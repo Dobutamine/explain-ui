@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@plugin "tailwindcss-primeui";
+
+:root {
+  color-scheme: dark;
+  /* Shrink the whole UI's typography. Everything DOM-side is rem-based
+     (Tailwind text-*, PrimeVue components), so lowering the root font-size
+     scales all fonts down proportionally. The diagram/chart canvases render
+     text in pixels, so they are unaffected. */
+  font-size: 14px;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
