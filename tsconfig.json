@@ -17,7 +17,6 @@
     "allowJs": true,
     "checkJs": false,
     "types": ["vite/client", "node"],
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@explain/*": ["./explain/*"]
