@@ -24,6 +24,12 @@ export class ChartRenderer implements RendererAdapter {
   private sharedAxis = false; // true → all series on one shared left y-axis
   private colorOffset = 0; // shift into COLORS so e.g. a split chart's lone
   // series can use the "second" colour (blue)
+  // Y-axis scaling. true → uPlot's default autoscaling. false → each y scale is
+  // pinned to a fixed [min, max] held in `fixedYRanges` (keyed by scale key:
+  // "y" when sharedAxis, else "y0"/"y1"). Locking snapshots the current
+  // autoscaled range so the view doesn't jump.
+  private autoScaleY = true;
+  private fixedYRanges: Record<string, [number, number]> = {};
   private ro: ResizeObserver;
 
   constructor(el: HTMLElement) {
@@ -58,6 +64,59 @@ export class ChartRenderer implements RendererAdapter {
     if (this.colorOffset === n) return;
     this.colorOffset = n;
     this.build();
+  }
+
+  /** Toggle y-axis autoscaling. Switching OFF snapshots the current autoscaled
+   *  range of every y scale and pins it (the view stays put); switching ON
+   *  hands the scales back to uPlot. */
+  setAutoScaleY(on: boolean) {
+    if (this.autoScaleY === on) return;
+    if (!on) this.fixedYRanges = this.readYRanges();
+    else this.fixedYRanges = {};
+    this.autoScaleY = on;
+    this.build();
+  }
+
+  /** The scale keys currently in play: "y" (shared) or one "y<i>" per series. */
+  private scaleKeys(): string[] {
+    if (this.labels.length === 0) return [];
+    return this.sharedAxis ? ["y"] : this.labels.map((_, i) => "y" + i);
+  }
+
+  /** Read each active y scale's current [min, max] off the live plot. */
+  private readYRanges(): Record<string, [number, number]> {
+    const out: Record<string, [number, number]> = {};
+    if (!this.plot) return out;
+    for (const k of this.scaleKeys()) {
+      const s = this.plot.scales[k];
+      if (s && s.min != null && s.max != null) out[k] = [s.min, s.max];
+    }
+    return out;
+  }
+
+  /** Describe the editable y-axes for the host UI: one entry per axis with its
+   *  scale key, the series label(s) it carries, its colour, and current range
+   *  (the live autoscaled range when auto, the pinned range when locked). */
+  getYAxes(): { key: string; label: string; color: string; min: number; max: number }[] {
+    const ranges = this.autoScaleY ? this.readYRanges() : this.fixedYRanges;
+    if (this.sharedAxis) {
+      const r = ranges["y"] ?? [0, 1];
+      return [{ key: "y", label: this.labels.join(", "), color: "#cbd5e1", min: r[0], max: r[1] }];
+    }
+    return this.labels.map((label, i) => {
+      const key = "y" + i;
+      const r = ranges[key] ?? [0, 1];
+      return { key, label, color: this.colorFor(i), min: r[0], max: r[1] };
+    });
+  }
+
+  /** Set a locked y scale's [min, max] (no-op while autoscaling, or if invalid).
+   *  Re-feeds the current data so the new range takes effect immediately, even
+   *  when the sim is paused. */
+  setYRange(key: string, min: number, max: number) {
+    if (!(min < max)) return;
+    this.fixedYRanges[key] = [min, max];
+    if (!this.autoScaleY && this.plot) this.plot.setData([this.xs, ...this.ys]);
   }
 
   private colorFor(i: number) {
@@ -130,6 +189,25 @@ export class ChartRenderer implements RendererAdapter {
       });
     }
 
+    const scales: uPlot.Options["scales"] = {
+      // Pin the x range to exactly the rolling window. uPlot's default numeric
+      // range adds ~10% padding each side, which made the visible span ~1 s
+      // wider than `windowS` (e.g. 5 s looking like 6 s).
+      x: {
+        time: false,
+        range: (_u, _min, dataMax) =>
+          dataMax == null ? [0, this.windowS] : [dataMax - this.windowS, dataMax],
+      },
+    };
+    // When autoscaling is off, pin each y scale to its stored range via a range
+    // fn that ignores the data (reads `fixedYRanges` live, so setYRange edits
+    // take effect on the next setData without a rebuild).
+    if (!this.autoScaleY) {
+      for (const k of this.scaleKeys()) {
+        scales[k] = { range: () => this.fixedYRanges[k] ?? [0, 1] };
+      }
+    }
+
     const opts: uPlot.Options = {
       width: this.el.clientWidth || 600,
       height: this.el.clientHeight || 240,
@@ -137,16 +215,7 @@ export class ChartRenderer implements RendererAdapter {
       // x is elapsed time; its labels grow unboundedly and aren't useful here,
       // so hide the x-axis entirely. Each series brings its own y-axis.
       axes: [{ show: false }, ...yAxes],
-      // Pin the x range to exactly the rolling window. uPlot's default numeric
-      // range adds ~10% padding each side, which made the visible span ~1 s
-      // wider than `windowS` (e.g. 5 s looking like 6 s).
-      scales: {
-        x: {
-          time: false,
-          range: (_u, _min, dataMax) =>
-            dataMax == null ? [0, this.windowS] : [dataMax - this.windowS, dataMax],
-        },
-      },
+      scales,
       // uPlot's legend carries an x-axis "Value" entry and value cells we don't
       // want; the host renders its own minimal legend instead.
       legend: { show: false },

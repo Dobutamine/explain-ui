@@ -3,6 +3,7 @@ import { onMounted, onBeforeUnmount, ref, computed, watch } from "vue";
 import Select from "primevue/select";
 import ToggleButton from "primevue/togglebutton";
 import InputText from "primevue/inputtext";
+import InputNumber from "primevue/inputnumber";
 import Button from "primevue/button";
 import { useRealtimeBus } from "@/composables/useRealtimeBus";
 import { useExplain } from "@/composables/useExplain";
@@ -93,6 +94,42 @@ const legendBottom = computed(() =>
   split.value && pathB.value ? [{ label: pathB.value, color: SERIES_COLORS[1] }] : [],
 );
 
+// Y-axis autoscaling. On by default; switching it off locks each y-axis to the
+// range it currently shows (snapshotted in the renderer) and reveals min/max
+// inputs so the user can dial in the scale. `yAxes` mirrors the renderer's
+// editable axes for the controls — `role` (not the renderer object) is stored
+// so the array stays plain/reactive.
+type YAxisCtl = { role: "top" | "bottom"; key: string; label: string; color: string; min: number; max: number };
+const autoY = ref(true);
+const yAxes = ref<YAxisCtl[]>([]);
+
+function adapterFor(role: "top" | "bottom") {
+  return role === "top" ? adapterTop : adapterBottom;
+}
+
+// pull the current editable axes off the active renderer(s) into reactive state
+function refreshYAxes() {
+  const list: YAxisCtl[] = [];
+  const add = (role: "top" | "bottom") => {
+    for (const ax of adapterFor(role)?.getYAxes() ?? []) list.push({ role, ...ax });
+  };
+  add("top");
+  if (split.value) add("bottom");
+  yAxes.value = list;
+}
+
+function onAutoYChange(on: boolean) {
+  const roles: ("top" | "bottom")[] = split.value ? ["top", "bottom"] : ["top"];
+  for (const role of roles) adapterFor(role)?.setAutoScaleY(on);
+  if (on) yAxes.value = [];
+  else refreshYAxes();
+}
+watch(autoY, onAutoYChange);
+
+function onRangeEdit(ax: YAxisCtl) {
+  adapterFor(ax.role)?.setYRange(ax.key, ax.min, ax.max);
+}
+
 // rolling time window shown on the x-axis (seconds)
 const WINDOW_OPTIONS = [
   { label: "1 s", value: 1 },
@@ -123,7 +160,12 @@ function applyView() {
     adapterBottom?.setVisible([]); // hidden, draw nothing
   }
 }
-watch([pathA, pathB, split, sharedAxis], applyView);
+watch([pathA, pathB, split, sharedAxis], () => {
+  applyView();
+  // a different view/series invalidates any locked ranges → back to autoscale
+  if (autoY.value) yAxes.value = [];
+  else autoY.value = true; // triggers onAutoYChange → renderers back to auto
+});
 watch(windowS, (v) => {
   adapterTop?.setWindow(v);
   adapterBottom?.setWindow(v);
@@ -284,6 +326,42 @@ onBeforeUnmount(() => {
         size="small"
         :disabled="split"
       />
+      <ToggleButton
+        v-model="autoY"
+        on-label="Auto Y"
+        off-label="Lock Y"
+        on-icon="pi pi-arrows-v"
+        off-icon="pi pi-lock"
+        size="small"
+        :disabled="!canDownload"
+      />
+      <!-- y-axis range editors, inline next to the lock toggle (only while locked) -->
+      <template v-if="!autoY">
+        <span
+          v-for="ax in yAxes"
+          :key="ax.role + ax.key"
+          class="flex items-center gap-1"
+        >
+          <span class="inline-block w-3 rounded-sm" style="height: 3px" :style="{ background: ax.color }"></span>
+          <InputNumber
+            v-tooltip.top="`${ax.label} min`"
+            :model-value="ax.min"
+            :max-fraction-digits="4"
+            size="small"
+            input-class="!w-14 !px-1 text-center"
+            @update:model-value="(v) => { ax.min = (v as number) ?? 0; onRangeEdit(ax); }"
+          />
+          <span class="opacity-40">–</span>
+          <InputNumber
+            v-tooltip.top="`${ax.label} max`"
+            :model-value="ax.max"
+            :max-fraction-digits="4"
+            size="small"
+            input-class="!w-14 !px-1 text-center"
+            @update:model-value="(v) => { ax.max = (v as number) ?? 0; onRangeEdit(ax); }"
+          />
+        </span>
+      </template>
       <span class="opacity-60 ml-2">window</span>
       <Select
         v-model="windowS"

@@ -2578,6 +2578,133 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "edit_mode": "all",
       "readonly": false,
       "caption": "enabled"
+    },
+    {
+      "caption": "kidneys running",
+      "target": "kidneys_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "filtration coeff (L/s/mmHg)",
+      "target": "kf",
+      "type": "number",
+      "delta": 0.0000001,
+      "factor": 1,
+      "rounding": 8,
+      "ll": 0,
+      "ul": 0.001,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "bowman pressure (mmHg)",
+      "target": "p_bowman",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "ll": 0,
+      "ul": 40,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "oncotic pressure (mmHg)",
+      "target": "oncotic_base",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "ll": 0,
+      "ul": 40,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "reabsorption fraction",
+      "target": "reabsorption_fraction",
+      "type": "number",
+      "delta": 0.001,
+      "factor": 1,
+      "rounding": 4,
+      "ll": 0,
+      "ul": 0.9999,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "reference albumin (g/L)",
+      "target": "albumin_ref",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 1,
+      "ll": 1,
+      "ul": 60,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "edit_mode": "factors",
+      "caption": "filtration coeff factor",
+      "target": "kf_factor_ps",
+      "type": "factor",
+      "build_prop": false
+    },
+    {
+      "edit_mode": "factors",
+      "caption": "reabsorption fraction factor",
+      "target": "reabs_factor_ps",
+      "type": "factor",
+      "build_prop": false
+    },
+    {
+      "caption": "GFR (mL/min)",
+      "target": "gfr",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "urine output (mL/min)",
+      "target": "urine_flow",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "net filtration pressure (mmHg)",
+      "target": "nfp",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "diuresis (mL)",
+      "target": "urine_volume",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
     }
   ],
   "Metabolism": [
