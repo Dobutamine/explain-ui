@@ -3841,7 +3841,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.lvo"
+              "Monitor.flows.lvo"
             ],
             "weight_based": true,
             "value": "186.1"
@@ -3852,7 +3852,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.rvo"
+              "Monitor.flows.rvo"
             ],
             "weight_based": true,
             "value": "185.8"
@@ -3863,7 +3863,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.cor_flow"
+              "Monitor.flows.cor_flow"
             ],
             "weight_based": true,
             "value": "11.6"
@@ -3874,7 +3874,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.svc_flow"
+              "Monitor.flows.svc_flow"
             ],
             "weight_based": true,
             "value": "77.5"
@@ -3885,7 +3885,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.ivc_flow"
+              "Monitor.flows.ivc_flow"
             ],
             "weight_based": true,
             "value": "99.2"
@@ -3896,7 +3896,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.da_flow"
+              "Monitor.flows.da_flow"
             ],
             "weight_based": true,
             "value": "0.0"
@@ -3918,7 +3918,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.brain_flow"
+              "Monitor.flows.brain_flow"
             ],
             "weight_based": true,
             "value": "38.0"
@@ -3929,7 +3929,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.kid_flow"
+              "Monitor.flows.kid_flow"
             ],
             "weight_based": true,
             "value": "24.6"
@@ -3940,7 +3940,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.ua_flow"
+              "Monitor.flows.ua_flow"
             ],
             "weight_based": true,
             "value": "0.0"
@@ -3951,7 +3951,7 @@
             "factor": 1000,
             "rounding": 1,
             "props": [
-              "Monitor.uv_flow"
+              "Monitor.flows.uv_flow"
             ],
             "weight_based": true,
             "value": "0.0"
@@ -10551,6 +10551,28 @@
         "is_enabled": true,
         "model_type": "Monitor",
         "components": {},
+        "flow_targets": [
+          { "name": "lvo", "model": "LV_AA.flow" },
+          { "name": "rvo", "model": "RV_PA.flow" },
+          { "name": "cor_flow", "model": "AA_COR.flow" },
+          { "name": "svc_flow", "model": "SVC_RASVC.flow" },
+          { "name": "ivc_flow", "model": "IVCI_RAIVCI.flow" },
+          { "name": "da_flow", "model": "AAR_DA.flow" },
+          { "name": "brain_flow", "model": "AA_BR_ART.flow" },
+          { "name": "kid_flow", "model": "AD_KID_ART.flow" },
+          { "name": "ua_flow", "model": "AD_PL_UMB_ART.flow" },
+          { "name": "uv_flow", "model": "PL_FETAL_VEN_PL_UMB_VEN.flow" },
+          { "name": "fo_ivci_flow", "model": "LA_RAIVCI.flow" },
+          { "name": "fo_svc_flow", "model": "LA_RASVC.flow" }
+        ],
+        "minmax_targets": [
+          { "name": "lv", "model": "LV" },
+          { "name": "rv", "model": "RV" }
+        ],
+        "signal_targets": [
+          { "name": "ecg", "model": "Heart.ecg_signal" },
+          { "name": "abp", "model": "AD.pres" }
+        ],
         "hr_avg_beats": 12,
         "flow_avg_beats": 1,
         "rr_avg_time": 20,

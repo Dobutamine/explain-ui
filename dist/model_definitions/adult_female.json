@@ -9384,6 +9384,22 @@
         "is_enabled": true,
         "model_type": "Monitor",
         "components": {},
+        "flow_targets": [
+          { "name": "lvo", "model": "LV_AA.flow" },
+          { "name": "rvo", "model": "RV_PA.flow" },
+          { "name": "cor_flow", "model": "AA_COR.flow" },
+          { "name": "svc_flow", "model": "SVC_RASVC.flow" },
+          { "name": "ivc_flow", "model": "IVCI_RAIVCI.flow" },
+          { "name": "brain_flow", "model": "AA_BR_ART.flow" },
+          { "name": "kid_flow", "model": "AD_KID_ART.flow" },
+          { "name": "ls_flow", "model": "AD_LS_ART.flow" },
+          { "name": "int_flow", "model": "AD_INT_ART.flow" },
+          { "name": "rlb_flow", "model": "AD_RLB.flow" },
+          { "name": "ua_flow", "model": "AD_PL_UMB_ART.flow" },
+          { "name": "uv_flow", "model": "PL_FETAL_VEN_PL_UMB_VEN.flow" },
+          { "name": "fo_ivci_flow", "model": "LA_RAIVCI.flow" },
+          { "name": "fo_svc_flow", "model": "LA_RASVC.flow" }
+        ],
         "hr_avg_beats": 4,
         "flow_avg_beats": 1,
         "rr_avg_time": 20,
@@ -11214,7 +11230,7 @@
             "factor": 1,
             "rounding": 2,
             "props": [
-              "Monitor.lvo"
+              "Monitor.flows.lvo"
             ],
             "weight_based": false,
             "value": "5.20"
@@ -11225,7 +11241,7 @@
             "factor": 1,
             "rounding": 2,
             "props": [
-              "Monitor.rvo"
+              "Monitor.flows.rvo"
             ],
             "weight_based": false,
             "value": "5.10"
@@ -11236,7 +11252,7 @@
             "factor": 1,
             "rounding": 3,
             "props": [
-              "Monitor.cor_flow"
+              "Monitor.flows.cor_flow"
             ],
             "weight_based": false,
             "value": "0.220"
@@ -11247,7 +11263,7 @@
             "factor": 1,
             "rounding": 3,
             "props": [
-              "Monitor.svc_flow"
+              "Monitor.flows.svc_flow"
             ],
             "weight_based": false,
             "value": "1.730"
@@ -11258,7 +11274,7 @@
             "factor": 1,
             "rounding": 4,
             "props": [
-              "Monitor.ivc_flow"
+              "Monitor.flows.ivc_flow"
             ],
             "weight_based": false,
             "value": "3.5794"
@@ -11269,7 +11285,7 @@
             "factor": 1,
             "rounding": 3,
             "props": [
-              "Monitor.brain_flow"
+              "Monitor.flows.brain_flow"
             ],
             "weight_based": false,
             "value": "0.666"
@@ -11280,7 +11296,7 @@
             "factor": 1,
             "rounding": 3,
             "props": [
-              "Monitor.kid_flow"
+              "Monitor.flows.kid_flow"
             ],
             "weight_based": false,
             "value": "0.948"
@@ -11291,7 +11307,7 @@
             "factor": 1,
             "rounding": 3,
             "props": [
-              "Monitor.ls_flow"
+              "Monitor.flows.ls_flow"
             ],
             "weight_based": false,
             "value": "0.948"
@@ -11302,7 +11318,7 @@
             "factor": 1,
             "rounding": 3,
             "props": [
-              "Monitor.int_flow"
+              "Monitor.flows.int_flow"
             ],
             "weight_based": false,
             "value": "0.720"
@@ -11313,7 +11329,7 @@
             "factor": 1,
             "rounding": 3,
             "props": [
-              "Monitor.rlb_flow"
+              "Monitor.flows.rlb_flow"
             ],
             "weight_based": false,
             "value": "0.721"
@@ -11324,7 +11340,7 @@
             "factor": 1,
             "rounding": 3,
             "props": [
-              "Monitor.ua_flow"
+              "Monitor.flows.ua_flow"
             ],
             "weight_based": false,
             "value": "0.000"
@@ -11335,7 +11351,7 @@
             "factor": 1,
             "rounding": 3,
             "props": [
-              "Monitor.uv_flow"
+              "Monitor.flows.uv_flow"
             ],
             "weight_based": false,
             "value": "0.000"

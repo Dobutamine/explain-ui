@@ -8,10 +8,10 @@ import { MonitorRenderer, type MonitorLane } from "@/render/MonitorRenderer";
 // Bedside patient-monitor host. Streams the Monitor model's purpose-built
 // waveform signals (fast chart channel) into a single sweep canvas, and feeds
 // the big numerics from the 1 Hz slow stream (rts). Waveforms never touch Vue
-// reactivity; only the slow numerics do (safe at ~1 Hz, like NumericsPanel).
+// reactivity; only the slow numerics do (safe at ~1 Hz).
 const el = ref<HTMLDivElement | null>(null);
 const { addRenderer, removeRenderer } = useRealtimeBus();
-const { watch: watchProps, watchSlow, slowValues } = useExplain();
+const { watch: watchProps, watchSlow, slowValues, modelReady } = useExplain();
 let adapter: MonitorRenderer | null = null;
 
 // format a slow-stream value, "—" when absent
@@ -24,14 +24,14 @@ const f = (n: Record<string, number>, p: string, d: number) => {
 // post-ductal (AD) numerics to match the AD pressure waveform.
 const LANES: MonitorLane[] = [
   {
-    signal: "Monitor.ecg_signal",
+    signal: "Monitor.signals.ecg",
     label: "ECG",
     color: "#4ade80",
     unit: "bpm",
     readNumeric: (n) => f(n, "Monitor.heart_rate", 0),
   },
   {
-    signal: "Monitor.sao2_pre_signal",
+    signal: "Monitor.signals.sat_pre",
     label: "SpO₂ pre",
     color: "#22d3ee",
     unit: "%",
@@ -39,7 +39,7 @@ const LANES: MonitorLane[] = [
     readNumeric: (n) => f(n, "Monitor.sao2_pre", 0),
   },
   {
-    signal: "Monitor.sao2_post_signal",
+    signal: "Monitor.signals.sat_post",
     label: "SpO₂ post",
     color: "#38bdf8",
     unit: "%",
@@ -47,23 +47,23 @@ const LANES: MonitorLane[] = [
     readNumeric: (n) => f(n, "Monitor.sao2_post", 0),
   },
   {
-    signal: "Monitor.abp_signal",
+    signal: "Monitor.signals.abp",
     label: "ABP",
     color: "#f87171",
     unit: "mmHg",
     readNumeric: (n) =>
-      `${f(n, "Monitor.abp_post_syst", 0)}/${f(n, "Monitor.abp_post_diast", 0)}`,
-    readSub: (n) => `(${f(n, "Monitor.abp_post_mean", 0)})`,
+      `${f(n, "Monitor.minmax.abp_pres_max", 0)}/${f(n, "Monitor.minmax.abp_pres_min", 0)}`,
+    readSub: (n) => `(${f(n, "Monitor.minmax.abp_pres_mean", 0)})`,
   },
   {
-    signal: "Monitor.resp_signal",
+    signal: "Monitor.signals.resp",
     label: "Resp",
     color: "#e5e7eb",
     unit: "/min",
     readNumeric: (n) => f(n, "Monitor.resp_rate", 0),
   },
   {
-    signal: "Monitor.co2_signal",
+    signal: "Monitor.signals.co2",
     label: "CO₂",
     color: "#facc15",
     unit: "kPa",
@@ -77,9 +77,9 @@ const SLOW_PATHS = [
   "Monitor.heart_rate",
   "Monitor.sao2_pre",
   "Monitor.sao2_post",
-  "Monitor.abp_post_syst",
-  "Monitor.abp_post_diast",
-  "Monitor.abp_post_mean",
+  "Monitor.minmax.abp_pres_max",
+  "Monitor.minmax.abp_pres_min",
+  "Monitor.minmax.abp_pres_mean",
   "Monitor.resp_rate",
   "Monitor.etco2",
 ];
@@ -100,6 +100,14 @@ const latest = computed<Record<string, number>>(() => {
 
 watch(windowS, (v) => adapter?.setWindow(v));
 watch(latest, (n) => adapter?.setNumerics(n));
+
+// build() replaces the DataCollector (watchlist is reset), so re-register every (re)build
+watch(modelReady, (ready) => {
+  if (ready) {
+    watchProps(FAST_PATHS);
+    watchSlow(SLOW_PATHS);
+  }
+});
 
 onMounted(() => {
   adapter = new MonitorRenderer(el.value!, LANES, windowS.value);

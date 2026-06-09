@@ -18,8 +18,6 @@ import ScalerPanel from "@/components/controls/ScalerPanel.vue";
 import VentilatorPanel from "@/components/controls/VentilatorPanel.vue";
 import EclsPanel from "@/components/controls/EclsPanel.vue";
 import SaveStatePanel from "@/components/controls/SaveStatePanel.vue";
-import NumericsPanel from "@/components/numerics/NumericsPanel.vue";
-import BloodGasPanel from "@/components/numerics/BloodGasPanel.vue";
 import NumericReadoutPanel from "@/components/numerics/NumericReadoutPanel.vue";
 import LoopChart from "@/components/host/LoopChart.vue";
 import Monitor from "@/components/host/Monitor.vue";
@@ -203,7 +201,6 @@ function toggleRun() {
           <TabPanels>
             <TabPanel value="monitoring">
               <div class="flex flex-col gap-3">
-                <NumericsPanel />
                 <NumericReadoutPanel
                   v-for="g in monitorGroups"
                   :key="g.key"
@@ -211,7 +208,6 @@ function toggleRun() {
                   :parameters="g.parameters"
                   :collapsed="g.collapsed"
                 />
-                <BloodGasPanel />
               </div>
             </TabPanel>
           </TabPanels>
