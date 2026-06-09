@@ -2659,7 +2659,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       ]
     }
   ],
-  "Mob2": [
+  "Mob": [
     {
       "target": "model_type",
       "type": "string",
