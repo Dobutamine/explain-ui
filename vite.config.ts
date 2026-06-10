@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "node:url";
@@ -80,6 +80,68 @@ function snapshotApi(): Plugin {
   };
 }
 
+// Dev-only proxy: POST /api/chat { prompt, conversation_id?, context? } forwards
+// to the "explain-labs_claude" bot (a Claude bot built specifically for this
+// project, on the Tailnet port 8090) and echoes its reply back. The bot URL +
+// API key are read from server-side env (EXPLAIN_BOT_URL / EXPLAIN_BOT_API_KEY)
+// and NEVER exposed to the browser bundle — same reason the cradle-webapp proxies
+// through a Next.js route instead of calling the bot directly. `env` is the
+// loadEnv() result so values in .env.local are picked up without a VITE_ prefix
+// (a VITE_ prefix would leak them into the client build).
+function explainBotApi(env: Record<string, string>): Plugin {
+  const baseUrl = env.EXPLAIN_BOT_URL || process.env.EXPLAIN_BOT_URL || "";
+  const apiKey = env.EXPLAIN_BOT_API_KEY || process.env.EXPLAIN_BOT_API_KEY || "";
+
+  return {
+    name: "explain-bot-api",
+    configureServer(server) {
+      server.middlewares.use("/api/chat", (req: any, res: any, next: () => void) => {
+        if (req.method !== "POST") return next();
+        let raw = "";
+        req.on("data", (c: Buffer) => (raw += c));
+        req.on("end", async () => {
+          const reply = (code: number, obj: unknown) => {
+            res.statusCode = code;
+            res.setHeader("content-type", "application/json");
+            res.end(JSON.stringify(obj));
+          };
+          if (!baseUrl || !apiKey) {
+            return reply(400, {
+              error:
+                "explain bot not configured — set EXPLAIN_BOT_URL and EXPLAIN_BOT_API_KEY in .env.local and restart the dev server",
+            });
+          }
+          try {
+            const { prompt, conversation_id, context } = JSON.parse(raw || "{}");
+            // Prepend the live patient-state block so the bot can answer about
+            // "this patient". The bot treats the whole string as the user turn.
+            const fullPrompt = context
+              ? `Current simulated patient state:\n${context}\n\n---\n\n${prompt ?? ""}`
+              : (prompt ?? "");
+            const upstream = await fetch(`${baseUrl}/v1/ask`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+              body: JSON.stringify({
+                prompt: fullPrompt,
+                ...(conversation_id ? { conversation_id } : {}),
+              }),
+            });
+            const text = await upstream.text();
+            res.statusCode = upstream.status;
+            res.setHeader(
+              "content-type",
+              upstream.headers.get("content-type") ?? "application/json",
+            );
+            res.end(text);
+          } catch (e) {
+            reply(502, { error: `explain bot unreachable: ${String(e)}` });
+          }
+        });
+      });
+    },
+  };
+}
+
 // COOP/COEP make `crossOriginIsolated === true`, which activates
 // SharedArrayBuffer — the preferred realtime data-plane transport
 // (ChannelWriter auto-falls back to transferable ArrayBuffers when these
@@ -89,8 +151,12 @@ const crossOriginIsolation = {
   "Cross-Origin-Embedder-Policy": "require-corp",
 };
 
-export default defineConfig({
-  plugins: [vue(), tailwindcss(), snapshotApi()],
+export default defineConfig(({ mode }) => {
+  // Load all env (no prefix filter) so server-side-only EXPLAIN_BOT_* vars in
+  // .env.local reach the chat proxy without being exposed to the client bundle.
+  const env = loadEnv(mode, process.cwd(), "");
+  return {
+  plugins: [vue(), tailwindcss(), snapshotApi(), explainBotApi(env)],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -101,4 +167,5 @@ export default defineConfig({
   worker: { format: "es" },
   server: { headers: crossOriginIsolation },
   preview: { headers: crossOriginIsolation },
+  };
 });

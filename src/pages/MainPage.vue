@@ -19,6 +19,7 @@ import VentilatorPanel from "@/components/controls/VentilatorPanel.vue";
 import EclsPanel from "@/components/controls/EclsPanel.vue";
 import SaveStatePanel from "@/components/controls/SaveStatePanel.vue";
 import NumericReadoutPanel from "@/components/numerics/NumericReadoutPanel.vue";
+import ChatPanel from "@/components/controls/ChatPanel.vue";
 import LoopChart from "@/components/host/LoopChart.vue";
 import Monitor from "@/components/host/Monitor.vue";
 import VentilatorScope from "@/components/host/VentilatorScope.vue";
@@ -204,6 +205,9 @@ function toggleRun() {
             <Tab value="monitoring" v-tooltip.top="'Monitoring'" aria-label="Monitoring">
               <i class="pi pi-gauge"></i>
             </Tab>
+            <Tab value="chat" v-tooltip.top="'Explain Labs chat'" aria-label="Explain Labs chat">
+              <i class="pi pi-comments"></i>
+            </Tab>
           </TabList>
           <TabPanels>
             <TabPanel value="monitoring">
@@ -216,6 +220,9 @@ function toggleRun() {
                   :collapsed="g.collapsed"
                 />
               </div>
+            </TabPanel>
+            <TabPanel value="chat">
+              <ChatPanel />
             </TabPanel>
           </TabPanels>
         </Tabs>
