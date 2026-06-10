@@ -7,6 +7,181 @@
 import type { InterfaceField } from "./types";
 
 export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
+  "Drugs": [
+    {
+      "target": "description",
+      "type": "string",
+      "caption": "description",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "caption": "enabled",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false
+    },
+    {
+      "target": "drugs_running",
+      "type": "boolean",
+      "caption": "drugs running",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "target": "administer_bolus",
+      "type": "function",
+      "caption": "administer IV bolus",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": [
+        {
+          "target": "drug",
+          "caption": "drug",
+          "type": "list",
+          "custom_options": true,
+          "choices": ["adrenaline", "noradrenaline"]
+        },
+        {
+          "target": "dose",
+          "caption": "dose (mcg)",
+          "type": "number",
+          "factor": 1,
+          "default": 1,
+          "delta": 0.5,
+          "rounding": 2,
+          "ll": 0,
+          "ul": 1000
+        }
+      ]
+    },
+    {
+      "target": "set_infusion",
+      "type": "function",
+      "caption": "set infusion",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": [
+        {
+          "target": "drug",
+          "caption": "drug",
+          "type": "list",
+          "custom_options": true,
+          "choices": ["adrenaline", "noradrenaline"]
+        },
+        {
+          "target": "rate",
+          "caption": "rate (mcg/kg/min)",
+          "type": "number",
+          "factor": 1,
+          "default": 0,
+          "delta": 0.05,
+          "rounding": 3,
+          "ll": 0,
+          "ul": 100
+        }
+      ]
+    },
+    {
+      "target": "injection_site",
+      "type": "string",
+      "caption": "injection site (IV)",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "target": "effect_site",
+      "type": "string",
+      "caption": "effect site",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "target": "conc_eff",
+      "type": "number",
+      "caption": "adrenaline effect-site conc (ng/mL)",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "target": "hr_drug_factor",
+      "type": "number",
+      "caption": "applied HR factor",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "target": "cont_drug_factor",
+      "type": "number",
+      "caption": "applied contractility factor",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "target": "svr_drug_factor",
+      "type": "number",
+      "caption": "applied SVR factor",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "target": "set_drug_param",
+      "type": "function",
+      "caption": "set PK/PD parameter",
+      "build_prop": false,
+      "edit_mode": "advanced",
+      "readonly": false,
+      "args": [
+        {
+          "target": "drug",
+          "caption": "drug",
+          "type": "list",
+          "custom_options": true,
+          "choices": ["adrenaline", "noradrenaline"]
+        },
+        {
+          "target": "param",
+          "caption": "parameter",
+          "type": "list",
+          "custom_options": true,
+          "choices": [
+            "ke0",
+            "clearance.global",
+            "hr_ec50", "hr_emax", "hr_hill",
+            "cont_ec50", "cont_emax", "cont_hill",
+            "svr_ec50", "svr_emax", "svr_hill"
+          ]
+        },
+        {
+          "target": "value",
+          "caption": "value",
+          "type": "number",
+          "factor": 1,
+          "default": 0,
+          "delta": 0.01,
+          "rounding": 4,
+          "ll": 0,
+          "ul": 1000
+        }
+      ]
+    }
+  ],
   "Ans": [
     {
       "target": "description",
