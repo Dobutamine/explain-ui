@@ -109,14 +109,13 @@ function toggleRun() {
   <div class="p-4 flex flex-col gap-4 min-h-screen">
     <!-- Title + status, pinned to the top of the screen -->
     <div
-      class="sticky top-0 z-20 -mx-4 -mt-4 mb-2 flex items-center gap-3 flex-wrap border-b border-surface-700 bg-surface-900 px-4 py-1.5"
+      class="sticky top-0 z-20 -mx-4 -mt-4 mb-2 flex items-center gap-3 flex-wrap border-b border-surface-700 bg-surface-900 px-4 py-2"
     >
-      <span class="text-sm font-semibold">Explain</span>
-      <span class="flex items-center gap-3 flex-wrap text-[10px] leading-none opacity-70">
-        <span>COI: <b>{{ isolated }}</b></span>
-        <span>ready: <b>{{ modelReady }}</b></span>
-        <span v-if="error" class="text-red-400">error: {{ error }}</span>
-      </span>
+      <img
+        src="/logo/explain-labs-logo.svg"
+        alt="Explain Labs"
+        class="h-12 w-auto shrink-0"
+      />
     </div>
 
     <!-- Parameters (left 1/4) · Diagram/Chart/PV-loop tabs (center 1/2) · Monitor (right 1/4) -->
@@ -231,10 +230,17 @@ function toggleRun() {
 
     <!-- Status (left) · run/calculate controls (center) · model loading (right) -->
     <div
-      class="compact-bar sticky bottom-0 z-20 -mx-4 -mb-4 mt-auto grid grid-cols-3 items-center gap-1.5 border-t border-surface-700 bg-surface-900 px-3 py-1 text-xs"
+      class="compact-bar sticky bottom-0 z-20 -mx-4 -mb-4 mt-auto grid grid-cols-3 items-center gap-1.5 border-t border-surface-700 bg-surface-900 px-3 py-1 text-sm"
     >
-      <!-- left: status -->
-      <span class="opacity-70 justify-self-start">STATUS: {{ status }}</span>
+      <!-- left: COI / ready indicators + status -->
+      <div class="flex items-center gap-3 flex-wrap justify-self-start">
+        <span class="flex items-center gap-3 flex-wrap opacity-70">
+          <span>COI: <b>{{ isolated }}</b></span>
+          <span>MODEL LOADED: <b>{{ modelReady }}</b></span>
+          <span v-if="error" class="text-red-400">error: {{ error }}</span>
+        </span>
+        <span class="opacity-70">STATUS: <b>{{ status }}</b></span>
+      </div>
 
       <!-- center: play / stop / calculate -->
       <div class="flex items-center gap-1.5 justify-self-center">
@@ -299,7 +305,7 @@ function toggleRun() {
 .compact-bar :deep(.p-select),
 .compact-bar :deep(.p-inputtext),
 .compact-bar :deep(.p-inputnumber-input) {
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   padding-top: 0.15rem;
   padding-bottom: 0.15rem;
   min-height: 0;
@@ -307,5 +313,14 @@ function toggleRun() {
 .compact-bar :deep(.p-button) {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
+}
+/* Bump the run/calculate button icons in step with the larger bar text. */
+.compact-bar :deep(.p-button) .pi {
+  font-size: 1rem;
+}
+
+/* Slightly larger tab icons across the control / viz / monitor tab strips. */
+:deep(.p-tab) .pi {
+  font-size: 1.25rem;
 }
 </style>
