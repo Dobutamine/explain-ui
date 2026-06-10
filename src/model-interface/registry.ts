@@ -2440,6 +2440,34 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "caption": "elastance non linear factor",
       "target": "el_k_factor_ps",
       "type": "factor"
+    },
+    {
+      "caption": "acute load contractility factor (HeartFunction)",
+      "target": "el_max_load_factor",
+      "type": "factor",
+      "edit_mode": "factors",
+      "readonly": true
+    },
+    {
+      "caption": "remodeling contractility factor (HeartFunction)",
+      "target": "el_max_remodel_factor",
+      "type": "factor",
+      "edit_mode": "factors",
+      "readonly": true
+    },
+    {
+      "caption": "remodeling stiffness factor (HeartFunction)",
+      "target": "el_k_remodel_factor",
+      "type": "factor",
+      "edit_mode": "factors",
+      "readonly": true
+    },
+    {
+      "caption": "remodeling dilation factor (HeartFunction)",
+      "target": "u_vol_remodel_factor",
+      "type": "factor",
+      "edit_mode": "factors",
+      "readonly": true
     }
   ],
   "HeartValve": [
@@ -3661,6 +3689,187 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "delta": 0.1,
       "factor": 1,
       "rounding": 1
+    }
+  ],
+  "HeartFunction": [
+    {
+      "target": "model_type",
+      "type": "string",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": true,
+      "caption": "model type"
+    },
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "load-induced compromise active",
+      "target": "hf_active",
+      "type": "boolean"
+    },
+    {
+      "caption": "remodeling active",
+      "target": "remodel_active",
+      "type": "boolean"
+    },
+    {
+      "caption": "acute contractility time constant (s)",
+      "target": "cont_tc",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 1
+    },
+    {
+      "caption": "acute contractility floor",
+      "target": "cont_floor",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 2
+    },
+    {
+      "caption": "afterload gain LV",
+      "target": "g_es_lv",
+      "type": "number",
+      "delta": 0.001,
+      "factor": 1,
+      "rounding": 4,
+      "edit_mode": "advanced"
+    },
+    {
+      "caption": "over-dilation gain LV",
+      "target": "g_ed_lv",
+      "type": "number",
+      "delta": 0.001,
+      "factor": 1,
+      "rounding": 4,
+      "edit_mode": "advanced"
+    },
+    {
+      "caption": "afterload gain RV",
+      "target": "g_es_rv",
+      "type": "number",
+      "delta": 0.001,
+      "factor": 1,
+      "rounding": 4,
+      "edit_mode": "advanced"
+    },
+    {
+      "caption": "over-dilation gain RV",
+      "target": "g_ed_rv",
+      "type": "number",
+      "delta": 0.001,
+      "factor": 1,
+      "rounding": 4,
+      "edit_mode": "advanced"
+    },
+    {
+      "caption": "remodeling time constant (s)",
+      "target": "remodel_tc",
+      "type": "number",
+      "delta": 60,
+      "factor": 1,
+      "rounding": 0,
+      "edit_mode": "advanced"
+    },
+    {
+      "caption": "wall-stress averaging time constant (s)",
+      "target": "stress_avg_tc",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 1,
+      "edit_mode": "advanced"
+    },
+    {
+      "caption": "concentric remodeling drive",
+      "target": "k_conc",
+      "type": "number",
+      "delta": 0.001,
+      "factor": 1,
+      "rounding": 4,
+      "edit_mode": "advanced"
+    },
+    {
+      "caption": "eccentric remodeling drive",
+      "target": "k_ecc",
+      "type": "number",
+      "delta": 0.001,
+      "factor": 1,
+      "rounding": 4,
+      "edit_mode": "advanced"
+    },
+    {
+      "caption": "setpoint warm-up window (s)",
+      "target": "setpoint_warmup",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "edit_mode": "advanced"
+    },
+    {
+      "caption": "LV end-systolic wall stress",
+      "target": "wall_stress_es_lv",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "readonly": true
+    },
+    {
+      "caption": "LV end-diastolic wall stress",
+      "target": "wall_stress_ed_lv",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "readonly": true
+    },
+    {
+      "caption": "RV end-systolic wall stress",
+      "target": "wall_stress_es_rv",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "readonly": true
+    },
+    {
+      "caption": "RV end-diastolic wall stress",
+      "target": "wall_stress_ed_rv",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "readonly": true
+    },
+    {
+      "caption": "LV acute load factor",
+      "target": "el_max_load_factor_lv",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "readonly": true
+    },
+    {
+      "caption": "RV acute load factor",
+      "target": "el_max_load_factor_rv",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "readonly": true
     }
   ],
   "Monitor": [
