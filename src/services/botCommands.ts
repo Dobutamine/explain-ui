@@ -118,29 +118,62 @@ function reject(description: string, error: string): ValidationResult {
   return { ok: false, description, error };
 }
 
-// Validate a single parsed command against the allowlist and the model-interface
+// How wide the command surface is. "guided" = the curated allowlist (safe demos);
+// "full" = any non-readonly, runtime-settable registry field on any live model.
+export type CommandScope = "guided" | "full";
+
+// Runtime-settable property field types. Excludes the structural wiring types
+// (multiple-list / prop-list / reference / dict — all rebuild-only) and string
+// (~all readonly descriptions). `factor` is the persistent `*_factor_ps` knobs.
+const SETTABLE_PROP_TYPES = new Set(["number", "factor", "boolean", "list"]);
+
+// Is this field something the bot may set/call at runtime? The registry only
+// lists editable fields, but it also carries readonly measured-outputs and
+// structural wiring — exclude those.
+export function isSettableField(f: InterfaceField, op: "setProp" | "call"): boolean {
+  if (op === "call") return f.type === "function";
+  return !f.readonly && SETTABLE_PROP_TYPES.has(f.type);
+}
+
+// Validate a single parsed command against the scope gate + the model-interface
 // schema, converting display units to raw. Pure (no engine access) so it can be
-// unit-tested with a plain modelState object.
-export function validateCommand(cmd: BotCommand, modelState: any): ValidationResult {
+// unit-tested with a plain modelState object. `scope` selects the gate: "guided"
+// restricts to the allowlist, "full" allows any settable registry field.
+export function validateCommand(
+  cmd: BotCommand,
+  modelState: any,
+  scope: CommandScope = "full",
+): ValidationResult {
   const op = cmd.op;
   const label = cmd.reason || `${op} ${cmd.model ?? ""}${cmd.target ? "." + cmd.target : ""}`;
 
-  if (!op || !isAllowed(op, cmd.model, cmd.target)) {
-    return reject(label, `command not enabled: ${op} ${cmd.model ?? ""} ${cmd.target ?? ""}`.trim());
+  // sim-control ops carry no model/target and are allowed in both scopes
+  if (op === "start")
+    return { ok: true, normalized: { kind: "start" }, description: cmd.reason || "start simulation" };
+  if (op === "stop")
+    return { ok: true, normalized: { kind: "stop" }, description: cmd.reason || "stop simulation" };
+  if (op !== "setProp" && op !== "call")
+    return reject(label, `unsupported op "${op}"`);
+
+  // Guided scope: only the curated allowlist. Full scope: rely on the
+  // settable-field + bounds checks inside each case below.
+  if (scope === "guided" && !isAllowed(op, cmd.model, cmd.target)) {
+    return reject(
+      label,
+      `not enabled in Guided scope: ${op} ${cmd.model ?? ""}${cmd.target ? "." + cmd.target : ""} — switch to Full scope to allow`,
+    );
   }
 
   switch (op) {
-    case "start":
-      return { ok: true, normalized: { kind: "start" }, description: cmd.reason || "start simulation" };
-    case "stop":
-      return { ok: true, normalized: { kind: "stop" }, description: cmd.reason || "stop simulation" };
-
     case "setProp": {
       if (!cmd.model || !cmd.target) return reject(label, "setProp requires model + target");
       const fields = fieldsFor(cmd.model, modelState);
       if (!fields) return reject(label, `model "${cmd.model}" not found in current scenario`);
       const f = fields.find((x) => x.target === cmd.target);
       if (!f) return reject(label, `"${cmd.target}" is not an editable property of ${cmd.model}`);
+      if (f.readonly) return reject(label, `"${cmd.target}" is read-only on ${cmd.model}`);
+      if (!isSettableField(f, "setProp"))
+        return reject(label, `${cmd.model}.${cmd.target} (type "${f.type}") is not settable at runtime`);
 
       const at = typeof cmd.at === "number" ? cmd.at : 0;
       const it = typeof cmd.it === "number" ? cmd.it : 0;
@@ -219,9 +252,6 @@ export function validateCommand(cmd: BotCommand, modelState: any): ValidationRes
         description: cmd.reason || `${cmd.model}.${cmd.target}(${argStr})`,
       };
     }
-
-    default:
-      return reject(label, `unsupported op "${op}"`);
   }
 }
 

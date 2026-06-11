@@ -5,6 +5,8 @@ import Panel from "primevue/panel";
 import Button from "primevue/button";
 import Textarea from "primevue/textarea";
 import ToggleSwitch from "primevue/toggleswitch";
+import SelectButton from "primevue/selectbutton";
+import type { CommandScope } from "@/services/botCommands";
 import { useChatStore } from "@/stores/chat";
 
 // Chat with the "explain-labs_claude" bot (built specifically for this project).
@@ -32,6 +34,15 @@ import type { ChatMessage } from "@/stores/chat";
 
 const chat = useChatStore();
 const input = ref("");
+
+// command surface: Guided = curated allowlist, Full = any settable model field
+const SCOPES = [
+  { label: "Guided", value: "guided" },
+  { label: "Full", value: "full" },
+];
+function onScope(v: CommandScope | null) {
+  if (v) chat.commandScope = v; // SelectButton can emit null on re-click; ignore
+}
 
 // show "Apply all" only when a message has 2+ still-applicable commands
 function hasMultiplePending(m: ChatMessage): boolean {
@@ -70,6 +81,16 @@ watch(
       <div class="flex items-center justify-between w-full">
         <span class="font-semibold">Explain AI Bot</span>
         <div class="flex items-center gap-2">
+          <SelectButton
+            v-tooltip.top="'Command surface: Guided = curated safe set; Full = any settable model parameter'"
+            :model-value="chat.commandScope"
+            :options="SCOPES"
+            option-label="label"
+            option-value="value"
+            :allow-empty="false"
+            size="small"
+            @update:model-value="onScope"
+          />
           <label
             v-tooltip.top="'When on, bot commands run immediately without an Apply click'"
             class="flex items-center gap-1 text-xs opacity-80 cursor-pointer"

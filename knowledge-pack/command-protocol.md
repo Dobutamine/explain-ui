@@ -6,8 +6,9 @@ and shows the user an **Apply / Dismiss** button for each. Nothing changes the p
 until the user clicks Apply — so propose freely, but propose correctly.
 
 This file says **how** to emit an action. The companion `command-catalog.md` lists
-**what** you may emit (the exact models, properties, functions, and value ranges).
-Treat the catalog as exhaustive: anything not in it is rejected by the app.
+**what** you may emit — in **Full mode** (the default) that's *every* settable parameter
+and function on *every* model; in **Guided mode** it's a small curated set. Anything not
+backed by the catalog + the live model map is rejected by the app.
 
 ## How to emit a command
 
@@ -39,16 +40,43 @@ One JSON object per block. Fields by `op`:
 | `start` | — | start the realtime simulation loop |
 | `stop` | — | stop the realtime simulation loop |
 
-`reason` is optional on every command — a short human label shown on the action card
-(e.g. `"raise PEEP to recruit lung"`). Always include it; it's what the user sees.
+`model` is the **instance name** (see the model map below), `target` is the field or
+function name from the catalog. `reason` is optional but always include it — a short
+human label shown on the action card (e.g. `"raise PEEP to recruit lung"`).
+
+## Picking the model and target
+
+A request like *"lower the systemic vascular resistance"* or *"make the left ventricle
+stiffer"* names a thing, not a field. Resolve it in three steps:
+
+1. **Find the instance.** Each user turn's context includes a **`Models in scenario:`**
+   block listing every live instance grouped by `model_type`
+   (e.g. `HeartChamber: LA, RA, LV, RV`). Pick the instance the user means — that's your
+   `model` (e.g. `LV`, or the singleton `Circulation`).
+2. **Find the field.** Look up that instance's `model_type` in `command-catalog.md` and
+   choose the parameter or function that matches the intent (e.g. `Circulation` →
+   `svr_factor_art`, or `HeartChamber` → `el_max_factor_ps`).
+3. **Prefer the `*_factor_ps` knob** for physiological tuning: a `factor` field where
+   `1.0` = baseline, `>1` increases, `<1` decreases. It composes with interventions and
+   weight-scaling, so "stiffer LV" → `{"op":"setProp","model":"LV","target":"el_max_factor_ps","value":1.3}`
+   is better than editing a raw elastance. Use base values only when the user gives an
+   explicit target number in real units.
+
+If you can't find a matching instance in the map or field in the catalog, say so instead
+of guessing a name.
 
 ## Rules
 
 - **Only emit a command when the user actually asks to change something** ("turn on
   the ventilator", "raise the FiO2", "start the sim"). For questions ("why is the
   saturation low?") just answer — no command block.
-- **Use the catalog verbatim.** Exact `model`, `target`, and argument names from
-  `command-catalog.md`. Do not invent models, properties, functions, or extra args.
+- **Use real names verbatim.** `model` = an instance name from the live `Models in
+  scenario:` map; `target` + argument names = exactly as in `command-catalog.md`. Do not
+  invent instances, properties, functions, or extra args.
+- **Scope.** The user runs either Full (default — anything in the catalog) or Guided (the
+  small curated set). You can't see which. Propose the most direct command; if it comes
+  back rejected as *"not enabled in Guided scope"*, tell the user to switch the chat
+  panel to **Full** and re-ask.
 - **Values are in the displayed clinical unit** shown in the catalog (e.g. FiO2 as a
   fraction `0.4`, rate in `/min`, pressures in `cmH2O`). Stay within the stated range —
   out-of-range values are rejected.

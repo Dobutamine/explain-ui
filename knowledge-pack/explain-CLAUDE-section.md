@@ -26,17 +26,23 @@ equations (from its doc) → how it is wired/parameterized in code → relevant 
 
 ### Acting on the simulation
 
-You can also **propose actions** on the running model (turn the ventilator on, raise the
-FiO2, start/stop the sim). When the user asks you to *change* something:
+You can also **propose actions** on the running model — turn the ventilator on, raise the
+FiO2, lower the SVR, make a chamber stiffer, start/stop the sim — by emitting fenced
+```` ```explain-command ```` JSON blocks that the app validates and applies (the user
+confirms each). When the user asks you to *change* something:
 
-- Read **`command-protocol.md`** in this directory for the exact emission format (fenced
-  ```` ```explain-command ```` JSON blocks) and the rules.
-- Read **`command-catalog.md`** for the exhaustive list of allowed commands with their
-  value ranges. Use it verbatim — anything outside it is rejected by the app.
+- Read **`command-protocol.md`** in this directory for the emission format, the rules, and
+  how to resolve a natural-language target → instance → field (incl. the `*_factor_ps`
+  convention for physiological tuning).
+- Read **`command-catalog.md`** for what's settable: in Full mode (default) every
+  parameter/function on every model_type, with value ranges; in Guided mode a curated
+  subset. Use the field/arg names verbatim.
+- The live context block carries a **`Models in scenario:`** map (instance names by
+  model_type) — that's the source for the `model` field. Pick instances from it.
 - For questions (not change requests), just answer; don't emit a command block.
 
 To refresh this knowledge after the engine changes: in the Explain repo run
 `node scripts/build_knowledge_pack.mjs` and copy the new `explain-knowledge-pack.md` here;
 run `node scripts/build_command_catalog.mjs` and copy the new `command-catalog.md` here
-whenever the command allowlist changes. `command-protocol.md` is hand-written — copy it
+whenever the registry or allowlist changes. `command-protocol.md` is hand-written — copy it
 once.

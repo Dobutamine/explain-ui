@@ -7,6 +7,7 @@ import {
   executeCommand,
   type BotCommand,
   type NormalizedCommand,
+  type CommandScope,
 } from "@/services/botCommands";
 
 // Chat with the "explain-labs_claude" bot (built specifically for this project).
@@ -57,6 +58,13 @@ export const useChatStore = defineStore("chat", () => {
   // Off by default (confirm-before-apply); persisted so a trusted session sticks.
   const autoApply = ref(localStorage.getItem("explain.chat.autoApply") === "1");
   watch(autoApply, (v) => localStorage.setItem("explain.chat.autoApply", v ? "1" : "0"));
+
+  // Command surface: "full" = any settable registry field; "guided" = the curated
+  // 26-command allowlist (safe demos). Default full; persisted.
+  const commandScope = ref<CommandScope>(
+    localStorage.getItem("explain.chat.scope") === "guided" ? "guided" : "full",
+  );
+  watch(commandScope, (v) => localStorage.setItem("explain.chat.scope", v));
 
   // Pull the same monitor groups the right-column panel shows, format the latest
   // slow-stream sample exactly like NumericReadoutPanel, and return a plain-text
@@ -109,6 +117,22 @@ export const useChatStore = defineStore("chat", () => {
         .map(fmt)
         .filter((s): s is string => !!s);
       if (rows.length) lines.push(`${m.title ?? key}: ${rows.join(", ")}`);
+    }
+
+    // Live model map: every instance grouped by model_type, so the bot can map a
+    // natural-language target onto the right instance name (then look up its
+    // settable fields in the command catalog). Only changes on scenario load.
+    if (state?.models) {
+      const byType = new Map<string, string[]>();
+      for (const [name, m] of Object.entries<any>(state.models)) {
+        const t = m?.model_type ?? "?";
+        (byType.get(t) ?? byType.set(t, []).get(t)!).push(name);
+      }
+      if (byType.size) {
+        lines.push("Models in scenario (instance names by model_type), targetable by commands:");
+        for (const t of [...byType.keys()].sort())
+          lines.push(`- ${t}: ${byType.get(t)!.sort().join(", ")}`);
+      }
     }
 
     // Tell the bot which of its proposed actions the user has actually applied
@@ -181,7 +205,7 @@ export const useChatStore = defineStore("chat", () => {
     const { clean, commands, parseErrors } = parseCommands(answer);
 
     const pending: PendingCommand[] = commands.map((cmd) => {
-      const v = validateCommand(cmd, modelState.value);
+      const v = validateCommand(cmd, modelState.value, commandScope.value);
       return {
         cmd,
         description: v.description,
@@ -242,6 +266,7 @@ export const useChatStore = defineStore("chat", () => {
     error,
     conversationId,
     autoApply,
+    commandScope,
     sendMessage,
     newConversation,
     applyCommand,
