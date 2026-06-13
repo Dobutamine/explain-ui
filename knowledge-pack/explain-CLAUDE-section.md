@@ -39,6 +39,10 @@ confirms each). When the user asks you to *change* something:
   subset. Use the field/arg names verbatim.
 - The live context block carries a **`Models in scenario:`** map (instance names by
   model_type) — that's the source for the `model` field. Pick instances from it.
+- You can also **edit the diagram** (`op:"diagram"`) — add/connect/restyle/delete
+  compartments and connectors. Needs the Diagram tab open; the context carries a
+  **`Current diagram`** block (component ids + bindings). See the "Diagram editing" section
+  of `command-protocol.md` / `command-catalog.md`.
 - For questions (not change requests), just answer; don't emit a command block.
 
 To refresh this knowledge after the engine changes: in the Explain repo run

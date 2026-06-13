@@ -36,13 +36,76 @@ One JSON object per block. Fields by `op`:
 | `op` | required fields | meaning |
 |------|-----------------|---------|
 | `call` | `model`, `target`, `args` (array) | invoke a model function (e.g. `switch_ventilator`) |
-| `setProp` | `model`, `target`, `value` | set a model property (e.g. `vent_rate`) |
+| `setProp` | `model`, `target`, `value` | set a model property (e.g. `vent_rate`); optional `it`/`at` (see Scheduling) |
+| `event` | `name`, `changes` (array) | build a **named, saved event** of timed property changes (see Scheduling) |
 | `start` | — | start the realtime simulation loop |
 | `stop` | — | stop the realtime simulation loop |
+| `diagram` | `action`, + per-action fields | edit the diagram (see below) |
 
 `model` is the **instance name** (see the model map below), `target` is the field or
 function name from the catalog. `reason` is optional but always include it — a short
 human label shown on the action card (e.g. `"raise PEEP to recruit lung"`).
+
+## Scheduling changes over time (`it` / `at`, and `op:"event"`)
+
+A change doesn't have to be instantaneous. Two optional numeric fields control timing
+(both in **simulated seconds**, and they only advance while the simulation is running):
+
+- **`it`** — *ramp duration*. The property tweens linearly from its current value to the
+  target over `it` seconds. Numeric properties only; booleans/lists ignore it (instant swap).
+- **`at`** — *delay*. The change waits `at` seconds (relative to when it is applied) before
+  it starts.
+
+You can put `it`/`at` on a plain `setProp`:
+
+```explain-command
+{"op":"setProp","model":"Heart","target":"heart_rate_ref","value":200,"it":15,"reason":"ramp HR to 200 over 15s"}
+```
+
+To bundle several timed changes into one **named, reusable event**, use `op:"event"`. Each
+entry in `changes[]` is a `setProp`-style `{model,target,value,it?,at?}` (values in display
+units, validated against the catalog exactly like a `setProp`). Applying the card **saves
+the event into the Event Scheduler panel** — it does *not* fire it; the user then applies or
+arms it there. `fire_at` (absolute sim-clock auto-fire) is an optional panel feature; leave
+it out unless asked.
+
+```explain-command
+{"op":"event","name":"induce tachy","changes":[
+  {"model":"Heart","target":"heart_rate_ref","value":200,"it":15},
+  {"model":"Breathing","target":"breathing_enabled","value":false,"at":30}
+],"reason":"ramp HR to 200 over 15s, then apnea at +30s"}
+```
+
+If any change fails validation (unknown field, out-of-range value, …) the whole event is
+rejected with the offending change named — fix and re-emit.
+
+## Editing the diagram (`op:"diagram"`)
+
+You can also build or restyle the **diagram** the user sees — compartments (sprites
+bound to engine models) and connectors (paths between them). These commands need the
+**Diagram tab to be open**; if it isn't, the card tells the user to open it.
+
+Each turn's context includes a **`Current diagram`** block listing every component id and
+its model binding, plus the usual **`Models in scenario:`** map. Reference existing
+components by the exact id from `Current diagram`; bind to engine instances by the exact
+name from the model map; give every *new* component a unique `name`.
+
+The `action` field selects the edit; see `command-catalog.md` (the "Diagram editing"
+section) for the per-action fields, the allowed `picto` images, `path.type` values, and the
+cosmetic `setLayout` patch keys. Sequencing within one reply works: a `connect` may
+reference a component an earlier `addComponent` in the same reply creates.
+
+````
+Sure — I'll add a kidney compartment and wire it to the aorta.
+
+```explain-command
+{"op":"diagram","action":"addComponent","name":"Kidney","models":["Kidneys"],"picto":"general.png","label":"Kidney","pos":{"type":"arc","dgs":210},"reason":"add kidney"}
+```
+
+```explain-command
+{"op":"diagram","action":"connect","from":"AA","to":"Kidney","models":["AA_Kidney"],"path":{"type":"arc"},"reason":"renal artery"}
+```
+````
 
 ## Picking the model and target
 

@@ -16,7 +16,9 @@ export type CommandOp =
   | "start" // start the realtime loop       -> useExplain().start
   | "stop" // stop the realtime loop         -> useExplain().stop
   | "calculate" // run N seconds offline          -> useExplain().calculate
-  | "load"; // load a scenario by name        -> useExplain().load
+  | "load" // load a scenario by name        -> useExplain().load
+  | "event" // build a named scheduled event  -> useEventsStore() (see chat store)
+  | "diagram"; // edit the diagram             -> DiagramRenderer (see diagram actions below)
 
 export interface AllowEntry {
   op: CommandOp;
@@ -129,4 +131,56 @@ export function isAllowed(op: string, model?: string, target?: string): boolean 
       (e.model === undefined || e.model === model) &&
       (e.target === undefined || e.target === target),
   );
+}
+
+// --- Diagram editing (op: "diagram") ---------------------------------------
+//
+// Diagram edits are a separate capability surface from model commands: they
+// don't target a registry field (no ll/ul/choices), they mutate the live
+// DiagramRenderer instead of the engine. They're gated on the renderer being
+// mounted (the Diagram tab) rather than on the guided/full allowlist. The
+// per-action field rules are validated in botCommands.validateDiagramCommand and
+// described to the bot via this descriptor list (build_command_catalog.mjs).
+//
+// FUTURE: risk-tiering / rate-limiting of structural diagram edits, mirroring
+// the model-command allowlist note above.
+export type DiagramAction =
+  | "addComponent"
+  | "connect"
+  | "setLayout"
+  | "setLabel"
+  | "setModels"
+  | "setPicto"
+  | "delete";
+
+export interface DiagramActionDef {
+  action: DiagramAction;
+  fields: string; // required/optional fields the bot must emit
+  note: string; // short human description for the bot catalog
+}
+
+export const DIAGRAM_ACTIONS: DiagramActionDef[] = [
+  {
+    action: "addComponent",
+    fields: "name (unique), models[] (engine instance names), picto, label?, pos?",
+    note: "add a compartment bound to engine model(s); pos is {type:'arc',dgs} or {type:'rel',x,y}",
+  },
+  {
+    action: "connect",
+    fields: "from, to (existing component names), models?[], path?{type,width}",
+    note: "draw a connector between two existing components, optionally bound to a Resistor model",
+  },
+  {
+    action: "setLayout",
+    fields: "name, patch (cosmetic layout keys only)",
+    note: "restyle a component/connector: alpha, z_index, tinting, sprite color/scale/rotation/pos, label, path",
+  },
+  { action: "setLabel", fields: "name, text", note: "set a component's caption text" },
+  { action: "setModels", fields: "name, models[]", note: "rebind which engine model(s) a component/connector represents" },
+  { action: "setPicto", fields: "name, picto", note: "swap a compartment's sprite image" },
+  { action: "delete", fields: "name", note: "remove a component (and its attached connectors) or a connector" },
+];
+
+export function isDiagramAction(a: unknown): a is DiagramAction {
+  return typeof a === "string" && DIAGRAM_ACTIONS.some((d) => d.action === a);
 }

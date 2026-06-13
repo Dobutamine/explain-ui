@@ -8,20 +8,24 @@ map in the live context to pick the right *instance name*, find that instance's
 **Envelope** (one JSON object per fenced block):
 
 ```json
-{"op":"setProp","model":"<instance name>","target":"<field>","value":<value>,"reason":"<short label>"}
+{"op":"setProp","model":"<instance name>","target":"<field>","value":<value>,"it":<ramp s?>,"at":<delay s?>,"reason":"<short label>"}
 {"op":"call","model":"<instance name>","target":"<function>","args":[...],"reason":"<short label>"}
+{"op":"event","name":"<event name>","changes":[{"model":"..","target":"..","value":..,"it":<s?>,"at":<s?>}],"reason":"<short label>"}
 {"op":"start"}   {"op":"stop"}
 ```
 
 Rules of thumb:
 - **Values are in the displayed unit** shown per field; stay within the stated range.
+- **Timing (optional):** `it` ramps a numeric value to the target over N simulated seconds;
+  `at` delays the change N seconds. `op:"event"` bundles several timed `changes[]` into a
+  named event saved to the Event Scheduler panel — see `command-protocol.md` (Scheduling).
 - **To tune a physiological property, prefer its `*_factor_ps` knob** (a `factor` field,
   1.0 = baseline, >1 increases, <1 decreases) over editing the raw base value — factors
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
 Snapshot: **38 model_types**, **345 settable params**, **24 functions**
-(+ 26 Guided commands). Regenerate with `node scripts/build_command_catalog.mjs`.
+(+ 26 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
 ## Guided mode — curated safe set
@@ -596,3 +600,59 @@ _call_:
 - `set_fio2(fio2 (number, range 0.21–1))` — fio2
 - `set_humidity(humidity (number, range 0–1))` — humidity
 - `set_temp(temp (number, C, range 0–1))` — temperature (C)
+
+---
+
+## Events & scheduling — `op:"event"`
+
+Bundle several property changes into one **named event** the user can replay. Each entry
+in `changes[]` is a `setProp`-style `{model, target, value}` with two optional timing
+fields (simulated seconds, only advancing while the sim runs):
+
+- `it` — ramp the numeric value to the target over N seconds (numbers only; booleans/lists swap instantly).
+- `at` — delay the change N seconds before it starts.
+
+Each change is validated against the same fields/bounds/units as a `setProp` (Full vs Guided
+scope applies per change). Applying the card **saves the event into the Event Scheduler
+panel** — it does not fire it; the user applies or arms it there. Optional `fire_at` (absolute
+sim-clock auto-fire) is a panel feature; omit unless asked.
+
+Envelope: `{"op":"event","name":"<name>","changes":[{"model","target","value","it"?,"at"?}, …],"fire_at":<s?>,"reason":"<label>"}`
+
+Example — drive a tachycardia then drop spontaneous breathing 30 s later:
+```json
+{"op":"event","name":"induce tachy","changes":[{"model":"Heart","target":"heart_rate_ref","value":200,"it":15},{"model":"Breathing","target":"breathing_enabled","value":false,"at":30}],"reason":"ramp HR to 200 over 15s, apnea at +30s"}
+```
+
+---
+
+## Diagram editing — `op:"diagram"`
+
+Edit the diagram the user sees (compartments = sprites bound to engine models,
+connectors = paths between them). Requires the **Diagram tab** to be open; each
+turn's context lists the **Current diagram** (component ids + their model bindings),
+and the **`Models in scenario:`** map gives the engine instance names you bind to.
+Use existing component ids verbatim; give every new component a unique `name`.
+
+Envelope: `{"op":"diagram","action":"<action>", ...fields, "reason":"<label>"}`
+
+Actions:
+- `addComponent` — fields: name (unique), models[] (engine instance names), picto, label?, pos?. add a compartment bound to engine model(s); pos is {type:'arc',dgs} or {type:'rel',x,y}
+- `connect` — fields: from, to (existing component names), models?[], path?{type,width}. draw a connector between two existing components, optionally bound to a Resistor model
+- `setLayout` — fields: name, patch (cosmetic layout keys only). restyle a component/connector: alpha, z_index, tinting, sprite color/scale/rotation/pos, label, path
+- `setLabel` — fields: name, text. set a component's caption text
+- `setModels` — fields: name, models[]. rebind which engine model(s) a component/connector represents
+- `setPicto` — fields: name, picto. swap a compartment's sprite image
+- `delete` — fields: name. remove a component (and its attached connectors) or a connector
+
+- **picto** must be one of: container.png, vessel.png, lung.png, pump.png, blood.png, exchanger.png, gas_container.png, general.png, placenta.png, trachea.png
+- **path.type** must be one of: straight, arc, arc_r
+- **setLayout patch** keys (cosmetic only): general.alpha, general.z_index, general.tinting, sprite.color, sprite.scale.x, sprite.scale.y, sprite.rotation, sprite.pos, label.size, label.color, label.pos_x, label.pos_y, path.type, path.width
+- **pos**: `{"type":"arc","dgs":<0-360>}` to sit on the layout ring, or
+  `{"type":"rel","x":<-1..1>,"y":<-1..1>}` relative to centre.
+
+Example — add a kidney compartment and connect it to the aorta:
+```json
+{"op":"diagram","action":"addComponent","name":"Kidney","models":["Kidneys"],"picto":"general.png","label":"Kidney","pos":{"type":"arc","dgs":210},"reason":"add kidney"}
+{"op":"diagram","action":"connect","from":"AA","to":"Kidney","models":["AA_Kidney"],"path":{"type":"arc"},"reason":"renal artery"}
+```

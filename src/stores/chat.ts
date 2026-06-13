@@ -1,12 +1,16 @@
 import { defineStore } from "pinia";
 import { ref, watch } from "vue";
 import { useExplain } from "@/composables/useExplain";
+import { useDiagramStore } from "@/stores/diagram";
+import { useEventsStore } from "@/stores/events";
 import {
   parseCommands,
   validateCommand,
   executeCommand,
+  executeDiagramCommand,
   type BotCommand,
   type NormalizedCommand,
+  type DiagramHandle,
   type CommandScope,
 } from "@/services/botCommands";
 
@@ -135,6 +139,22 @@ export const useChatStore = defineStore("chat", () => {
       }
     }
 
+    // Current diagram: component names + their model bindings + connections, so
+    // the bot can reference existing components when asked to modify the diagram
+    // (op:"diagram"). Only present while the Diagram editor is mounted.
+    const dd = useDiagramStore().getDiagram();
+    const comps = dd?.components as Record<string, any> | undefined;
+    if (comps && Object.keys(comps).length) {
+      lines.push("Current diagram (editable via op:\"diagram\"; names below are the component ids):");
+      for (const [name, c] of Object.entries(comps)) {
+        const models = Array.isArray(c.models) && c.models.length ? ` → [${c.models.join(", ")}]` : "";
+        if (c.type === "Connector") lines.push(`- ${name} (Connector ${c.dbcFrom}→${c.dbcTo})${models}`);
+        else lines.push(`- ${name} (Compartment, ${c.picto})${models}`);
+      }
+    } else {
+      lines.push("Diagram editor not open — open the Diagram tab to enable op:\"diagram\" edits.");
+    }
+
     // Tell the bot which of its proposed actions the user has actually applied
     // (most recent first), so it can reason about cause/effect across turns.
     const recent = appliedLog.value.slice(-8).reverse();
@@ -204,8 +224,22 @@ export const useChatStore = defineStore("chat", () => {
     const { modelState } = useExplain();
     const { clean, commands, parseErrors } = parseCommands(answer);
 
+    // Diagram validation is batch-aware: a `connect` may reference a component a
+    // prior `addComponent` in the same reply introduces. Seed the known-name set
+    // from the live diagram, then update it as we validate each command in order.
+    const dd = useDiagramStore().getDiagram();
+    const names: Set<string> | null = dd?.components
+      ? new Set(Object.keys(dd.components))
+      : null;
+
     const pending: PendingCommand[] = commands.map((cmd) => {
-      const v = validateCommand(cmd, modelState.value, commandScope.value);
+      const v = validateCommand(cmd, modelState.value, commandScope.value, { names });
+      // keep the known-name set in sync so later commands in this batch validate
+      // against the predicted post-edit diagram
+      if (v.ok && cmd.op === "diagram" && names) {
+        if (cmd.action === "addComponent" && cmd.name) names.add(cmd.name.trim());
+        else if (cmd.action === "delete" && cmd.name) names.delete(cmd.name.trim());
+      }
       return {
         cmd,
         description: v.description,
@@ -228,13 +262,50 @@ export const useChatStore = defineStore("chat", () => {
     if (autoApply.value && pending.length) applyAll(messages.value.length - 1);
   }
 
-  // Apply a single pending command to the live engine (confirm-before-apply).
-  function applyCommand(messageIndex: number, cmdIndex: number) {
+  // Build a renderer-backed DiagramHandle over the live DiagramRenderer +
+  // Model.updateDiagram, or null when no Diagram editor is mounted.
+  function diagramHandle(): DiagramHandle | null {
+    const r = useDiagramStore().activeRenderer;
+    if (!r) return null;
+    const { model } = useExplain();
+    return {
+      add: (name, picto) => r.addCompartment(name, picto).then((n) => n ?? name),
+      setLayout: (name, patch) => r.applyLayoutPatch(name, patch),
+      setLabel: (name, text) => r.setLabel(name, text),
+      setModels: (name, models) => r.setModels(name, models),
+      setPicto: (name, picto) => r.setPicto(name, picto),
+      connect: (from, to, opts) => r.connect(from, to, opts),
+      remove: (name) => r.removeByName(name),
+      push: () => (model as any).updateDiagram?.(r.getDiagram()),
+    };
+  }
+
+  // Apply a single pending command to the live engine/diagram (confirm-before-apply).
+  async function applyCommand(messageIndex: number, cmdIndex: number) {
     const pc = messages.value[messageIndex]?.commands?.[cmdIndex];
     if (!pc || pc.status !== "pending" || !pc.normalized) return;
-    const explain = useExplain();
     try {
-      executeCommand(pc.normalized, explain);
+      if (pc.normalized.kind === "diagram") {
+        const h = diagramHandle();
+        if (!h) throw new Error("open the Diagram tab to apply this edit");
+        await executeDiagramCommand(pc.normalized, h);
+      } else if (pc.normalized.kind === "event") {
+        // a bot event is SAVED into the Event Scheduler panel (not fired here);
+        // the user applies/arms it there. persist() best-effort writes it into
+        // the scenario JSON (no-op fallback in prod, like the panel's own save).
+        const n = pc.normalized;
+        const store = useEventsStore();
+        store.upsert({
+          id: crypto.randomUUID?.() ?? `ev_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
+          name: n.name,
+          changes: n.changes,
+          fire_at: n.fire_at,
+          armed: false,
+        });
+        await store.persist();
+      } else {
+        executeCommand(pc.normalized, useExplain());
+      }
       pc.status = "applied";
       appliedLog.value.push({ description: pc.description, ts: Date.now() });
     } catch (e) {
@@ -248,9 +319,11 @@ export const useChatStore = defineStore("chat", () => {
     if (pc && pc.status === "pending") pc.status = "dismissed";
   }
 
-  function applyAll(messageIndex: number) {
+  // Apply in order and await each — diagram edits can depend on earlier ones in
+  // the same reply (a `connect` needs its `addComponent` to have landed first).
+  async function applyAll(messageIndex: number) {
     const cmds = messages.value[messageIndex]?.commands ?? [];
-    cmds.forEach((_, i) => applyCommand(messageIndex, i));
+    for (let i = 0; i < cmds.length; i++) await applyCommand(messageIndex, i);
   }
 
   function newConversation() {

@@ -15,7 +15,10 @@
 
 import { getInterfaceForType } from "@/model-interface/registry";
 import type { InterfaceField } from "@/model-interface/types";
-import { isAllowed, type CommandOp } from "./botCommandAllowlist";
+import { isAllowed, isDiagramAction, type CommandOp, type DiagramAction } from "./botCommandAllowlist";
+import { PICTOS, PATH_TYPES, LAYOUT_PATCH_WHITELIST } from "@/render/diagramConstants";
+// type-only import keeps this module Vue/Pinia-free (the value lives in the store)
+import type { EventChange } from "@/stores/events";
 
 // ---- wire shape the bot emits (one JSON object per fenced block) ----
 export interface BotCommand {
@@ -27,18 +30,61 @@ export interface BotCommand {
   it?: number; // setProp: tween time in seconds (optional)
   at?: number; // delay before applying, seconds (optional)
   seconds?: number; // calculate
-  name?: string; // load
+  name?: string; // load (scenario) / diagram (component name) / event (event name)
   group?: string; // scale
   factor?: number; // scale
   reason?: string; // optional human label for the action card
+  // --- event (op: "event"): a named bundle of scheduled prop changes ---
+  changes?: EventChangeInput[]; // event: the property changes
+  fire_at?: number; // event: optional absolute sim-time to auto-fire (panel feature)
+  // --- diagram (op: "diagram") ---
+  action?: DiagramAction; // which diagram edit
+  models?: string[]; // addComponent / connect / setModels: engine instance names
+  picto?: string; // addComponent / setPicto: sprite image
+  label?: string; // addComponent: caption (defaults to name)
+  pos?: any; // addComponent: {type:'arc',dgs} | {type:'rel',x,y}
+  from?: string; // connect: source component name
+  to?: string; // connect: destination component name
+  path?: { type?: string; width?: number }; // connect: path shape
+  text?: string; // setLabel: caption text
+  patch?: any; // setLayout: cosmetic layout patch
+}
+
+// one change as the bot emits it (values in display/clinical units, like setProp)
+export interface EventChangeInput {
+  model?: string;
+  target?: string;
+  value?: unknown;
+  it?: number; // ramp seconds (numeric only)
+  at?: number; // delay seconds before the change starts
 }
 
 // ---- normalized, engine-ready action (units already converted to raw) ----
 export type NormalizedCommand =
   | { kind: "call"; fn: string; args: unknown[]; at: number }
   | { kind: "setProp"; prop: string; value: number | boolean | string; it: number; at: number }
+  | { kind: "event"; name: string; fire_at: number | null; changes: EventChange[] }
   | { kind: "start" }
-  | { kind: "stop" };
+  | { kind: "stop" }
+  | DiagramNormalized;
+
+// diagram edits drive the live DiagramRenderer, not the engine
+export type DiagramNormalized =
+  | { kind: "diagram"; action: "addComponent"; name: string; models: string[]; picto: string; label: string; pos?: any }
+  | { kind: "diagram"; action: "connect"; from: string; to: string; models?: string[]; path?: { type?: string; width?: number } }
+  | { kind: "diagram"; action: "setLayout"; name: string; patch: any }
+  | { kind: "diagram"; action: "setLabel"; name: string; text: string }
+  | { kind: "diagram"; action: "setModels"; name: string; models: string[] }
+  | { kind: "diagram"; action: "setPicto"; name: string; picto: string }
+  | { kind: "diagram"; action: "delete"; name: string };
+
+// Context the diagram validator needs: the set of component names currently in
+// the live diagram (real components + adds queued earlier in the same reply,
+// minus deletes). `null` means no diagram renderer is mounted, so diagram edits
+// can't be applied.
+export interface DiagramContext {
+  names: Set<string> | null;
+}
 
 export interface ValidationResult {
   ok: boolean;
@@ -135,6 +181,101 @@ export function isSettableField(f: InterfaceField, op: "setProp" | "call"): bool
   return !f.readonly && SETTABLE_PROP_TYPES.has(f.type);
 }
 
+// One validated property change: a raw, engine-ready EventChange plus a
+// human-readable description fragment (display units). Shared by the `setProp`
+// op and each change inside an `event` op, so a bot-scheduled change behaves
+// exactly like a one-off setProp or a human edit (same gate, bounds, units).
+interface ValidatedChange {
+  change: EventChange; // value already converted to raw
+  desc: string; // "Model: target → value unit"
+}
+
+function validatePropChange(
+  model: string | undefined,
+  target: string | undefined,
+  value: unknown,
+  it: number,
+  at: number,
+  modelState: any,
+  scope: CommandScope,
+): { ok: true; result: ValidatedChange } | { ok: false; error: string } {
+  if (!model || !target) return { ok: false, error: "requires model + target" };
+  if (scope === "guided" && !isAllowed("setProp", model, target))
+    return { ok: false, error: `not enabled in Guided scope: setProp ${model}.${target} — switch to Full scope to allow` };
+  const fields = fieldsFor(model, modelState);
+  if (!fields) return { ok: false, error: `model "${model}" not found in current scenario` };
+  const f = fields.find((x) => x.target === target);
+  if (!f) return { ok: false, error: `"${target}" is not an editable property of ${model}` };
+  if (f.readonly) return { ok: false, error: `"${target}" is read-only on ${model}` };
+  if (!isSettableField(f, "setProp"))
+    return { ok: false, error: `${model}.${target} (type "${f.type}") is not settable at runtime` };
+
+  if (f.type === "number" || f.type === "factor") {
+    const v = value as number;
+    const err = checkNumberBounds(f, target, v);
+    if (err) return { ok: false, error: err };
+    const unit = f.caption?.match(/\(([^)]+)\)/)?.[1] ?? "";
+    return {
+      ok: true,
+      result: {
+        change: { model, target, type: "number", value: toRaw(f, v), it, at },
+        desc: `${model}: ${target} → ${v}${unit ? " " + unit : ""}`,
+      },
+    };
+  }
+  if (f.type === "boolean") {
+    if (typeof value !== "boolean") return { ok: false, error: `${target} expects true/false` };
+    return {
+      ok: true,
+      result: { change: { model, target, type: "boolean", value, it: 0, at }, desc: `${model}: ${target} → ${value}` },
+    };
+  }
+  if (f.type === "list") {
+    const choices = resolveChoices(f);
+    if (typeof value !== "string" || !choices.includes(value))
+      return { ok: false, error: `${target} must be one of: ${choices.join(", ")}` };
+    return {
+      ok: true,
+      result: { change: { model, target, type: "list", value, it: 0, at }, desc: `${model}: ${target} → ${value}` },
+    };
+  }
+  return { ok: false, error: `property type "${f.type}" not supported for bot commands` };
+}
+
+// Validate an `op:"event"` command: a named bundle of scheduled prop changes.
+// Each change is validated exactly like a setProp; the whole event is rejected
+// if any change is bad. fire_at/armed are panel features the bot leaves unset
+// (armed defaults off in the store) — per-change `at` is its timing mechanism.
+function validateEventCommand(cmd: BotCommand, modelState: any, scope: CommandScope): ValidationResult {
+  const label = cmd.reason || `event ${cmd.name ?? ""}`.trim();
+  const name = (cmd.name ?? "").trim();
+  if (!name) return reject(label, "event requires a 'name'");
+  if (!Array.isArray(cmd.changes) || cmd.changes.length === 0)
+    return reject(label, "event requires a non-empty 'changes' array");
+
+  const changes: EventChange[] = [];
+  const parts: string[] = [];
+  for (const ch of cmd.changes) {
+    const it = typeof ch.it === "number" ? ch.it : 0;
+    const at = typeof ch.at === "number" ? ch.at : 0;
+    const r = validatePropChange(ch.model, ch.target, ch.value, it, at, modelState, scope);
+    if (!r.ok) return reject(label, `change ${ch.model ?? "?"}.${ch.target ?? "?"}: ${r.error}`);
+    const c = r.result.change;
+    changes.push(c);
+    let d = r.result.desc;
+    if (c.type === "number" && c.it) d += ` over ${c.it}s`;
+    if (c.at) d += ` after ${c.at}s`;
+    parts.push(d);
+  }
+
+  const fire_at = typeof cmd.fire_at === "number" ? cmd.fire_at : null;
+  return {
+    ok: true,
+    normalized: { kind: "event", name, fire_at, changes },
+    description: cmd.reason || `${name}: ${parts.join("; ")}`,
+  };
+}
+
 // Validate a single parsed command against the scope gate + the model-interface
 // schema, converting display units to raw. Pure (no engine access) so it can be
 // unit-tested with a plain modelState object. `scope` selects the gate: "guided"
@@ -143,15 +284,22 @@ export function validateCommand(
   cmd: BotCommand,
   modelState: any,
   scope: CommandScope = "full",
+  diagram?: DiagramContext,
 ): ValidationResult {
   const op = cmd.op;
   const label = cmd.reason || `${op} ${cmd.model ?? ""}${cmd.target ? "." + cmd.target : ""}`;
+
+  // diagram edits are a separate surface (renderer, not engine); gated on a
+  // mounted renderer rather than the guided/full allowlist.
+  if (op === "diagram") return validateDiagramCommand(cmd, modelState, diagram?.names ?? null);
 
   // sim-control ops carry no model/target and are allowed in both scopes
   if (op === "start")
     return { ok: true, normalized: { kind: "start" }, description: cmd.reason || "start simulation" };
   if (op === "stop")
     return { ok: true, normalized: { kind: "stop" }, description: cmd.reason || "stop simulation" };
+  // event: a named bundle of scheduled changes; gated per-change (no early gate)
+  if (op === "event") return validateEventCommand(cmd, modelState, scope);
   if (op !== "setProp" && op !== "call")
     return reject(label, `unsupported op "${op}"`);
 
@@ -166,49 +314,16 @@ export function validateCommand(
 
   switch (op) {
     case "setProp": {
-      if (!cmd.model || !cmd.target) return reject(label, "setProp requires model + target");
-      const fields = fieldsFor(cmd.model, modelState);
-      if (!fields) return reject(label, `model "${cmd.model}" not found in current scenario`);
-      const f = fields.find((x) => x.target === cmd.target);
-      if (!f) return reject(label, `"${cmd.target}" is not an editable property of ${cmd.model}`);
-      if (f.readonly) return reject(label, `"${cmd.target}" is read-only on ${cmd.model}`);
-      if (!isSettableField(f, "setProp"))
-        return reject(label, `${cmd.model}.${cmd.target} (type "${f.type}") is not settable at runtime`);
-
       const at = typeof cmd.at === "number" ? cmd.at : 0;
       const it = typeof cmd.it === "number" ? cmd.it : 0;
-      const prop = `${cmd.model}.${cmd.target}`;
-
-      if (f.type === "number" || f.type === "factor") {
-        const v = cmd.value as number;
-        const err = checkNumberBounds(f, cmd.target!, v);
-        if (err) return reject(label, err);
-        const unit = f.caption?.match(/\(([^)]+)\)/)?.[1] ?? "";
-        return {
-          ok: true,
-          normalized: { kind: "setProp", prop, value: toRaw(f, v), it, at },
-          description: cmd.reason || `${cmd.model}: ${cmd.target} → ${v}${unit ? " " + unit : ""}`,
-        };
-      }
-      if (f.type === "boolean") {
-        if (typeof cmd.value !== "boolean") return reject(label, `${cmd.target} expects true/false`);
-        return {
-          ok: true,
-          normalized: { kind: "setProp", prop, value: cmd.value, it: 0, at },
-          description: cmd.reason || `${cmd.model}: ${cmd.target} → ${cmd.value}`,
-        };
-      }
-      if (f.type === "list") {
-        const choices = resolveChoices(f);
-        if (typeof cmd.value !== "string" || !choices.includes(cmd.value))
-          return reject(label, `${cmd.target} must be one of: ${choices.join(", ")}`);
-        return {
-          ok: true,
-          normalized: { kind: "setProp", prop, value: cmd.value, it: 0, at },
-          description: cmd.reason || `${cmd.model}: ${cmd.target} → ${cmd.value}`,
-        };
-      }
-      return reject(label, `property type "${f.type}" not supported for bot commands`);
+      const r = validatePropChange(cmd.model, cmd.target, cmd.value, it, at, modelState, scope);
+      if (!r.ok) return reject(label, r.error);
+      const c = r.result.change;
+      return {
+        ok: true,
+        normalized: { kind: "setProp", prop: `${c.model}.${c.target}`, value: c.value, it: c.it, at: c.at },
+        description: cmd.reason || r.result.desc,
+      };
     }
 
     case "call": {
@@ -255,6 +370,182 @@ export function validateCommand(
   }
 }
 
+// ---- diagram validation helpers ----
+
+// every model name in `models` must be a live engine instance; returns an error
+// string listing the unknown ones, or null
+function modelsExist(models: string[], modelState: any): string | null {
+  const live = modelState?.models ?? {};
+  const missing = models.filter((m) => !(m in live));
+  return missing.length ? `unknown model instance(s): ${missing.join(", ")}` : null;
+}
+
+function pictoError(picto: string): string | null {
+  return (PICTOS as readonly string[]).includes(picto)
+    ? null
+    : `picto must be one of: ${PICTOS.join(", ")}`;
+}
+
+// validate a sprite position; null when ok or omitted
+function posError(pos: any): string | null {
+  if (pos == null) return null;
+  if (typeof pos !== "object") return "pos must be an object";
+  if (pos.type === "arc") return typeof pos.dgs === "number" ? null : "arc pos needs a numeric dgs";
+  if (pos.type === "rel")
+    return typeof pos.x === "number" && typeof pos.y === "number" ? null : "rel pos needs numeric x,y";
+  return "pos.type must be 'arc' or 'rel'";
+}
+
+// flatten a nested patch object into dotted leaf paths
+function flattenPaths(obj: any, prefix = ""): string[] {
+  const out: string[] = [];
+  for (const k of Object.keys(obj)) {
+    const p = prefix ? `${prefix}.${k}` : k;
+    const v = obj[k];
+    if (v && typeof v === "object" && !Array.isArray(v)) out.push(...flattenPaths(v, p));
+    else out.push(p);
+  }
+  return out;
+}
+
+// a leaf path is allowed if it equals a whitelist entry or sits under one
+// (e.g. "sprite.pos.dgs" is covered by the "sprite.pos" entry)
+function isAllowedPatchPath(p: string): boolean {
+  return (LAYOUT_PATCH_WHITELIST as readonly string[]).some((w) => p === w || p.startsWith(w + "."));
+}
+
+function needName(cmd: BotCommand): string {
+  return (cmd.name ?? "").trim();
+}
+
+// Validate a single diagram-edit command against the live diagram (component
+// names) + model instances. `names` is null when no renderer is mounted.
+export function validateDiagramCommand(
+  cmd: BotCommand,
+  modelState: any,
+  names: Set<string> | null,
+): ValidationResult {
+  const label = cmd.reason || `diagram ${cmd.action ?? "?"}`;
+  if (!isDiagramAction(cmd.action)) return reject(label, `unknown diagram action "${cmd.action}"`);
+  if (!names) return reject(label, "open the Diagram tab to apply diagram edits");
+  const action = cmd.action;
+
+  switch (action) {
+    case "addComponent": {
+      const name = needName(cmd);
+      if (!name) return reject(label, "addComponent requires a unique 'name'");
+      if (names.has(name)) return reject(label, `a component named "${name}" already exists`);
+      const models = Array.isArray(cmd.models) ? cmd.models.map(String) : [];
+      if (!models.length) return reject(label, "addComponent requires models[] (engine instance name)");
+      const me = modelsExist(models, modelState);
+      if (me) return reject(label, me);
+      const picto = cmd.picto ?? "container.png";
+      const pe = pictoError(picto);
+      if (pe) return reject(label, pe);
+      const poserr = posError(cmd.pos);
+      if (poserr) return reject(label, poserr);
+      return {
+        ok: true,
+        normalized: { kind: "diagram", action, name, models, picto, label: cmd.label ?? name, pos: cmd.pos },
+        description: cmd.reason || `add ${name} → [${models.join(", ")}] (${picto})`,
+      };
+    }
+    case "connect": {
+      const from = (cmd.from ?? "").trim();
+      const to = (cmd.to ?? "").trim();
+      if (!from || !to) return reject(label, "connect requires 'from' and 'to'");
+      if (!names.has(from)) return reject(label, `from "${from}" is not a component in the diagram`);
+      if (!names.has(to)) return reject(label, `to "${to}" is not a component in the diagram`);
+      const models = Array.isArray(cmd.models) ? cmd.models.map(String) : [];
+      if (models.length) {
+        const me = modelsExist(models, modelState);
+        if (me) return reject(label, me);
+      }
+      let path: { type?: string; width?: number } | undefined;
+      if (cmd.path) {
+        const t = cmd.path.type;
+        if (t !== undefined && !(PATH_TYPES as readonly string[]).includes(t))
+          return reject(label, `path.type must be one of: ${PATH_TYPES.join(", ")}`);
+        path = {
+          ...(t !== undefined ? { type: t } : {}),
+          ...(typeof cmd.path.width === "number" ? { width: cmd.path.width } : {}),
+        };
+      }
+      return {
+        ok: true,
+        normalized: { kind: "diagram", action, from, to, models: models.length ? models : undefined, path },
+        description: cmd.reason || `connect ${from} → ${to}${models.length ? ` [${models.join(", ")}]` : ""}`,
+      };
+    }
+    case "setLayout": {
+      const name = needName(cmd);
+      if (!name) return reject(label, "setLayout requires 'name'");
+      if (!names.has(name)) return reject(label, `"${name}" is not in the diagram`);
+      const patch = cmd.patch;
+      if (!patch || typeof patch !== "object" || Array.isArray(patch))
+        return reject(label, "setLayout requires a 'patch' object");
+      const bad = flattenPaths(patch).filter((p) => !isAllowedPatchPath(p));
+      if (bad.length) return reject(label, `patch keys not allowed: ${bad.join(", ")}`);
+      const alpha = patch?.general?.alpha;
+      if (typeof alpha === "number" && (alpha < 0 || alpha > 1))
+        return reject(label, "alpha must be between 0 and 1");
+      return {
+        ok: true,
+        normalized: { kind: "diagram", action, name, patch },
+        description: cmd.reason || `restyle ${name}`,
+      };
+    }
+    case "setLabel": {
+      const name = needName(cmd);
+      if (!name) return reject(label, "setLabel requires 'name'");
+      if (!names.has(name)) return reject(label, `"${name}" is not in the diagram`);
+      if (typeof cmd.text !== "string") return reject(label, "setLabel requires string 'text'");
+      return {
+        ok: true,
+        normalized: { kind: "diagram", action, name, text: cmd.text },
+        description: cmd.reason || `label ${name} → "${cmd.text}"`,
+      };
+    }
+    case "setModels": {
+      const name = needName(cmd);
+      if (!name) return reject(label, "setModels requires 'name'");
+      if (!names.has(name)) return reject(label, `"${name}" is not in the diagram`);
+      const models = Array.isArray(cmd.models) ? cmd.models.map(String) : null;
+      if (!models) return reject(label, "setModels requires models[]");
+      const me = modelsExist(models, modelState);
+      if (me) return reject(label, me);
+      return {
+        ok: true,
+        normalized: { kind: "diagram", action, name, models },
+        description: cmd.reason || `bind ${name} → [${models.join(", ")}]`,
+      };
+    }
+    case "setPicto": {
+      const name = needName(cmd);
+      if (!name) return reject(label, "setPicto requires 'name'");
+      if (!names.has(name)) return reject(label, `"${name}" is not in the diagram`);
+      const picto = cmd.picto ?? "";
+      const pe = pictoError(picto);
+      if (pe) return reject(label, pe);
+      return {
+        ok: true,
+        normalized: { kind: "diagram", action, name, picto },
+        description: cmd.reason || `picto ${name} → ${picto}`,
+      };
+    }
+    case "delete": {
+      const name = needName(cmd);
+      if (!name) return reject(label, "delete requires 'name'");
+      if (!names.has(name)) return reject(label, `"${name}" is not in the diagram`);
+      return {
+        ok: true,
+        normalized: { kind: "diagram", action, name },
+        description: cmd.reason || `delete ${name}`,
+      };
+    }
+  }
+}
+
 // The slice of useExplain() the executor needs (keeps this module Vue-free).
 export interface ExplainHandle {
   call: (fn: string, args?: unknown[], at?: number) => void;
@@ -263,7 +554,21 @@ export interface ExplainHandle {
   stop: () => void;
 }
 
-// Apply a validated, normalized command to the live engine.
+// Thin, renderer-backed handle for diagram edits (keeps this module Pixi-free).
+// Implemented in the chat store over the live DiagramRenderer + Model.updateDiagram.
+export interface DiagramHandle {
+  add: (name: string, picto: string) => Promise<string>; // -> actual (unique) name
+  setLayout: (name: string, patch: any) => void;
+  setLabel: (name: string, text: string) => void;
+  setModels: (name: string, models: string[]) => void;
+  setPicto: (name: string, picto: string) => Promise<void> | void;
+  connect: (from: string, to: string, opts?: { models?: string[]; path?: { type?: string; width?: number } }) => string | null;
+  remove: (name: string) => void;
+  push: () => void; // re-bind the live animation (Model.updateDiagram)
+}
+
+// Apply a validated, normalized engine command to the live engine. Diagram
+// commands (kind "diagram") go through executeDiagramCommand instead.
 export function executeCommand(norm: NormalizedCommand, explain: ExplainHandle): void {
   switch (norm.kind) {
     case "call":
@@ -279,4 +584,42 @@ export function executeCommand(norm: NormalizedCommand, explain: ExplainHandle):
       explain.stop();
       break;
   }
+}
+
+// Apply a validated diagram edit to the live renderer, then push the diagram to
+// the engine once so the animation re-binds (no model rebuild). Async because
+// adding a compartment / swapping a picto loads sprite assets; the caller must
+// await so a follow-up `connect` sees the new component.
+export async function executeDiagramCommand(
+  norm: DiagramNormalized,
+  h: DiagramHandle,
+): Promise<void> {
+  switch (norm.action) {
+    case "addComponent": {
+      const actual = await h.add(norm.name, norm.picto);
+      h.setModels(actual, norm.models);
+      h.setLabel(actual, norm.label);
+      if (norm.pos) h.setLayout(actual, { sprite: { pos: norm.pos } });
+      break;
+    }
+    case "connect":
+      h.connect(norm.from, norm.to, { models: norm.models, path: norm.path });
+      break;
+    case "setLayout":
+      h.setLayout(norm.name, norm.patch);
+      break;
+    case "setLabel":
+      h.setLabel(norm.name, norm.text);
+      break;
+    case "setModels":
+      h.setModels(norm.name, norm.models);
+      break;
+    case "setPicto":
+      await h.setPicto(norm.name, norm.picto);
+      break;
+    case "delete":
+      h.remove(norm.name);
+      break;
+  }
+  h.push();
 }

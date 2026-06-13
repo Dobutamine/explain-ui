@@ -751,17 +751,25 @@ export class DiagramRenderer implements RendererAdapter {
   /** Delete the selected component (sprite + attached connectors) and its
    *  entry in diagram_definition. */
   deleteSelected() {
-    const name = this.selected;
-    if (!name || !this.app) return;
-    if (this.selectedKind === "conn") {
+    if (this.selected) this.removeByName(this.selected, this.selectedKind);
+  }
+
+  /** Delete a component or connector by name (sprite/graphics + attached
+   *  connectors) and its entry in diagram_definition. Used by the editor
+   *  (deleteSelected) and by programmatic/bot edits. `kind` is inferred from the
+   *  diagram when omitted, so callers needn't track the selection. */
+  removeByName(name: string, kind?: "comp" | "conn" | null) {
+    if (!name || !this.app || !this.diagram?.components?.[name]) return;
+    const k = kind ?? (this.diagram.components[name].type === "Connector" ? "conn" : "comp");
+    if (k === "conn") {
       this.conns = this.conns.filter((c) => {
         if (c.name !== name) return true;
         this.app!.stage.removeChild(c.graphics);
         this.app!.stage.removeChild(c.arrow);
         return false;
       });
-      if (this.diagram?.components) delete this.diagram.components[name];
-      this.clearSelection();
+      delete this.diagram.components[name];
+      if (this.selected === name) this.clearSelection();
       this.onChangeCb?.();
       return;
     }
@@ -779,8 +787,8 @@ export class DiagramRenderer implements RendererAdapter {
       }
       return true;
     });
-    if (this.diagram?.components) delete this.diagram.components[name];
-    this.clearSelection();
+    delete this.diagram.components[name];
+    if (this.selected === name) this.clearSelection();
     this.onChangeCb?.();
   }
 
@@ -837,14 +845,32 @@ export class DiagramRenderer implements RendererAdapter {
     return name;
   }
 
-  private createConnection(fromName: string, toName: string) {
-    if (!this.diagram?.components) return;
+  private createConnection(fromName: string, toName: string): string | null {
+    if (!this.diagram?.components) return null;
     const name = this.uniqueName(fromName + "_" + toName);
     const comp = defaultConnector(fromName, toName);
     this.diagram.components[name] = comp;
     this.makeConnector(name, comp);
     this.select(name, "conn");
     this.onChangeCb?.();
+    return name;
+  }
+
+  /** Create a connector between two existing components by name (programmatic
+   *  equivalent of connect-mode's two clicks), optionally binding engine
+   *  model(s) and applying a path patch. Returns the new connector name, or null
+   *  if either endpoint is missing. */
+  connect(
+    from: string,
+    to: string,
+    opts?: { models?: string[]; path?: { type?: string; width?: number } },
+  ): string | null {
+    if (!this.comps[from] || !this.comps[to]) return null;
+    const name = this.createConnection(from, to);
+    if (!name) return null;
+    if (opts?.models) this.setModels(name, opts.models);
+    if (opts?.path) this.applyLayoutPatch(name, { path: opts.path });
+    return name;
   }
 
   private uniqueName(base: string): string {

@@ -10,6 +10,8 @@ import Select from "primevue/select";
 import MultiSelect from "primevue/multiselect";
 import { useRealtimeBus } from "@/composables/useRealtimeBus";
 import { useExplain } from "@/composables/useExplain";
+import { useDiagramStore } from "@/stores/diagram";
+import { PICTOS as PICTO_OPTIONS, PATH_TYPES as PATH_TYPE_OPTIONS } from "@/render/diagramConstants";
 // type-only import is erased at build; the renderer (and PixiJS) is loaded
 // lazily below so Pixi lands in its own async chunk, not the main bundle.
 import type { DiagramRenderer as DiagramRendererT } from "@/render/DiagramRenderer";
@@ -18,6 +20,8 @@ const el = ref<HTMLDivElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const { addRenderer, removeRenderer } = useRealtimeBus();
 const { model, modelState } = useExplain();
+// Publishes the live renderer so the chat/bot pipeline can drive diagram edits.
+const diagramStore = useDiagramStore();
 let adapter: DiagramRendererT | null = null;
 
 const editMode = ref(false);
@@ -45,20 +49,10 @@ const selPathType = ref("straight");
 const selPathWidth = ref(5);
 const selModels = ref<string[]>([]);
 
-// sprite images available in public/gfx (arrow.png is the flow indicator, not a picto)
-const PICTOS = [
-  "container.png",
-  "vessel.png",
-  "lung.png",
-  "pump.png",
-  "blood.png",
-  "exchanger.png",
-  "gas_container.png",
-  "general.png",
-  "placenta.png",
-  "trachea.png",
-];
-const PATH_TYPES = ["straight", "arc", "arc_r"];
+// sprite + path options come from the shared diagram constants (also used by the
+// bot-command validator); copied to mutable arrays for the PrimeVue Select props.
+const PICTOS = [...PICTO_OPTIONS];
+const PATH_TYPES = [...PATH_TYPE_OPTIONS];
 
 const modelNames = computed(() => {
   const m = (modelState.value as any)?.models;
@@ -105,10 +99,13 @@ async function mountRenderer(diagram: any) {
   gridOn.value = diagram?.settings?.grid === true;
   if (diagram?.settings?.gridSize > 0) gridSize.value = diagram.settings.gridSize;
   addRenderer(adapter);
+  // publish to the chat/bot pipeline so it can drive diagram edits while mounted
+  diagramStore.register(adapter);
 }
 
 function teardown() {
   if (adapter) {
+    diagramStore.unregister(adapter);
     removeRenderer(adapter);
     adapter.dispose();
     adapter = null;
@@ -241,13 +238,6 @@ function download(text: string, name: string) {
             class="addsel w-40"
           />
         </template>
-        <ToggleButton
-          v-model="connectMode"
-          on-label="Connecting"
-          off-label="Connect"
-          size="small"
-          @update:model-value="toggleConnect"
-        />
       </template>
     </div>
 
@@ -430,6 +420,14 @@ function download(text: string, name: string) {
         accept="application/json"
         class="hidden"
         @change="onImport"
+      />
+      <span class="mx-1 opacity-40">|</span>
+      <ToggleButton
+        v-model="connectMode"
+        on-label="Connecting"
+        off-label="Connect"
+        size="small"
+        @update:model-value="toggleConnect"
       />
       <span class="mx-1 opacity-40">|</span>
       <ToggleButton

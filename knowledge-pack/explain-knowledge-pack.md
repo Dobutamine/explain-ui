@@ -4130,6 +4130,22 @@ export default class Model extends ModelEmitter {
   }
 
   /**
+   * Re-bind the sprite diagram's animation to an edited diagram definition
+   * WITHOUT rebuilding the model — the running simulation (model objects,
+   * volumes, time) is preserved. Pass the diagram_definition object (the
+   * `{ settings, components }` shape). The worker rebuilds its AnimationPacker
+   * and re-posts the realtime channel registry so renderers rebind live.
+   * @param {Object} diagram_definition
+   */
+  updateDiagram(diagram_definition) {
+    this.send({
+      type: "PUT",
+      message: "diagram_definition",
+      payload: JSON.stringify(diagram_definition),
+    });
+  }
+
+  /**
    * Rebuild the engine using the last loaded definition snapshot.
    */
   restart() {
@@ -4663,6 +4679,9 @@ self.onmessage = (e) => {
             console.log("ModelEngine: task scheduler request: ", e.data.payload )
             set_property(_normalize_payload(e.data.payload));
             break;
+          case "diagram_definition":
+            update_diagram(_normalize_payload(e.data.payload));
+            break;
         }
         break;
       case "POST": // create a new resource
@@ -4744,6 +4763,31 @@ const _post_rt_channels = function () {
       anim: animation_packer ? animation_packer.registry() : null,
     },
   });
+};
+
+// Re-bind the sprite-diagram animation to an EDITED diagram definition without
+// rebuilding the model — the live simulation (model objects, volumes, time)
+// is left running. Swaps model.diagram_definition, rebuilds the AnimationPacker
+// (component -> slot registry + direct model refs), re-acquires the anim
+// snapshot at the new stride/version, and re-posts the rt_channels handshake so
+// the main-thread reader and renderers rebind. Returns true on success.
+const update_diagram = function (diagram_definition) {
+  if (!model) return false;
+  if (diagram_definition) model.diagram_definition = diagram_definition;
+  if (!channel_writer) return false;
+  try {
+    build_counter += 1;
+    animation_packer = new AnimationPacker(model, build_counter);
+    channel_writer.acquireAnimSnapshot(
+      animation_packer.stride || 0,
+      animation_packer.version
+    );
+    _post_rt_channels();
+    return true;
+  } catch (e) {
+    console.error("ModelEngine: diagram animation rebind failed:", e);
+    return false;
+  }
 };
 
 // define the model functions
@@ -20320,12 +20364,16 @@ export function groupByEditMode(fields: InterfaceField[]): FieldGroup[] {
 import { defineStore } from "pinia";
 import { ref, watch } from "vue";
 import { useExplain } from "@/composables/useExplain";
+import { useDiagramStore } from "@/stores/diagram";
+import { useEventsStore } from "@/stores/events";
 import {
   parseCommands,
   validateCommand,
   executeCommand,
+  executeDiagramCommand,
   type BotCommand,
   type NormalizedCommand,
+  type DiagramHandle,
   type CommandScope,
 } from "@/services/botCommands";
 
@@ -20454,6 +20502,22 @@ export const useChatStore = defineStore("chat", () => {
       }
     }
 
+    // Current diagram: component names + their model bindings + connections, so
+    // the bot can reference existing components when asked to modify the diagram
+    // (op:"diagram"). Only present while the Diagram editor is mounted.
+    const dd = useDiagramStore().getDiagram();
+    const comps = dd?.components as Record<string, any> | undefined;
+    if (comps && Object.keys(comps).length) {
+      lines.push("Current diagram (editable via op:\"diagram\"; names below are the component ids):");
+      for (const [name, c] of Object.entries(comps)) {
+        const models = Array.isArray(c.models) && c.models.length ? ` → [${c.models.join(", ")}]` : "";
+        if (c.type === "Connector") lines.push(`- ${name} (Connector ${c.dbcFrom}→${c.dbcTo})${models}`);
+        else lines.push(`- ${name} (Compartment, ${c.picto})${models}`);
+      }
+    } else {
+      lines.push("Diagram editor not open — open the Diagram tab to enable op:\"diagram\" edits.");
+    }
+
     // Tell the bot which of its proposed actions the user has actually applied
     // (most recent first), so it can reason about cause/effect across turns.
     const recent = appliedLog.value.slice(-8).reverse();
@@ -20523,8 +20587,22 @@ export const useChatStore = defineStore("chat", () => {
     const { modelState } = useExplain();
     const { clean, commands, parseErrors } = parseCommands(answer);
 
+    // Diagram validation is batch-aware: a `connect` may reference a component a
+    // prior `addComponent` in the same reply introduces. Seed the known-name set
+    // from the live diagram, then update it as we validate each command in order.
+    const dd = useDiagramStore().getDiagram();
+    const names: Set<string> | null = dd?.components
+      ? new Set(Object.keys(dd.components))
+      : null;
+
     const pending: PendingCommand[] = commands.map((cmd) => {
-      const v = validateCommand(cmd, modelState.value, commandScope.value);
+      const v = validateCommand(cmd, modelState.value, commandScope.value, { names });
+      // keep the known-name set in sync so later commands in this batch validate
+      // against the predicted post-edit diagram
+      if (v.ok && cmd.op === "diagram" && names) {
+        if (cmd.action === "addComponent" && cmd.name) names.add(cmd.name.trim());
+        else if (cmd.action === "delete" && cmd.name) names.delete(cmd.name.trim());
+      }
       return {
         cmd,
         description: v.description,
@@ -20547,13 +20625,50 @@ export const useChatStore = defineStore("chat", () => {
     if (autoApply.value && pending.length) applyAll(messages.value.length - 1);
   }
 
-  // Apply a single pending command to the live engine (confirm-before-apply).
-  function applyCommand(messageIndex: number, cmdIndex: number) {
+  // Build a renderer-backed DiagramHandle over the live DiagramRenderer +
+  // Model.updateDiagram, or null when no Diagram editor is mounted.
+  function diagramHandle(): DiagramHandle | null {
+    const r = useDiagramStore().activeRenderer;
+    if (!r) return null;
+    const { model } = useExplain();
+    return {
+      add: (name, picto) => r.addCompartment(name, picto).then((n) => n ?? name),
+      setLayout: (name, patch) => r.applyLayoutPatch(name, patch),
+      setLabel: (name, text) => r.setLabel(name, text),
+      setModels: (name, models) => r.setModels(name, models),
+      setPicto: (name, picto) => r.setPicto(name, picto),
+      connect: (from, to, opts) => r.connect(from, to, opts),
+      remove: (name) => r.removeByName(name),
+      push: () => (model as any).updateDiagram?.(r.getDiagram()),
+    };
+  }
+
+  // Apply a single pending command to the live engine/diagram (confirm-before-apply).
+  async function applyCommand(messageIndex: number, cmdIndex: number) {
     const pc = messages.value[messageIndex]?.commands?.[cmdIndex];
     if (!pc || pc.status !== "pending" || !pc.normalized) return;
-    const explain = useExplain();
     try {
-      executeCommand(pc.normalized, explain);
+      if (pc.normalized.kind === "diagram") {
+        const h = diagramHandle();
+        if (!h) throw new Error("open the Diagram tab to apply this edit");
+        await executeDiagramCommand(pc.normalized, h);
+      } else if (pc.normalized.kind === "event") {
+        // a bot event is SAVED into the Event Scheduler panel (not fired here);
+        // the user applies/arms it there. persist() best-effort writes it into
+        // the scenario JSON (no-op fallback in prod, like the panel's own save).
+        const n = pc.normalized;
+        const store = useEventsStore();
+        store.upsert({
+          id: crypto.randomUUID?.() ?? `ev_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
+          name: n.name,
+          changes: n.changes,
+          fire_at: n.fire_at,
+          armed: false,
+        });
+        await store.persist();
+      } else {
+        executeCommand(pc.normalized, useExplain());
+      }
       pc.status = "applied";
       appliedLog.value.push({ description: pc.description, ts: Date.now() });
     } catch (e) {
@@ -20567,9 +20682,11 @@ export const useChatStore = defineStore("chat", () => {
     if (pc && pc.status === "pending") pc.status = "dismissed";
   }
 
-  function applyAll(messageIndex: number) {
+  // Apply in order and await each — diagram edits can depend on earlier ones in
+  // the same reply (a `connect` needs its `addComponent` to have landed first).
+  async function applyAll(messageIndex: number) {
     const cmds = messages.value[messageIndex]?.commands ?? [];
-    cmds.forEach((_, i) => applyCommand(messageIndex, i));
+    for (let i = 0; i < cmds.length; i++) await applyCommand(messageIndex, i);
   }
 
   function newConversation() {
@@ -20640,13 +20757,76 @@ One JSON object per block. Fields by `op`:
 | `op` | required fields | meaning |
 |------|-----------------|---------|
 | `call` | `model`, `target`, `args` (array) | invoke a model function (e.g. `switch_ventilator`) |
-| `setProp` | `model`, `target`, `value` | set a model property (e.g. `vent_rate`) |
+| `setProp` | `model`, `target`, `value` | set a model property (e.g. `vent_rate`); optional `it`/`at` (see Scheduling) |
+| `event` | `name`, `changes` (array) | build a **named, saved event** of timed property changes (see Scheduling) |
 | `start` | — | start the realtime simulation loop |
 | `stop` | — | stop the realtime simulation loop |
+| `diagram` | `action`, + per-action fields | edit the diagram (see below) |
 
 `model` is the **instance name** (see the model map below), `target` is the field or
 function name from the catalog. `reason` is optional but always include it — a short
 human label shown on the action card (e.g. `"raise PEEP to recruit lung"`).
+
+## Scheduling changes over time (`it` / `at`, and `op:"event"`)
+
+A change doesn't have to be instantaneous. Two optional numeric fields control timing
+(both in **simulated seconds**, and they only advance while the simulation is running):
+
+- **`it`** — *ramp duration*. The property tweens linearly from its current value to the
+  target over `it` seconds. Numeric properties only; booleans/lists ignore it (instant swap).
+- **`at`** — *delay*. The change waits `at` seconds (relative to when it is applied) before
+  it starts.
+
+You can put `it`/`at` on a plain `setProp`:
+
+```explain-command
+{"op":"setProp","model":"Heart","target":"heart_rate_ref","value":200,"it":15,"reason":"ramp HR to 200 over 15s"}
+```
+
+To bundle several timed changes into one **named, reusable event**, use `op:"event"`. Each
+entry in `changes[]` is a `setProp`-style `{model,target,value,it?,at?}` (values in display
+units, validated against the catalog exactly like a `setProp`). Applying the card **saves
+the event into the Event Scheduler panel** — it does *not* fire it; the user then applies or
+arms it there. `fire_at` (absolute sim-clock auto-fire) is an optional panel feature; leave
+it out unless asked.
+
+```explain-command
+{"op":"event","name":"induce tachy","changes":[
+  {"model":"Heart","target":"heart_rate_ref","value":200,"it":15},
+  {"model":"Breathing","target":"breathing_enabled","value":false,"at":30}
+],"reason":"ramp HR to 200 over 15s, then apnea at +30s"}
+```
+
+If any change fails validation (unknown field, out-of-range value, …) the whole event is
+rejected with the offending change named — fix and re-emit.
+
+## Editing the diagram (`op:"diagram"`)
+
+You can also build or restyle the **diagram** the user sees — compartments (sprites
+bound to engine models) and connectors (paths between them). These commands need the
+**Diagram tab to be open**; if it isn't, the card tells the user to open it.
+
+Each turn's context includes a **`Current diagram`** block listing every component id and
+its model binding, plus the usual **`Models in scenario:`** map. Reference existing
+components by the exact id from `Current diagram`; bind to engine instances by the exact
+name from the model map; give every *new* component a unique `name`.
+
+The `action` field selects the edit; see `command-catalog.md` (the "Diagram editing"
+section) for the per-action fields, the allowed `picto` images, `path.type` values, and the
+cosmetic `setLayout` patch keys. Sequencing within one reply works: a `connect` may
+reference a component an earlier `addComponent` in the same reply creates.
+
+````
+Sure — I'll add a kidney compartment and wire it to the aorta.
+
+```explain-command
+{"op":"diagram","action":"addComponent","name":"Kidney","models":["Kidneys"],"picto":"general.png","label":"Kidney","pos":{"type":"arc","dgs":210},"reason":"add kidney"}
+```
+
+```explain-command
+{"op":"diagram","action":"connect","from":"AA","to":"Kidney","models":["AA_Kidney"],"path":{"type":"arc"},"reason":"renal artery"}
+```
+````
 
 ## Picking the model and target
 
@@ -20714,20 +20894,24 @@ map in the live context to pick the right *instance name*, find that instance's
 **Envelope** (one JSON object per fenced block):
 
 ```json
-{"op":"setProp","model":"<instance name>","target":"<field>","value":<value>,"reason":"<short label>"}
+{"op":"setProp","model":"<instance name>","target":"<field>","value":<value>,"it":<ramp s?>,"at":<delay s?>,"reason":"<short label>"}
 {"op":"call","model":"<instance name>","target":"<function>","args":[...],"reason":"<short label>"}
+{"op":"event","name":"<event name>","changes":[{"model":"..","target":"..","value":..,"it":<s?>,"at":<s?>}],"reason":"<short label>"}
 {"op":"start"}   {"op":"stop"}
 ```
 
 Rules of thumb:
 - **Values are in the displayed unit** shown per field; stay within the stated range.
+- **Timing (optional):** `it` ramps a numeric value to the target over N simulated seconds;
+  `at` delays the change N seconds. `op:"event"` bundles several timed `changes[]` into a
+  named event saved to the Event Scheduler panel — see `command-protocol.md` (Scheduling).
 - **To tune a physiological property, prefer its `*_factor_ps` knob** (a `factor` field,
   1.0 = baseline, >1 increases, <1 decreases) over editing the raw base value — factors
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
 Snapshot: **38 model_types**, **345 settable params**, **24 functions**
-(+ 26 Guided commands). Regenerate with `node scripts/build_command_catalog.mjs`.
+(+ 26 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
 ## Guided mode — curated safe set
@@ -21302,6 +21486,62 @@ _call_:
 - `set_fio2(fio2 (number, range 0.21–1))` — fio2
 - `set_humidity(humidity (number, range 0–1))` — humidity
 - `set_temp(temp (number, C, range 0–1))` — temperature (C)
+
+---
+
+## Events & scheduling — `op:"event"`
+
+Bundle several property changes into one **named event** the user can replay. Each entry
+in `changes[]` is a `setProp`-style `{model, target, value}` with two optional timing
+fields (simulated seconds, only advancing while the sim runs):
+
+- `it` — ramp the numeric value to the target over N seconds (numbers only; booleans/lists swap instantly).
+- `at` — delay the change N seconds before it starts.
+
+Each change is validated against the same fields/bounds/units as a `setProp` (Full vs Guided
+scope applies per change). Applying the card **saves the event into the Event Scheduler
+panel** — it does not fire it; the user applies or arms it there. Optional `fire_at` (absolute
+sim-clock auto-fire) is a panel feature; omit unless asked.
+
+Envelope: `{"op":"event","name":"<name>","changes":[{"model","target","value","it"?,"at"?}, …],"fire_at":<s?>,"reason":"<label>"}`
+
+Example — drive a tachycardia then drop spontaneous breathing 30 s later:
+```json
+{"op":"event","name":"induce tachy","changes":[{"model":"Heart","target":"heart_rate_ref","value":200,"it":15},{"model":"Breathing","target":"breathing_enabled","value":false,"at":30}],"reason":"ramp HR to 200 over 15s, apnea at +30s"}
+```
+
+---
+
+## Diagram editing — `op:"diagram"`
+
+Edit the diagram the user sees (compartments = sprites bound to engine models,
+connectors = paths between them). Requires the **Diagram tab** to be open; each
+turn's context lists the **Current diagram** (component ids + their model bindings),
+and the **`Models in scenario:`** map gives the engine instance names you bind to.
+Use existing component ids verbatim; give every new component a unique `name`.
+
+Envelope: `{"op":"diagram","action":"<action>", ...fields, "reason":"<label>"}`
+
+Actions:
+- `addComponent` — fields: name (unique), models[] (engine instance names), picto, label?, pos?. add a compartment bound to engine model(s); pos is {type:'arc',dgs} or {type:'rel',x,y}
+- `connect` — fields: from, to (existing component names), models?[], path?{type,width}. draw a connector between two existing components, optionally bound to a Resistor model
+- `setLayout` — fields: name, patch (cosmetic layout keys only). restyle a component/connector: alpha, z_index, tinting, sprite color/scale/rotation/pos, label, path
+- `setLabel` — fields: name, text. set a component's caption text
+- `setModels` — fields: name, models[]. rebind which engine model(s) a component/connector represents
+- `setPicto` — fields: name, picto. swap a compartment's sprite image
+- `delete` — fields: name. remove a component (and its attached connectors) or a connector
+
+- **picto** must be one of: container.png, vessel.png, lung.png, pump.png, blood.png, exchanger.png, gas_container.png, general.png, placenta.png, trachea.png
+- **path.type** must be one of: straight, arc, arc_r
+- **setLayout patch** keys (cosmetic only): general.alpha, general.z_index, general.tinting, sprite.color, sprite.scale.x, sprite.scale.y, sprite.rotation, sprite.pos, label.size, label.color, label.pos_x, label.pos_y, path.type, path.width
+- **pos**: `{"type":"arc","dgs":<0-360>}` to sit on the layout ring, or
+  `{"type":"rel","x":<-1..1>,"y":<-1..1>}` relative to centre.
+
+Example — add a kidney compartment and connect it to the aorta:
+```json
+{"op":"diagram","action":"addComponent","name":"Kidney","models":["Kidneys"],"picto":"general.png","label":"Kidney","pos":{"type":"arc","dgs":210},"reason":"add kidney"}
+{"op":"diagram","action":"connect","from":"AA","to":"Kidney","models":["AA_Kidney"],"path":{"type":"arc"},"reason":"renal artery"}
+```
 
 ````
 

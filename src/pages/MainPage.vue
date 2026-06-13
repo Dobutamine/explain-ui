@@ -17,6 +17,8 @@ import ModelEditor from "@/components/controls/ModelEditor.vue";
 import ScalerPanel from "@/components/controls/ScalerPanel.vue";
 import VentilatorPanel from "@/components/controls/VentilatorPanel.vue";
 import EclsPanel from "@/components/controls/EclsPanel.vue";
+import ResuscitationPanel from "@/components/controls/ResuscitationPanel.vue";
+import EventSchedulerPanel from "@/components/controls/EventSchedulerPanel.vue";
 import SaveStatePanel from "@/components/controls/SaveStatePanel.vue";
 import NumericReadoutPanel from "@/components/numerics/NumericReadoutPanel.vue";
 import ChatPanel from "@/components/controls/ChatPanel.vue";
@@ -120,7 +122,7 @@ function toggleRun() {
 
     <!-- Parameters (left 1/4) · Diagram/Chart/PV-loop tabs (center 1/2) · Monitor (right 1/4) -->
     <div v-if="modelReady" class="flex flex-col lg:flex-row gap-3 items-start">
-      <div class="w-full lg:w-1/4">
+      <div class="w-full lg:w-1/4 min-w-0">
         <Tabs v-model:value="controlTab">
           <TabList>
             <Tab value="editor" v-tooltip.top="'Model editor'" aria-label="Model editor">
@@ -132,8 +134,14 @@ function toggleRun() {
             <Tab value="ecls" v-tooltip.top="'ECLS'" aria-label="ECLS">
               <i class="pi pi-sync"></i>
             </Tab>
+            <Tab value="resuscitation" v-tooltip.top="'Resuscitation'" aria-label="Resuscitation">
+              <i class="pi pi-heart"></i>
+            </Tab>
             <Tab value="scaler" v-tooltip.top="'Scaler'" aria-label="Scaler">
               <i class="pi pi-expand"></i>
+            </Tab>
+            <Tab value="events" v-tooltip.top="'Event scheduler'" aria-label="Event scheduler">
+              <i class="pi pi-clock"></i>
             </Tab>
           </TabList>
           <TabPanels>
@@ -152,15 +160,25 @@ function toggleRun() {
                 <EclsPanel />
               </div>
             </TabPanel>
+            <TabPanel value="resuscitation">
+              <div class="flex flex-col gap-3">
+                <ResuscitationPanel />
+              </div>
+            </TabPanel>
             <TabPanel value="scaler">
               <div class="flex flex-col gap-3">
                 <ScalerPanel />
               </div>
             </TabPanel>
+            <TabPanel value="events">
+              <div class="flex flex-col gap-3">
+                <EventSchedulerPanel />
+              </div>
+            </TabPanel>
           </TabPanels>
         </Tabs>
       </div>
-      <div class="w-full lg:w-1/2">
+      <div class="w-full lg:w-1/2 min-w-0">
         <Tabs v-model:value="vizTab">
           <TabList>
             <Tab value="diagram" v-tooltip.top="'Diagram'" aria-label="Diagram">
@@ -204,7 +222,7 @@ function toggleRun() {
           </TabPanels>
         </Tabs>
       </div>
-      <div class="w-full lg:w-1/4">
+      <div class="w-full lg:w-1/4 min-w-0">
         <Tabs v-model:value="monitorTab">
           <TabList>
             <Tab value="monitoring" v-tooltip.top="'Monitoring'" aria-label="Monitoring">
