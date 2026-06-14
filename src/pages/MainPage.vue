@@ -9,7 +9,10 @@ import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import TabPanels from "primevue/tabpanels";
 import TabPanel from "primevue/tabpanel";
+import { useRouter } from "vue-router";
 import { useModelStore } from "@/stores/model";
+import { useAuthStore } from "@/stores/auth";
+import { useStatesStore } from "@/stores/states";
 import { useExplain } from "@/composables/useExplain";
 import RealtimeChart from "@/components/host/RealtimeChart.vue";
 import Diagram from "@/components/host/Diagram.vue";
@@ -20,6 +23,7 @@ import EclsPanel from "@/components/controls/EclsPanel.vue";
 import ResuscitationPanel from "@/components/controls/ResuscitationPanel.vue";
 import EventSchedulerPanel from "@/components/controls/EventSchedulerPanel.vue";
 import SaveStatePanel from "@/components/controls/SaveStatePanel.vue";
+import AdminUsersButton from "@/components/controls/AdminUsersButton.vue";
 import NumericReadoutPanel from "@/components/numerics/NumericReadoutPanel.vue";
 import ChatPanel from "@/components/controls/ChatPanel.vue";
 import LoopChart from "@/components/host/LoopChart.vue";
@@ -27,8 +31,17 @@ import Monitor from "@/components/host/Monitor.vue";
 import VentilatorScope from "@/components/host/VentilatorScope.vue";
 
 const store = useModelStore();
+const auth = useAuthStore();
+const router = useRouter();
 const { scenarios, current } = storeToRefs(store);
-const { model, status, modelReady, isRunning, error, load, start, stop, calculate } = useExplain();
+
+async function logout() {
+  await auth.logout();
+  router.push({ name: "login" });
+}
+const { model, status, modelReady, isRunning, error, load, loadFromObject, start, stop, calculate } =
+  useExplain();
+const statesStore = useStatesStore();
 
 // SharedArrayBuffer transport is active only when cross-origin isolated.
 const isolated = globalThis.crossOriginIsolated === true;
@@ -57,16 +70,41 @@ const DEFAULT_SCENARIO = "term_neonate";
 
 // selecting a scenario loads it immediately (no Load button needed)
 watch(current, (name) => {
-  if (name) load(name);
+  if (name) {
+    load(name);
+    statesStore.setCurrent(null); // a local scenario isn't a cloud state
+  }
 });
 
 onMounted(async () => {
   await store.fetchScenarios();
-  // pick the default scenario at startup; the watcher above loads it
+  const u = auth.user;
+  // Startup priority:
+  // 1. A model developer's chosen LOCAL scenario (highest priority).
+  if (u?.modelDeveloper && u.defaultLocalState && scenarios.value.includes(u.defaultLocalState)) {
+    current.value = u.defaultLocalState; // watcher loads it (and clears cloud currentId)
+    return;
+  }
+  // 2. The user's default CLOUD state.
+  if (u?.defaultState) {
+    const file = await statesStore.loadState(u.defaultState);
+    if (file) {
+      loadFromObject(file);
+      return;
+    }
+  }
+  // 3. The bundled scenario.
   current.value = scenarios.value.includes(DEFAULT_SCENARIO)
     ? DEFAULT_SCENARIO
     : (scenarios.value[0] ?? null);
 });
+
+// model-developer preference: flag the selected local scenario as the one to load
+// at startup (overrides the cloud default). Click again to clear it.
+function toggleDefaultLocal() {
+  if (!current.value) return;
+  statesStore.setDefaultLocal(auth.user?.defaultLocalState === current.value ? null : current.value);
+}
 
 // delete a model definition file from public/model_definitions (dev endpoint)
 async function deleteScenario(name: string) {
@@ -118,6 +156,18 @@ function toggleRun() {
         alt="Explain Labs"
         class="h-12 w-auto shrink-0"
       />
+      <div class="ml-auto flex items-center gap-3">
+        <span v-if="auth.user" class="text-sm opacity-70">{{ auth.user.email }}</span>
+        <AdminUsersButton v-if="auth.user?.admin" />
+        <Button
+          icon="pi pi-sign-out"
+          label="Sign out"
+          size="small"
+          severity="secondary"
+          text
+          @click="logout"
+        />
+      </div>
     </div>
 
     <!-- Parameters (left 1/4) · Diagram/Chart/PV-loop tabs (center 1/2) · Monitor (right 1/4) -->
@@ -292,25 +342,44 @@ function toggleRun() {
         <span class="opacity-60">seconds</span>
       </div>
 
-      <!-- right: local model loading -->
+      <!-- right: local model loading (model developers only) + state save/load -->
       <div class="flex items-center gap-1.5 justify-self-end">
-        <span class="opacity-70">local models</span>
-        <Select
-          v-model="current"
-          :options="scenarios"
-          placeholder="Select a scenario"
-          size="small"
-          class="w-56"
-        />
-        <Button
-          v-tooltip.top="'Delete selected model definition'"
-          icon="pi pi-trash"
-          aria-label="Delete model definition"
-          severity="secondary"
-          size="small"
-          :disabled="!current"
-          @click="current && deleteScenario(current)"
-        />
+        <template v-if="auth.user?.modelDeveloper">
+          <span class="opacity-70">local models</span>
+          <Select
+            v-model="current"
+            :options="scenarios"
+            placeholder="Select a scenario"
+            size="small"
+            class="w-56"
+          />
+          <Button
+            v-tooltip.top="
+              current && auth.user?.defaultLocalState === current
+                ? 'Startup scenario (click to unset)'
+                : 'Load this scenario at startup'
+            "
+            :icon="
+              current && auth.user?.defaultLocalState === current
+                ? 'pi pi-star-fill'
+                : 'pi pi-star'
+            "
+            aria-label="Load this scenario at startup"
+            severity="secondary"
+            size="small"
+            :disabled="!current"
+            @click="toggleDefaultLocal"
+          />
+          <Button
+            v-tooltip.top="'Delete selected model definition'"
+            icon="pi pi-trash"
+            aria-label="Delete model definition"
+            severity="secondary"
+            size="small"
+            :disabled="!current"
+            @click="current && deleteScenario(current)"
+          />
+        </template>
         <SaveStatePanel v-if="modelReady" />
       </div>
     </div>

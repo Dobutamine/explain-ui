@@ -5,9 +5,14 @@
 // dist/) has neither, so this tiny zero-dependency Node server provides both:
 //
 //   1. serves the static dist/ build (with COOP/COEP so SharedArrayBuffer /
-//      crossOriginIsolated works — same headers vite sets in dev/preview), and
+//      crossOriginIsolated works — same headers vite sets in dev/preview),
 //   2. hosts POST /api/chat, forwarding to the Explain bot's /v1/ask with the
-//      API key injected SERVER-SIDE (never shipped to the browser bundle).
+//      API key injected SERVER-SIDE (never shipped to the browser bundle), and
+//   3. hosts /api/auth/{login,register,logout,me} — MongoDB + bcrypt credential
+//      check / account creation issuing a signed HttpOnly session cookie (shared
+//      logic in ./auth.mjs, reused verbatim by the dev proxy in vite.config.ts), and
+//   4. hosts /api/states/{save,list,get,delete} — per-user save/load of model
+//      states in MongoDB (auth-scoped; shared logic in ./states.mjs).
 //
 // The bot's reply is returned verbatim; the browser parses any embedded
 // ```explain-command``` blocks itself (see src/services/botCommands.ts), so this
@@ -16,6 +21,8 @@
 // Env (set in the process environment, or use `node --env-file=.env.local`):
 //   EXPLAIN_BOT_URL       e.g. http://lucys-mac-mini.tail990503.ts.net:8091
 //   EXPLAIN_BOT_API_KEY   the bot's X-API-Key
+//   MONGODB_URI           Mongo connection string (auth; db name in the path)
+//   AUTH_SECRET           secret used to sign session cookies
 //   PORT                  listen port (default 8080)
 //   DIST_DIR              static dir (default ./dist)
 //
@@ -25,6 +32,15 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { login, logout, me, register, listUsers, setModelDeveloper } from "./auth.mjs";
+import {
+  saveState,
+  listStates,
+  getState,
+  deleteState,
+  setDefaultState,
+  setDefaultLocalState,
+} from "./states.mjs";
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 const DIST = path.resolve(ROOT, process.env.DIST_DIR || "dist");
@@ -99,6 +115,88 @@ function handleChat(req, res) {
   });
 }
 
+// ---- /api/auth/* : login / logout / me (MongoDB + bcrypt + signed cookie) ----
+// Shares server/auth.mjs with the dev proxy (vite.config.ts). Cookies are issued
+// Secure here since prod is served over https. MONGODB_URI / AUTH_SECRET come from
+// the process environment (run with `node --env-file=.env.local`).
+function sendJson(res, code, obj, setCookie) {
+  const headers = { ...COI_HEADERS, "content-type": "application/json" };
+  if (setCookie) headers["set-cookie"] = setCookie;
+  res.writeHead(code, headers);
+  res.end(JSON.stringify(obj));
+}
+
+function handleAuth(req, res, route) {
+  const respond = (r) => sendJson(res, r.status, r.body, r.setCookie);
+  const fail = (e) => sendJson(res, 500, { error: `auth error: ${String(e)}` });
+
+  if (route === "me") {
+    if (req.method !== "GET") return res.writeHead(405, COI_HEADERS).end("method not allowed");
+    return me(req.headers.cookie).then(respond).catch(fail);
+  }
+  if (route === "users") {
+    if (req.method !== "GET") return res.writeHead(405, COI_HEADERS).end("method not allowed");
+    return listUsers(req.headers.cookie).then(respond).catch(fail);
+  }
+  if (req.method !== "POST") return res.writeHead(405, COI_HEADERS).end("method not allowed");
+  if (route === "logout") return respond(logout({ secure: true }));
+  // login / register / set-model-developer — take a JSON body
+  let raw = "";
+  req.on("data", (c) => (raw += c));
+  req.on("end", () => {
+    let body = {};
+    try {
+      body = JSON.parse(raw || "{}");
+    } catch {
+      /* treat as empty */
+    }
+    if (route === "set-model-developer") {
+      return setModelDeveloper(req.headers.cookie, body).then(respond).catch(fail);
+    }
+    const handler = route === "register" ? register : login;
+    handler(body, { secure: true }).then(respond).catch(fail);
+  });
+}
+
+// ---- /api/states/* : per-user save / list / get / delete of model states ----
+// Auth-scoped (session cookie); shares server/states.mjs with the dev proxy.
+function handleStates(req, res, route) {
+  const respond = (r) => sendJson(res, r.status, r.body);
+  const fail = (e) => sendJson(res, 500, { error: `states error: ${String(e)}` });
+  const cookie = req.headers.cookie;
+
+  if (route === "list") {
+    if (req.method !== "GET") return res.writeHead(405, COI_HEADERS).end("method not allowed");
+    return listStates(cookie).then(respond).catch(fail);
+  }
+  if (route === "get") {
+    if (req.method !== "GET") return res.writeHead(405, COI_HEADERS).end("method not allowed");
+    const id = new URL(req.url, "http://localhost").searchParams.get("id");
+    return getState(cookie, id).then(respond).catch(fail);
+  }
+  // save / delete / set-default — POST with a JSON body
+  if (req.method !== "POST") return res.writeHead(405, COI_HEADERS).end("method not allowed");
+  let raw = "";
+  req.on("data", (c) => (raw += c));
+  req.on("end", () => {
+    let body = {};
+    try {
+      body = JSON.parse(raw || "{}");
+    } catch {
+      /* treat as empty */
+    }
+    const p =
+      route === "delete"
+        ? deleteState(cookie, body)
+        : route === "set-default"
+          ? setDefaultState(cookie, body)
+          : route === "set-default-local"
+            ? setDefaultLocalState(cookie, body)
+            : saveState(cookie, body);
+    p.then(respond).catch(fail);
+  });
+}
+
 // ---- static dist/ with SPA fallback ----
 function serveStatic(req, res) {
   const urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
@@ -130,6 +228,19 @@ function serveStatic(req, res) {
 }
 
 const server = http.createServer((req, res) => {
+  const reqPath = (req.url || "/").split("?")[0];
+  if (reqPath === "/api/auth/login") return handleAuth(req, res, "login");
+  if (reqPath === "/api/auth/register") return handleAuth(req, res, "register");
+  if (reqPath === "/api/auth/logout") return handleAuth(req, res, "logout");
+  if (reqPath === "/api/auth/me") return handleAuth(req, res, "me");
+  if (reqPath === "/api/auth/users") return handleAuth(req, res, "users");
+  if (reqPath === "/api/auth/set-model-developer") return handleAuth(req, res, "set-model-developer");
+  if (reqPath === "/api/states/save") return handleStates(req, res, "save");
+  if (reqPath === "/api/states/list") return handleStates(req, res, "list");
+  if (reqPath === "/api/states/get") return handleStates(req, res, "get");
+  if (reqPath === "/api/states/delete") return handleStates(req, res, "delete");
+  if (reqPath === "/api/states/set-default") return handleStates(req, res, "set-default");
+  if (reqPath === "/api/states/set-default-local") return handleStates(req, res, "set-default-local");
   if (req.url?.startsWith("/api/chat")) {
     if (req.method !== "POST") {
       res.writeHead(405, COI_HEADERS).end("method not allowed");
@@ -148,5 +259,7 @@ server.listen(PORT, () => {
   console.log(`Explain app server on http://localhost:${PORT}`);
   console.log(`  static dir : ${path.relative(ROOT, DIST)}/`);
   console.log(`  /api/chat  : ${BOT_URL ? `-> ${BOT_URL}/v1/ask` : "NOT configured (set EXPLAIN_BOT_URL/KEY)"}`);
+  console.log(`  /api/auth  : ${process.env.MONGODB_URI ? "MongoDB login enabled" : "NOT configured (set MONGODB_URI/AUTH_SECRET)"}`);
+  console.log(`  /api/states: ${process.env.MONGODB_URI ? "per-user state save/load enabled" : "NOT configured (set MONGODB_URI)"}`);
   if (!fs.existsSync(DIST)) console.log(`  ! ${path.relative(ROOT, DIST)}/ missing — run \`npm run build\``);
 });

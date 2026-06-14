@@ -45,9 +45,33 @@ function snapshotApi(): Plugin {
     };
   };
 
+  // Guard: the local file-snapshot endpoints (save/delete) are model-developer
+  // only. Reads just the cookie header (leaves the body for the handler below)
+  // and verifies the session via the shared auth handler. Registered BEFORE each
+  // jsonPost handler on the same path, so connect runs it first.
+  const requireDeveloper = (req: any, res: any, next: () => void) => {
+    if (req.method !== "POST") return next();
+    const deny = (code: number, error: string) => {
+      res.statusCode = code;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error }));
+    };
+    import("./server/auth.mjs")
+      .then(async ({ me }) => {
+        const user = (await me(req.headers.cookie)).body?.user;
+        if (!user) return deny(401, "not authenticated");
+        if (!user.modelDeveloper) return deny(403, "model developers only");
+        next();
+      })
+      .catch((e) => deny(500, `auth error: ${String(e)}`));
+  };
+
   return {
     name: "snapshot-api",
     configureServer(server) {
+      server.middlewares.use("/api/save-snapshot", requireDeveloper);
+      server.middlewares.use("/api/delete-snapshot", requireDeveloper);
+
       server.middlewares.use(
         "/api/save-snapshot",
         jsonPost(({ name, data }, reply) => {
@@ -142,6 +166,231 @@ function explainBotApi(env: Record<string, string>): Plugin {
   };
 }
 
+// Dev-only auth proxy: POST /api/auth/login, POST /api/auth/logout, GET
+// /api/auth/me. Credentials are checked against MongoDB (MONGODB_URI) with bcrypt
+// and a signed HttpOnly session cookie is issued (AUTH_SECRET). MongoDB/bcrypt run
+// only in this Node dev process — they are never bundled into the client, exactly
+// like the EXPLAIN_BOT_API_KEY isolation above. Auth logic lives in shared
+// server/*.mjs modules reused verbatim by the prod server (server/index.mjs).
+function authApi(env: Record<string, string>): Plugin {
+  // The shared server/*.mjs modules read process.env (as the prod server does via
+  // --env-file). Vite's loadEnv() does NOT populate process.env, so bridge the two
+  // server-side-only secrets across here without exposing them to the client.
+  if (env.MONGODB_URI && !process.env.MONGODB_URI) process.env.MONGODB_URI = env.MONGODB_URI;
+  if (env.AUTH_SECRET && !process.env.AUTH_SECRET) process.env.AUTH_SECRET = env.AUTH_SECRET;
+  return {
+    name: "auth-api",
+    configureServer(server) {
+      // Lazy import keeps mongodb out of the config-eval path until a request hits.
+      const handlers = () => import("./server/auth.mjs");
+      const sendJson = (res: any, code: number, obj: unknown, setCookie?: string) => {
+        res.statusCode = code;
+        res.setHeader("content-type", "application/json");
+        if (setCookie) res.setHeader("set-cookie", setCookie);
+        res.end(JSON.stringify(obj));
+      };
+      const readBody = (req: any) =>
+        new Promise<any>((resolve) => {
+          let raw = "";
+          req.on("data", (c: Buffer) => (raw += c));
+          req.on("end", () => {
+            try {
+              resolve(JSON.parse(raw || "{}"));
+            } catch {
+              resolve({});
+            }
+          });
+        });
+
+      server.middlewares.use("/api/auth/login", (req: any, res: any, next: () => void) => {
+        if (req.method !== "POST") return next();
+        readBody(req).then(async (body) => {
+          try {
+            const { login } = await handlers();
+            const r = await login(body, { secure: false });
+            sendJson(res, r.status, r.body, r.setCookie);
+          } catch (e) {
+            sendJson(res, 500, { error: `auth error: ${String(e)}` });
+          }
+        });
+      });
+
+      server.middlewares.use("/api/auth/register", (req: any, res: any, next: () => void) => {
+        if (req.method !== "POST") return next();
+        readBody(req).then(async (body) => {
+          try {
+            const { register } = await handlers();
+            const r = await register(body, { secure: false });
+            sendJson(res, r.status, r.body, r.setCookie);
+          } catch (e) {
+            sendJson(res, 500, { error: `auth error: ${String(e)}` });
+          }
+        });
+      });
+
+      server.middlewares.use("/api/auth/logout", (req: any, res: any, next: () => void) => {
+        if (req.method !== "POST") return next();
+        handlers().then(({ logout }) => {
+          const r = logout({ secure: false });
+          sendJson(res, r.status, r.body, r.setCookie);
+        });
+      });
+
+      server.middlewares.use("/api/auth/me", (req: any, res: any, next: () => void) => {
+        if (req.method !== "GET") return next();
+        handlers().then(async ({ me }) => {
+          try {
+            const r = await me(req.headers.cookie);
+            sendJson(res, r.status, r.body, r.setCookie);
+          } catch (e) {
+            sendJson(res, 500, { error: `auth error: ${String(e)}` });
+          }
+        });
+      });
+
+      server.middlewares.use("/api/auth/users", (req: any, res: any, next: () => void) => {
+        if (req.method !== "GET") return next();
+        handlers().then(async ({ listUsers }) => {
+          try {
+            const r = await listUsers(req.headers.cookie);
+            sendJson(res, r.status, r.body);
+          } catch (e) {
+            sendJson(res, 500, { error: `auth error: ${String(e)}` });
+          }
+        });
+      });
+
+      server.middlewares.use(
+        "/api/auth/set-model-developer",
+        (req: any, res: any, next: () => void) => {
+          if (req.method !== "POST") return next();
+          readBody(req).then(async (body) => {
+            try {
+              const { setModelDeveloper } = await handlers();
+              const r = await setModelDeveloper(req.headers.cookie, body);
+              sendJson(res, r.status, r.body);
+            } catch (e) {
+              sendJson(res, 500, { error: `auth error: ${String(e)}` });
+            }
+          });
+        },
+      );
+    },
+  };
+}
+
+// Dev-only proxy: /api/states/* — per-user save / list / get / delete of full
+// model states in MongoDB. Auth-scoped (session cookie); shares server/states.mjs
+// verbatim with the prod server (server/index.mjs). Relies on authApi() above
+// having bridged MONGODB_URI / AUTH_SECRET into process.env.
+function statesApi(): Plugin {
+  return {
+    name: "states-api",
+    configureServer(server) {
+      const handlers = () => import("./server/states.mjs");
+      const sendJson = (res: any, code: number, obj: unknown) => {
+        res.statusCode = code;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(obj));
+      };
+      const readBody = (req: any) =>
+        new Promise<any>((resolve) => {
+          let raw = "";
+          req.on("data", (c: Buffer) => (raw += c));
+          req.on("end", () => {
+            try {
+              resolve(JSON.parse(raw || "{}"));
+            } catch {
+              resolve({});
+            }
+          });
+        });
+      const fail = (res: any, e: unknown) =>
+        sendJson(res, 500, { error: `states error: ${String(e)}` });
+
+      server.middlewares.use("/api/states/save", (req: any, res: any, next: () => void) => {
+        if (req.method !== "POST") return next();
+        readBody(req).then(async (body) => {
+          try {
+            const { saveState } = await handlers();
+            const r = await saveState(req.headers.cookie, body);
+            sendJson(res, r.status, r.body);
+          } catch (e) {
+            fail(res, e);
+          }
+        });
+      });
+
+      server.middlewares.use("/api/states/list", (req: any, res: any, next: () => void) => {
+        if (req.method !== "GET") return next();
+        handlers().then(async ({ listStates }) => {
+          try {
+            const r = await listStates(req.headers.cookie);
+            sendJson(res, r.status, r.body);
+          } catch (e) {
+            fail(res, e);
+          }
+        });
+      });
+
+      server.middlewares.use("/api/states/get", (req: any, res: any, next: () => void) => {
+        if (req.method !== "GET") return next();
+        handlers().then(async ({ getState }) => {
+          try {
+            const id = new URL(req.url, "http://localhost").searchParams.get("id");
+            const r = await getState(req.headers.cookie, id);
+            sendJson(res, r.status, r.body);
+          } catch (e) {
+            fail(res, e);
+          }
+        });
+      });
+
+      server.middlewares.use("/api/states/delete", (req: any, res: any, next: () => void) => {
+        if (req.method !== "POST") return next();
+        readBody(req).then(async (body) => {
+          try {
+            const { deleteState } = await handlers();
+            const r = await deleteState(req.headers.cookie, body);
+            sendJson(res, r.status, r.body);
+          } catch (e) {
+            fail(res, e);
+          }
+        });
+      });
+
+      server.middlewares.use("/api/states/set-default", (req: any, res: any, next: () => void) => {
+        if (req.method !== "POST") return next();
+        readBody(req).then(async (body) => {
+          try {
+            const { setDefaultState } = await handlers();
+            const r = await setDefaultState(req.headers.cookie, body);
+            sendJson(res, r.status, r.body);
+          } catch (e) {
+            fail(res, e);
+          }
+        });
+      });
+
+      server.middlewares.use(
+        "/api/states/set-default-local",
+        (req: any, res: any, next: () => void) => {
+          if (req.method !== "POST") return next();
+          readBody(req).then(async (body) => {
+            try {
+              const { setDefaultLocalState } = await handlers();
+              const r = await setDefaultLocalState(req.headers.cookie, body);
+              sendJson(res, r.status, r.body);
+            } catch (e) {
+              fail(res, e);
+            }
+          });
+        },
+      );
+    },
+  };
+}
+
 // COOP/COEP make `crossOriginIsolated === true`, which activates
 // SharedArrayBuffer — the preferred realtime data-plane transport
 // (ChannelWriter auto-falls back to transferable ArrayBuffers when these
@@ -156,7 +405,7 @@ export default defineConfig(({ mode }) => {
   // .env.local reach the chat proxy without being exposed to the client bundle.
   const env = loadEnv(mode, process.cwd(), "");
   return {
-  plugins: [vue(), tailwindcss(), snapshotApi(), explainBotApi(env)],
+  plugins: [vue(), tailwindcss(), snapshotApi(), explainBotApi(env), authApi(env), statesApi()],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
