@@ -221,7 +221,7 @@ function manualBreath() {
       </div>
 
       <!-- ET tube -->
-      <div class="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-white/10 pt-2">
+      <div class="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-surface-700 pt-2">
         <div v-for="f in TUBE" :key="f.p" class="flex flex-col gap-0.5">
           <span class="text-xs opacity-70">{{ f.label }} <span class="opacity-50">{{ f.unit }}</span></span>
           <InputNumber
@@ -244,7 +244,7 @@ function manualBreath() {
       </div>
 
       <!-- patient trigger + manual breath -->
-      <div class="flex items-center justify-between gap-2 border-t border-white/10 pt-2">
+      <div class="flex items-center justify-between gap-2 border-t border-surface-700 pt-2">
         <label class="text-sm opacity-80 flex items-center gap-2">
           Synchronized
           <ToggleSwitch :model-value="synchronized" @update:model-value="onSync" />
@@ -259,9 +259,9 @@ function manualBreath() {
       </div>
 
       <!-- measured read-outs (slow stream) -->
-      <div class="border-t border-white/10 pt-2">
+      <div class="border-t border-surface-700 pt-2">
         <div class="text-xs opacity-60 mb-1">measured</div>
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-3 gap-x-3 gap-y-2">
           <div v-for="m in measured" :key="m.label" class="flex flex-col">
             <span class="text-xs opacity-60">{{ m.label }}</span>
             <span class="text-sm tabular-nums">

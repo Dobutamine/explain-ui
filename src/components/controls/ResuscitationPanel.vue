@@ -160,7 +160,7 @@ function onContinuous(v: boolean) {
       </div>
 
       <!-- compression settings -->
-      <div class="border-t border-white/10 pt-2">
+      <div class="border-t border-surface-700 pt-2">
         <div class="text-xs opacity-60 mb-1">compressions</div>
         <div class="grid grid-cols-2 gap-x-3 gap-y-2">
           <div v-for="f in COMPRESSIONS" :key="f.p" class="flex flex-col gap-0.5">
@@ -186,7 +186,7 @@ function onContinuous(v: boolean) {
       </div>
 
       <!-- ventilation settings -->
-      <div class="border-t border-white/10 pt-2">
+      <div class="border-t border-surface-700 pt-2">
         <div class="text-xs opacity-60 mb-1">ventilations</div>
         <div class="grid grid-cols-2 gap-x-3 gap-y-2">
           <div v-for="f in VENTILATIONS" :key="f.p" class="flex flex-col gap-0.5">
@@ -212,9 +212,9 @@ function onContinuous(v: boolean) {
       </div>
 
       <!-- measured read-outs (slow stream) -->
-      <div class="border-t border-white/10 pt-2">
+      <div class="border-t border-surface-700 pt-2">
         <div class="text-xs opacity-60 mb-1">measured</div>
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-3 gap-x-3 gap-y-2">
           <div v-for="m in measured" :key="m.label" class="flex flex-col">
             <span class="text-xs opacity-60">{{ m.label }}</span>
             <span class="text-sm tabular-nums">

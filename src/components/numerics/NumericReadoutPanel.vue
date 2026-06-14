@@ -78,7 +78,7 @@ watch(
       <div
         v-for="p in parameters"
         :key="p.label"
-        class="border border-surface-700 rounded p-1 text-center"
+        class="border border-surface-600 bg-surface-800/40 rounded p-1 text-center"
       >
         <div class="text-[10px] leading-tight opacity-60 truncate">{{ p.label }}</div>
         <div class="text-base font-semibold tabular-nums">{{ fmt(p) }}</div>

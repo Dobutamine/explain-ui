@@ -14,3 +14,11 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+
+/* PrimeVue already dims disabled controls (.p-disabled) but leaves the cursor
+   unchanged — add the not-allowed affordance globally so disabled switches,
+   buttons and inputs communicate their state on hover. */
+.p-disabled,
+.p-disabled * {
+  cursor: not-allowed;
+}

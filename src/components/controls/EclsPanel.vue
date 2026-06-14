@@ -214,7 +214,7 @@ function onReturnCannula(v: string) {
       </div>
 
       <!-- cannulas -->
-      <div class="grid grid-cols-1 gap-2 border-t border-white/10 pt-2">
+      <div class="grid grid-cols-1 gap-2 border-t border-surface-700 pt-2">
         <div class="flex flex-col gap-0.5">
           <span class="text-xs opacity-70">Drainage cannula</span>
           <Select
@@ -240,7 +240,7 @@ function onReturnCannula(v: string) {
       </div>
 
       <!-- resistance-factor tuning -->
-      <div class="border-t border-white/10 pt-2">
+      <div class="border-t border-surface-700 pt-2">
         <div class="text-xs opacity-60 mb-1">resistance factors</div>
         <div class="grid grid-cols-2 gap-x-3 gap-y-2">
           <div v-for="f in RES_FACTORS" :key="f.p" class="flex flex-col gap-0.5">
@@ -266,9 +266,9 @@ function onReturnCannula(v: string) {
       </div>
 
       <!-- measured read-outs (slow stream) -->
-      <div class="border-t border-white/10 pt-2">
+      <div class="border-t border-surface-700 pt-2">
         <div class="text-xs opacity-60 mb-1">measured</div>
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-3 gap-x-3 gap-y-2">
           <div v-for="m in measured" :key="m.label" class="flex flex-col">
             <span class="text-xs opacity-60">{{ m.label }}</span>
             <span class="text-sm tabular-nums">

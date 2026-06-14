@@ -493,7 +493,7 @@ onMounted(() => modelReady.value && store.syncFromScenario());
             <Button
               v-tooltip.top="'Delete'"
               icon="pi pi-trash"
-              severity="secondary"
+              severity="danger"
               size="small"
               text
               @click="deleteEvent(ev)"

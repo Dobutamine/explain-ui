@@ -230,8 +230,9 @@ function fmtDate(v: string | null): string {
       size="small"
       @click="openStatesDialog"
     />
+    <!-- Load JSON button hidden for now; the file input below stays wired up. -->
     <Button
-      v-if="auth.user?.modelDeveloper"
+      v-if="false"
       v-tooltip.top="'Load JSON'"
       icon="pi pi-file-import"
       aria-label="Load JSON"

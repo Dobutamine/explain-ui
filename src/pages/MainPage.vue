@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from "vue";
+import { onMounted, onBeforeUnmount, ref, computed, watch } from "vue";
 import { storeToRefs } from "pinia";
 import Select from "primevue/select";
 import Button from "primevue/button";
@@ -64,6 +64,14 @@ const monitorGroups = computed(() => {
       parameters: m.parameters ?? [],
       collapsed: m.collapsed ?? false,
     }));
+});
+
+// Name of the scenario / saved state currently loaded into the engine. Keyed on
+// modelReady (toggles false→true on every (re)build) so it re-derives per load;
+// uses the definition's embedded `name`, falling back to the selected scenario.
+const loadedName = computed(() => {
+  if (!modelReady.value) return null;
+  return (model as any).loadedFileData?.name || current.value || null;
 });
 
 const DEFAULT_SCENARIO = "term_neonate";
@@ -143,6 +151,24 @@ function toggleRun() {
   if (isRunning.value) stop();
   else onStart();
 }
+
+// Spacebar toggles play/stop — but only when the user isn't typing in a field
+// (inputs, textareas, selects, contenteditable) so it doesn't hijack text entry.
+function onKeydown(e: KeyboardEvent) {
+  if (e.code !== "Space" && e.key !== " ") return;
+  if (e.repeat || !modelReady.value) return;
+  const t = e.target as HTMLElement | null;
+  if (
+    t &&
+    (t.isContentEditable ||
+      ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(t.tagName))
+  )
+    return;
+  e.preventDefault(); // stop the page from scrolling
+  toggleRun();
+}
+onMounted(() => window.addEventListener("keydown", onKeydown));
+onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 </script>
 
 <template>
@@ -156,6 +182,10 @@ function toggleRun() {
         alt="Explain Labs"
         class="h-12 w-auto shrink-0"
       />
+      <span v-if="loadedName" class="min-w-0 truncate text-sm" v-tooltip.bottom="'Loaded state'">
+        <span class="opacity-50">Current state:</span>
+        <span class="ml-1 font-medium text-surface-100">{{ loadedName }}</span>
+      </span>
       <div class="ml-auto flex items-center gap-3">
         <span v-if="auth.user" class="text-sm opacity-70">{{ auth.user.email }}</span>
         <AdminUsersButton v-if="auth.user?.admin" />
@@ -313,7 +343,7 @@ function toggleRun() {
       <!-- center: play / stop / calculate -->
       <div class="flex items-center gap-1.5 justify-self-center">
         <Button
-          v-tooltip.top="isRunning ? 'Stop' : 'Start'"
+          v-tooltip.top="isRunning ? 'Stop (Space)' : 'Start (Space)'"
           :icon="isRunning ? 'pi pi-stop' : 'pi pi-play'"
           :aria-label="isRunning ? 'Stop' : 'Start'"
           size="small"
@@ -323,9 +353,9 @@ function toggleRun() {
         />
         <InputGroup style="width: auto">
           <Button
-            v-tooltip.top="'Calculate'"
-            icon="pi pi-calculator"
-            aria-label="Calculate"
+            v-tooltip.top="'Fast forward'"
+            icon="pi pi-forward"
+            aria-label="Fast forward"
             size="small"
             severity="secondary"
             :disabled="!modelReady"
@@ -374,7 +404,8 @@ function toggleRun() {
             v-tooltip.top="'Delete selected model definition'"
             icon="pi pi-trash"
             aria-label="Delete model definition"
-            severity="secondary"
+            severity="danger"
+            text
             size="small"
             :disabled="!current"
             @click="current && deleteScenario(current)"
@@ -409,5 +440,12 @@ function toggleRun() {
 /* Slightly larger tab icons across the control / viz / monitor tab strips. */
 :deep(.p-tab) .pi {
   font-size: 1.25rem;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+/* Hover affordance for the icon-only tabs: inactive icons brighten + lift so it
+   reads as clickable (the active tab already has its own highlight). */
+:deep(.p-tab:not(.p-tab-active):hover) .pi {
+  filter: brightness(1.4);
+  transform: translateY(-1px);
 }
 </style>
