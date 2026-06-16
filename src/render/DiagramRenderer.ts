@@ -25,6 +25,11 @@ interface CompNode {
   posType: string;
   dgs: number;
   sprite: Sprite;
+  glow: Sprite | null; // soft additive halo behind the disc (tinted by to2)
+  rim: Sprite | null; // enlarged tinted disc behind, reads as a bright edge
+  cr: number; // smoothed tint rgb (damps per-frame to2 flicker)
+  cg: number;
+  cb: number;
   label: Text | null; // caption, follows the sprite
   layout: any;
 }
@@ -35,34 +40,47 @@ interface ConnNode {
   layout: any;
   from: string;
   to: string;
-  arrow: Sprite; // moving flow indicator
-  pos: number; // normalized position along the path [0,1)
+  dots: Sprite[]; // train of flow indicators riding the path
+  smFlow: number; // smoothed |flow| → dot size & opacity
+  cr: number; // smoothed dot tint rgb
+  cg: number;
+  cb: number;
+  pos: number; // normalized phase along the path [0,1)
   geom: any; // {type:'straight',x1,y1,x2,y2} | {type:'arc',cx,cy,r,from,to}
 }
 
-// flow-arrow tuning (fraction of path advanced per unit flow per frame).
-// Calibrated for Resistor.flow in L/s (~0.003-0.05 L/s): at ~0.01 L/s and
-// ~60 fps the arrow traverses a connector in ~1 s, faster on high-flow vessels.
-const ARROW_SPEED_STRAIGHT = 2.0;
-const ARROW_SPEED_ARC = 2.0;
-// Fixed opacity for the flow indicator. Visibility does not track flow
-// magnitude — direction/speed of travel already conveys flow; tying opacity to
-// it just made the arrows flicker. The path's own alpha still fades with flow.
-const ARROW_ALPHA = 0.9;
-// Sprite scale for the flow indicator. The arrow must be wider than the path it
-// rides (path width is ~5-7 px) so it reads as a distinct marker, not a bump in
-// the line. arrow.png is ~318 px, so 0.06 ≈ 19 px.
-const ARROW_SCALE = 0.045;
-// arrow.png points "up" (-y) at rotation 0, so a sprite aligned to a path
-// heading needs this offset added to the path's direction angle.
-const ARROW_ROT_OFFSET = Math.PI / 2;
-// Connector paths are a fixed neutral dark grey backbone — they do not recolour
-// or fade with flow. Flow is conveyed by the moving arrow (which takes the
-// upstream component's colour).
-const CONNECTOR_COLOR = 0x444444;
-// Filled disc drawn behind everything at the layout circle, so the inside of
-// the component ring reads lighter than the (transparent) page background.
-const DISC_COLOR = 0x262626;
+// ---- Flow indicator: a train of small discs that stream along each connector.
+// Calibrated for Resistor.flow in L/s (~0.003-0.05 L/s). Direction and speed
+// come from the instantaneous flow; a smoothed magnitude gently scales the dot
+// size and fades the dots out on near-zero-flow vessels, so closed shunts read
+// as still. The path itself stays a fixed neutral grey backbone.
+const DOT_PICTO = "gfx/container.png"; // a small disc that rides the path
+const DOT_SCALE = 0.04; // base dot size (container.png is ~318 px → ~13 px)
+const DOT_ALPHA = 0.95;
+const DOT_SPEED = 2.0; // path fraction advanced per unit flow per frame
+const DOT_SPACING_PX = 46; // target spacing between dots along a path
+const DOT_MIN = 2; // min / max dots per connector
+const DOT_MAX = 7;
+const DOT_FLOW_REF = 0.02; // |flow| (L/s) at which dots reach full size/opacity
+const DOT_SCALE_MIN = 0.8; // dot size multiplier at low flow …
+const DOT_SCALE_MAX = 1.35; // … and at/above DOT_FLOW_REF
+const FLOW_LERP = 0.12; // smoothing for the per-connector flow magnitude
+
+// ---- Compartment depth: a soft additive glow behind each disc (tinted by
+// oxygenation, brightened by fill) plus a brighter rim — an enlarged tinted copy
+// of the disc that peeks out as a crisp edge against the backdrop.
+const GLOW_SCALE = 1.95; // glow radius relative to the disc
+const GLOW_ALPHA_MAX = 0.5; // glow opacity at full fill
+const RIM_SCALE = 1.12; // rim disc size relative to the main disc
+const RIM_LIGHTEN = 0.55; // how far the rim tint is lerped toward white
+const TINT_LERP = 0.18; // per-frame smoothing of compartment / dot colour
+
+// Connector paths are a fixed neutral dark grey backbone — flow is conveyed by
+// the streaming dots, which take the upstream component's colour.
+const CONNECTOR_COLOR = 0x4a4a4a;
+// Backdrop vignette centre (lighter than the soft-faded edge), drawn behind the
+// component ring so the inside of the ring reads with depth.
+const DISC_COLOR = 0x2a2a2a;
 // Editor alignment grid (toggleable). Subtle lines; snapping uses gridSize.
 const GRID_COLOR = 0x3a3a3a;
 const GRID_ALPHA = 0.6;
@@ -81,7 +99,9 @@ export class DiagramRenderer implements RendererAdapter {
   private comps: Record<string, CompNode> = {};
   private conns: ConnNode[] = [];
   private animIndex: Record<string, number> = {};
-  private bgDisc: Graphics | null = null; // lighter backdrop under the ring
+  private bgSprite: Sprite | null = null; // vignette backdrop under the ring
+  private glowTex: Texture | null = null; // soft radial halo (generated once)
+  private vignetteTex: Texture | null = null; // backdrop gradient (generated once)
   private gridG: Graphics | null = null; // editor alignment grid overlay
   private gridOn = false;
   private gridSize = GRID_SIZE_DEFAULT;
@@ -94,7 +114,6 @@ export class DiagramRenderer implements RendererAdapter {
   private yOffset = 0;
   private scaling = 1;
   private speed = 1;
-  private maxTo2 = 7.1;
   private ro: ResizeObserver | null = null;
 
   // editor state (Phase E)
@@ -150,12 +169,12 @@ export class DiagramRenderer implements RendererAdapter {
     this.yOffset = numberOr(settings.yOffset, 0);
     this.scaling = numberOr(settings.scaling, 1);
     this.speed = numberOr(settings.speed, 1);
-    this.maxTo2 = numberOr(settings.max_to2, 7.1);
     this.gridOn = settings.grid === true;
     this.gridSize = settings.gridSize > 0 ? settings.gridSize : GRID_SIZE_DEFAULT;
     this.recomputeGeometry();
 
     await this.preloadTextures();
+    this.buildTextures();
     this.drawBackdrop();
     this.drawGrid();
     this.buildCompartments();
@@ -168,7 +187,7 @@ export class DiagramRenderer implements RendererAdapter {
   }
 
   private async preloadTextures() {
-    const pictos = new Set<string>(["gfx/arrow.png"]); // flow indicator
+    const pictos = new Set<string>([DOT_PICTO]); // flow indicator (streaming dots)
     for (const comp of Object.values<any>(this.diagram?.components ?? {})) {
       let p = comp.picto || "container.png";
       if (!p.includes("gfx/")) p = "gfx/" + p;
@@ -190,21 +209,41 @@ export class DiagramRenderer implements RendererAdapter {
     this.ringR = Math.max(20, fill);
   }
 
-  /** Lighter filled disc under the component ring. Sits behind everything; its
-   *  centre/radius track the layout circle, so it is redrawn on resize. */
+  /** Generate the procedural radial textures used for depth: the soft compartment
+   *  glow and the backdrop vignette. Built once (canvas → Texture). */
+  private buildTextures() {
+    // disc-sized so GLOW_SCALE is a true ratio against container.png (318 px)
+    this.glowTex = makeRadialTexture(318, [
+      [0.0, "rgba(255,255,255,1)"],
+      [0.32, "rgba(255,255,255,0.65)"],
+      [1.0, "rgba(255,255,255,0)"],
+    ]);
+    // lighter centre → darker → soft-faded transparent edge (blends on the page)
+    this.vignetteTex = makeRadialTexture(512, [
+      [0.0, "#343434"],
+      [0.6, hexToCss(DISC_COLOR)],
+      [0.92, "#1c1c1c"],
+      [1.0, "rgba(18,18,18,0)"],
+    ]);
+  }
+
+  /** Vignette backdrop under the component ring. Sits behind everything; its
+   *  centre/size track the layout circle, so it is rescaled on resize. */
   private drawBackdrop() {
-    if (!this.app) return;
-    if (!this.bgDisc) {
-      this.bgDisc = new Graphics();
-      this.bgDisc.zIndex = -1000; // behind paths, sprites and labels
-      this.bgDisc.eventMode = "none";
-      this.app.stage.addChild(this.bgDisc);
+    if (!this.app || !this.vignetteTex) return;
+    if (!this.bgSprite) {
+      this.bgSprite = new Sprite(this.vignetteTex);
+      this.bgSprite.anchor.set(0.5);
+      this.bgSprite.zIndex = -1000; // behind paths, sprites and labels
+      this.bgSprite.eventMode = "none";
+      this.app.stage.addChild(this.bgSprite);
     }
-    const cx = this.xCenter + this.xOffset;
-    const cy = this.yCenter + this.yOffset;
-    const r = this.ringR;
-    this.bgDisc.clear();
-    this.bgDisc.circle(cx, cy, r).fill({ color: DISC_COLOR, alpha: 1 });
+    // a touch larger than the ring so the soft edge falls outside the sprites
+    const d = this.ringR * 2.1;
+    this.bgSprite.x = this.xCenter + this.xOffset;
+    this.bgSprite.y = this.yCenter + this.yOffset;
+    this.bgSprite.width = d;
+    this.bgSprite.height = d;
   }
 
   /** Editor alignment grid. Drawn over the backdrop but under paths/sprites;
@@ -261,28 +300,46 @@ export class DiagramRenderer implements RendererAdapter {
     let picto = comp.picto || "container.png";
     if (!picto.includes("gfx/")) picto = "gfx/" + picto;
 
+    const baseZ = layout.general.z_index;
+    // pre-frame tint: the deoxygenated end of the ramp for tinted compartments,
+    // so unfilled compartments read as venous until the first volume frame.
+    const baseRgb: [number, number, number] = layout.general.tinting
+      ? [DEOX_RGB[0], DEOX_RGB[1], DEOX_RGB[2]]
+      : hexToRgb(layout.sprite.color);
+
+    // Depth layers (compartments only): a soft additive glow and a brighter rim
+    // behind the disc. Devices (e.g. the invisible TITLE) get just the sprite.
+    let glow: Sprite | null = null;
+    let rim: Sprite | null = null;
+    if (comp.type === "Compartment") {
+      glow = new Sprite(this.glowTex!);
+      glow.anchor.set(0.5);
+      glow.zIndex = baseZ - 2;
+      glow.eventMode = "none";
+      glow.blendMode = "add";
+      glow.alpha = 0; // raised by fill once frames arrive
+      glow.tint = packRgb(baseRgb);
+      this.app!.stage.addChild(glow);
+
+      rim = new Sprite(Texture.from(picto));
+      rim.anchor.set(layout.sprite.anchor.x, layout.sprite.anchor.y);
+      rim.zIndex = baseZ - 1;
+      rim.eventMode = "none";
+      rim.tint = packRgb(lerpRgb(baseRgb, WHITE_RGB, RIM_LIGHTEN));
+      this.app!.stage.addChild(rim);
+    }
+
     const sprite = Sprite.from(picto);
     sprite.anchor.set(layout.sprite.anchor.x, layout.sprite.anchor.y);
     sprite.alpha = layout.general.alpha;
     sprite.rotation = layout.sprite.rotation;
-    sprite.zIndex = layout.general.z_index;
-    sprite.tint = layout.general.tinting ? 0x151a7b : layout.sprite.color;
+    sprite.zIndex = baseZ;
+    sprite.tint = packRgb(baseRgb);
 
     const { x, y } = this.placeAt(layout);
-    sprite.x = x;
-    sprite.y = y;
-
-    // initial visible scale before the first frame arrives
-    const r0 = radiusFromVolume(0.15);
-    sprite.scale.set(
-      r0 * layout.sprite.scale.x * this.scaling,
-      r0 * layout.sprite.scale.y * this.scaling,
-    );
-
     sprite.eventMode = "static";
     sprite.cursor = "pointer";
     sprite.on("pointerdown", (e: any) => this.onSpriteDown(name, e));
-
     this.app!.stage.addChild(sprite);
 
     // caption: a Text that rides above the sprite. label.pos_x/pos_y are pixel
@@ -293,16 +350,49 @@ export class DiagramRenderer implements RendererAdapter {
       this.app!.stage.addChild(label);
     }
 
-    this.comps[name] = {
+    const node: CompNode = {
       x,
       y,
       posType: layout.sprite.pos.type,
       dgs: layout.sprite.pos.dgs,
       sprite,
+      glow,
+      rim,
+      cr: baseRgb[0],
+      cg: baseRgb[1],
+      cb: baseRgb[2],
       label,
       layout,
     };
-    this.positionLabel(this.comps[name]);
+    this.comps[name] = node;
+    // initial visible scale/position before the first frame arrives
+    this.setCompartmentScale(node, radiusFromVolume(0.15));
+    this.syncCompartmentPos(node);
+    this.positionLabel(node);
+  }
+
+  /** Scale a compartment's disc and its glow/rim layers together for radius r. */
+  private setCompartmentScale(node: CompNode, r: number) {
+    const l = node.layout;
+    const sx = r * l.sprite.scale.x * this.scaling;
+    const sy = r * l.sprite.scale.y * this.scaling;
+    node.sprite.scale.set(sx, sy);
+    if (node.rim) node.rim.scale.set(sx * RIM_SCALE, sy * RIM_SCALE);
+    if (node.glow) node.glow.scale.set(sx * GLOW_SCALE, sy * GLOW_SCALE);
+  }
+
+  /** Move a compartment's disc and its glow/rim layers to the node position. */
+  private syncCompartmentPos(node: CompNode) {
+    node.sprite.x = node.x;
+    node.sprite.y = node.y;
+    if (node.rim) {
+      node.rim.x = node.x;
+      node.rim.y = node.y;
+    }
+    if (node.glow) {
+      node.glow.x = node.x;
+      node.glow.y = node.y;
+    }
   }
 
   /** Place a compartment's caption at its sprite centre plus the configured
@@ -422,13 +512,20 @@ export class DiagramRenderer implements RendererAdapter {
     g.on("pointerdown", (e: any) => this.onConnDown(name, e));
     this.app!.stage.addChildAt(g, 0); // paths under sprites
 
-    const arrow = Sprite.from("gfx/arrow.png");
-    arrow.anchor.set(0.5, 0.5);
-    arrow.scale.set(ARROW_SCALE * this.scaling);
-    arrow.zIndex = comp.layout.general.z_index + 1;
-    arrow.alpha = ARROW_ALPHA;
-    arrow.eventMode = "none";
-    this.app!.stage.addChild(arrow);
+    // a train of dots whose count tracks the path length (one per ~spacing px),
+    // sitting just above the path but below the compartments they flow between.
+    const count = dotCount(pathLength(geom), this.scaling);
+    const dots: Sprite[] = [];
+    for (let i = 0; i < count; i++) {
+      const d = Sprite.from(DOT_PICTO);
+      d.anchor.set(0.5, 0.5);
+      d.scale.set(DOT_SCALE * this.scaling);
+      d.zIndex = comp.layout.general.z_index + 0.5;
+      d.alpha = 0; // raised once flow arrives
+      d.eventMode = "none";
+      this.app!.stage.addChild(d);
+      dots.push(d);
+    }
 
     this.conns.push({
       name,
@@ -436,7 +533,11 @@ export class DiagramRenderer implements RendererAdapter {
       layout: comp.layout,
       from: comp.dbcFrom,
       to: comp.dbcTo,
-      arrow,
+      dots,
+      smFlow: 0,
+      cr: DEOX_RGB[0],
+      cg: DEOX_RGB[1],
+      cb: DEOX_RGB[2],
       pos: 0,
       geom,
     });
@@ -495,68 +596,90 @@ export class DiagramRenderer implements RendererAdapter {
     this.animIndex = {};
     const comps = payload?.anim?.components ?? [];
     for (const c of comps) this.animIndex[c.name] = c.index;
-    if (payload?.anim?.layout?.max_to2) this.maxTo2 = payload.anim.layout.max_to2;
   }
 
   onFrame(_chart: ChartFrame | null, anim: AnimFrame | null) {
     if (!this.ready || !anim) return;
     const frame = anim.frame;
 
-    // compartments: scale by volume, tint by to2
+    // compartments: scale by volume, tint by to2 (smoothed), glow by fill
     for (const name in this.comps) {
       const idx = this.animIndex[name];
       if (idx === undefined) continue;
       const node = this.comps[name];
       const mag = frame[animMagOffset(idx)];
-      const tint = frame[animTintOffset(idx)];
       const r = radiusFromVolume(mag > 0 ? mag : 0.15);
-      node.sprite.scale.set(
-        r * node.layout.sprite.scale.x * this.scaling,
-        r * node.layout.sprite.scale.y * this.scaling,
-      );
-      if (node.layout.general.tinting) node.sprite.tint = colorFromTo2(tint, this.maxTo2);
+      this.setCompartmentScale(node, r);
+      if (!node.layout.general.tinting) continue;
+
+      // ease the tint toward the target colour to damp per-frame to2 flicker
+      const tgt = rgbFromTo2(frame[animTintOffset(idx)]);
+      node.cr += (tgt[0] - node.cr) * TINT_LERP;
+      node.cg += (tgt[1] - node.cg) * TINT_LERP;
+      node.cb += (tgt[2] - node.cb) * TINT_LERP;
+      const rgb: [number, number, number] = [node.cr, node.cg, node.cb];
+      node.sprite.tint = packRgb(rgb);
+      if (node.rim) node.rim.tint = packRgb(lerpRgb(rgb, WHITE_RGB, RIM_LIGHTEN));
+      if (node.glow) {
+        node.glow.tint = packRgb(rgb);
+        const fill = clamp01((r - 0.2) / 0.35); // fuller → brighter halo
+        node.glow.alpha = GLOW_ALPHA_MAX * (0.25 + 0.75 * fill);
+      }
     }
 
-    // connectors: the path stays a fixed neutral grey; only the arrow moves and
-    // takes its colour from the upstream component (tint source = dbcFrom's to2).
+    // connectors: the path stays a fixed neutral grey; the dot train streams
+    // along it, coloured from the upstream component (tint = dbcFrom's to2).
     for (const conn of this.conns) {
       const idx = this.animIndex[conn.name];
       if (idx === undefined) continue;
       const flow = frame[animMagOffset(idx)];
       const tint = frame[animTintOffset(idx)];
-      this.advanceArrow(conn, flow, tint);
+      this.advanceDots(conn, flow, tint);
     }
   }
 
-  // move a connector's flow indicator along its path, speed/direction by flow;
-  // colour it from the upstream component (tint = dbcFrom's to2)
-  private advanceArrow(conn: ConnNode, flow: number, tint: number) {
+  // stream a connector's dot train along its path: phase advances by flow
+  // (speed + direction); a smoothed magnitude scales dot size and fades the dots
+  // out near zero flow; colour comes from the upstream component (dbcFrom's to2).
+  private advanceDots(conn: ConnNode, flow: number, tint: number) {
     const g = conn.geom;
-    const a = conn.arrow;
-    if (!g) return;
+    const n = conn.dots.length;
+    if (!g || !n) return;
 
+    // smoothed magnitude → size multiplier + opacity (kills flicker)
+    conn.smFlow += (Math.abs(flow) - conn.smFlow) * FLOW_LERP;
+    const m = clamp01(conn.smFlow / DOT_FLOW_REF);
+    const sizeMul = DOT_SCALE_MIN + (DOT_SCALE_MAX - DOT_SCALE_MIN) * m;
+    const alpha = DOT_ALPHA * clamp01(conn.smFlow / (DOT_FLOW_REF * 0.12));
+
+    // advance the phase (keep the per-geometry calibration of the old arrow)
     if (g.type === "straight") {
-      conn.pos = wrap01(conn.pos + flow * ARROW_SPEED_STRAIGHT * this.speed);
-      a.x = g.x1 + (g.x2 - g.x1) * conn.pos;
-      a.y = g.y1 + (g.y2 - g.y1) * conn.pos;
-      let rot = Math.atan2(g.y2 - g.y1, g.x2 - g.x1) + ARROW_ROT_OFFSET;
-      if (flow < 0) rot += Math.PI;
-      a.rotation = rot;
+      conn.pos = wrap01(conn.pos + flow * DOT_SPEED * this.speed);
     } else {
       const range = g.to - g.from || 1e-6;
-      conn.pos = wrap01(conn.pos + (flow * ARROW_SPEED_ARC * this.speed) / Math.abs(range));
-      const ang = g.from + range * conn.pos;
-      a.x = g.cx + g.r * Math.cos(ang);
-      a.y = g.cy + g.r * Math.sin(ang);
-      // tangent to the circle at `ang` is ang + π/2; add the sprite offset too
-      let rot = ang + Math.PI / 2 + ARROW_ROT_OFFSET;
-      if (flow < 0) rot += Math.PI;
-      a.rotation = rot;
+      conn.pos = wrap01(conn.pos + (flow * DOT_SPEED * this.speed) / Math.abs(range));
     }
-    // colour the arrow from the upstream component it flows out of, so it stands
-    // out against the neutral-grey path; fall back to white if this connector
-    // isn't tinted.
-    a.tint = conn.layout.general.tinting ? colorFromTo2(tint, this.maxTo2) : 0xffffff;
+
+    // colour all dots from the smoothed upstream to2 (or white if untinted)
+    let col = 0xffffff;
+    if (conn.layout.general.tinting) {
+      const tgt = rgbFromTo2(tint);
+      conn.cr += (tgt[0] - conn.cr) * TINT_LERP;
+      conn.cg += (tgt[1] - conn.cg) * TINT_LERP;
+      conn.cb += (tgt[2] - conn.cb) * TINT_LERP;
+      col = packRgb([conn.cr, conn.cg, conn.cb]);
+    }
+
+    const sc = DOT_SCALE * this.scaling * sizeMul;
+    for (let k = 0; k < n; k++) {
+      const d = conn.dots[k];
+      const p = pointOnPath(g, wrap01(conn.pos + k / n));
+      d.x = p.x;
+      d.y = p.y;
+      d.scale.set(sc);
+      d.alpha = alpha;
+      d.tint = col;
+    }
   }
 
   // recompute positions/paths when the canvas resizes
@@ -570,8 +693,7 @@ export class DiagramRenderer implements RendererAdapter {
       const p = this.placeAt(node.layout);
       node.x = p.x;
       node.y = p.y;
-      node.sprite.x = p.x;
-      node.sprite.y = p.y;
+      this.syncCompartmentPos(node);
       this.positionLabel(node);
     }
     for (const conn of this.conns) {
@@ -618,8 +740,10 @@ export class DiagramRenderer implements RendererAdapter {
       const l = conn.layout;
       conn.graphics.alpha = l.general.alpha;
       conn.graphics.zIndex = l.general.z_index;
-      conn.arrow.zIndex = l.general.z_index + 1;
-      if (!l.general.tinting) conn.arrow.tint = 0xffffff;
+      for (const d of conn.dots) {
+        d.zIndex = l.general.z_index + 0.5;
+        if (!l.general.tinting) d.tint = 0xffffff;
+      }
       const f = this.comps[conn.from];
       const t = this.comps[conn.to];
       if (f && t) conn.geom = this.drawPath(conn.graphics, l, f, t);
@@ -632,12 +756,22 @@ export class DiagramRenderer implements RendererAdapter {
       node.sprite.alpha = l.general.alpha;
       node.sprite.zIndex = l.general.z_index;
       node.sprite.rotation = l.sprite.rotation;
-      if (!l.general.tinting) node.sprite.tint = l.sprite.color;
+      if (node.glow) node.glow.zIndex = l.general.z_index - 2;
+      if (node.rim) node.rim.zIndex = l.general.z_index - 1;
+      if (!l.general.tinting) {
+        // fixed colour: seed the smoothed tint and recolour all layers now
+        const rgb = hexToRgb(l.sprite.color);
+        node.cr = rgb[0];
+        node.cg = rgb[1];
+        node.cb = rgb[2];
+        node.sprite.tint = packRgb(rgb);
+        if (node.rim) node.rim.tint = packRgb(lerpRgb(rgb, WHITE_RGB, RIM_LIGHTEN));
+        if (node.glow) node.glow.tint = packRgb(rgb);
+      }
       const p = this.placeAt(l);
-      node.sprite.x = p.x;
-      node.sprite.y = p.y;
       node.x = p.x;
       node.y = p.y;
+      this.syncCompartmentPos(node);
       node.posType = l.sprite.pos.type;
       node.dgs = l.sprite.pos.dgs;
       if (node.label) {
@@ -765,7 +899,7 @@ export class DiagramRenderer implements RendererAdapter {
       this.conns = this.conns.filter((c) => {
         if (c.name !== name) return true;
         this.app!.stage.removeChild(c.graphics);
-        this.app!.stage.removeChild(c.arrow);
+        for (const d of c.dots) this.app!.stage.removeChild(d);
         return false;
       });
       delete this.diagram.components[name];
@@ -776,13 +910,15 @@ export class DiagramRenderer implements RendererAdapter {
     const node = this.comps[name];
     if (node) {
       this.app.stage.removeChild(node.sprite);
+      if (node.glow) this.app.stage.removeChild(node.glow);
+      if (node.rim) this.app.stage.removeChild(node.rim);
       if (node.label) this.app.stage.removeChild(node.label);
       delete this.comps[name];
     }
     this.conns = this.conns.filter((c) => {
       if (c.from === name || c.to === name) {
         this.app!.stage.removeChild(c.graphics);
-        this.app!.stage.removeChild(c.arrow);
+        for (const d of c.dots) this.app!.stage.removeChild(d);
         return false;
       }
       return true;
@@ -902,7 +1038,9 @@ export class DiagramRenderer implements RendererAdapter {
     this.comps = {};
     this.conns = [];
     this.selectionG = null;
-    this.bgDisc = null;
+    this.bgSprite = null;
+    this.glowTex = null;
+    this.vignetteTex = null;
     this.gridG = null;
   }
 }
@@ -981,15 +1119,98 @@ function radiusFromVolume(vol: number): number {
   return Math.cbrt(cubic);
 }
 
-function colorFromTo2(to2: number, maxTo2: number): number {
-  if (Number.isNaN(to2)) return 0x666666;
-  let v = to2 > maxTo2 ? maxTo2 : to2;
-  let remap = (v / maxTo2) * (1 - -5) + -5; // remap [0,maxTo2] -> [-5,1]
-  if (remap < 0) remap = 0;
-  const red = Math.round(remap * 250) & 0xff;
-  const green = Math.round(remap * 50) & 0xff;
-  const blue = Math.round(70 + remap * 75) & 0xff;
-  return (red << 16) | (green << 8) | blue;
+// Anatomical oxygenation ramp (Theme C). Maps blood O2 content (to2) onto a
+// deoxygenated slate-blue → oxygenated brick-red gradient via linear RGB interp.
+//
+// The gradient window is a FIXED clinical range in to2 units, deliberately NOT
+// the per-diagram `max_to2` hint: that hint is unreliably set (e.g. 6 on the
+// neonate, whose blood actually spans ~4.8–8.6), which clamped almost all
+// compartments to one colour. Across scenarios venous blood bottoms out near
+// ~3 and arterial peaks near ~8.8, so this absolute window gives genuine
+// venous↔arterial separation in every diagram. The per-diagram `max_to2` hint is
+// intentionally not used.
+const TO2_LO = 3.0;
+const TO2_HI = 8.8;
+const DEOX_RGB = [0x16, 0x48, 0xb0]; // dark blue (deoxygenated)
+const OX_RGB = [0xe2, 0x3a, 0x66]; // pink-red (oxygenated)
+// Bias (>1) keeps the gradient blue across the venous range and swings to
+// pink-red only near the oxygenated top, so mid-saturation (venous) blood reads
+// blue-purple rather than pink. Linear interp would put systemic venous at the
+// midpoint, i.e. magenta.
+const RAMP_GAMMA = 4.0;
+const WHITE_RGB = [255, 255, 255];
+
+// Map blood O2 content (to2) onto the deox→ox ramp, returning unrounded rgb so
+// callers can smooth it over frames before packing to a tint int.
+function rgbFromTo2(to2: number): [number, number, number] {
+  if (Number.isNaN(to2)) return [0x66, 0x66, 0x66];
+  let t = (to2 - TO2_LO) / (TO2_HI - TO2_LO);
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  t = Math.pow(t, RAMP_GAMMA);
+  return [
+    DEOX_RGB[0] + (OX_RGB[0] - DEOX_RGB[0]) * t,
+    DEOX_RGB[1] + (OX_RGB[1] - DEOX_RGB[1]) * t,
+    DEOX_RGB[2] + (OX_RGB[2] - DEOX_RGB[2]) * t,
+  ];
+}
+
+// pack an rgb triple (floats ok) into a 0xRRGGBB tint int
+function packRgb(rgb: number[]): number {
+  return (clampByte(rgb[0]) << 16) | (clampByte(rgb[1]) << 8) | clampByte(rgb[2]);
+}
+function clampByte(v: number): number {
+  v = Math.round(v);
+  return v < 0 ? 0 : v > 255 ? 255 : v;
+}
+function lerpRgb(a: number[], b: number[], t: number): number[] {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+function hexToRgb(hex: string): [number, number, number] {
+  const h = (hex || "#ffffff").replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(full, 16) || 0;
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+function hexToCss(n: number): string {
+  return "#" + (n & 0xffffff).toString(16).padStart(6, "0");
+}
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+// number of streaming dots for a path of `len` px (one per ~DOT_SPACING_PX),
+// clamped so short connectors keep at least a couple and long ones don't swarm.
+function dotCount(len: number, scaling: number): number {
+  const n = Math.round(len / (DOT_SPACING_PX * scaling));
+  return n < DOT_MIN ? DOT_MIN : n > DOT_MAX ? DOT_MAX : n;
+}
+
+// length of a connector path geometry in px (straight chord or arc length)
+function pathLength(g: any): number {
+  if (!g) return 0;
+  if (g.type === "straight") return Math.hypot(g.x2 - g.x1, g.y2 - g.y1);
+  return Math.abs(g.to - g.from) * g.r;
+}
+
+// point at fraction `frac` [0,1] along a connector path geometry
+function pointOnPath(g: any, frac: number): { x: number; y: number } {
+  if (g.type === "straight") {
+    return { x: g.x1 + (g.x2 - g.x1) * frac, y: g.y1 + (g.y2 - g.y1) * frac };
+  }
+  const ang = g.from + (g.to - g.from) * frac;
+  return { x: g.cx + g.r * Math.cos(ang), y: g.cy + g.r * Math.sin(ang) };
+}
+
+// build a square radial-gradient Texture from canvas (centre → edge colour stops)
+function makeRadialTexture(size: number, stops: [number, string][]): Texture {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d")!;
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  for (const [off, col] of stops) grad.addColorStop(off, col);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  return Texture.from(c);
 }
 
 // center of a circle of radius r passing through (x1,y1) and (x2,y2)
