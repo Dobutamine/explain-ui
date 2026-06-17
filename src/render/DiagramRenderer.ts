@@ -821,10 +821,9 @@ export class DiagramRenderer implements RendererAdapter {
       this.dragMoved = true;
     }
     const node = this.comps[this.dragging];
-    node.sprite.x = this.snap(e.global.x + this.dragOffsetX);
-    node.sprite.y = this.snap(e.global.y + this.dragOffsetY);
-    node.x = node.sprite.x;
-    node.y = node.sprite.y;
+    node.x = this.snap(e.global.x + this.dragOffsetX);
+    node.y = this.snap(e.global.y + this.dragOffsetY);
+    this.syncCompartmentPos(node); // moves disc + glow/rim together
     this.positionLabel(node);
     this.rerouteConnectors(this.dragging);
     this.drawSelection();
@@ -853,14 +852,13 @@ export class DiagramRenderer implements RendererAdapter {
       node.posType = "arc";
       node.dgs = dgs;
       const p = this.placeAt(node.layout);
-      node.sprite.x = p.x;
-      node.sprite.y = p.y;
       node.x = p.x;
       node.y = p.y;
     } else {
-      node.layout.sprite.pos = { type: "rel", x: (node.sprite.x - cx) / r, y: (node.sprite.y - cy) / r, dgs: 0 };
+      node.layout.sprite.pos = { type: "rel", x: (node.x - cx) / r, y: (node.y - cy) / r, dgs: 0 };
       node.posType = "rel";
     }
+    this.syncCompartmentPos(node); // settle disc + glow/rim at the final position
     this.positionLabel(node);
     this.rerouteConnectors(name);
     this.drawSelection();
