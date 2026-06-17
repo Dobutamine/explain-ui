@@ -55,10 +55,11 @@ interface ConnNode {
 // size and fades the dots out on near-zero-flow vessels, so closed shunts read
 // as still. The path itself stays a fixed neutral grey backbone.
 const DOT_PICTO = "gfx/container.png"; // a small disc that rides the path
-const DOT_SCALE = 0.04; // base dot size (container.png is ~318 px → ~13 px)
+const DOT_SCALE = 0.03; // base dot size (container.png is ~318 px → ~10 px)
 const DOT_ALPHA = 0.95;
+const DOT_LIGHTEN = 0.4; // lift the dot tint toward white so it pops on the path
 const DOT_SPEED = 2.0; // path fraction advanced per unit flow per frame
-const DOT_SPACING_PX = 46; // target spacing between dots along a path
+const DOT_SPACING_PX = 64; // target spacing between dots along a path
 const DOT_MIN = 2; // min / max dots per connector
 const DOT_MAX = 7;
 const DOT_FLOW_REF = 0.02; // |flow| (L/s) at which dots reach full size/opacity
@@ -660,14 +661,15 @@ export class DiagramRenderer implements RendererAdapter {
       conn.pos = wrap01(conn.pos + (flow * DOT_SPEED * this.speed) / Math.abs(range));
     }
 
-    // colour all dots from the smoothed upstream to2 (or white if untinted)
+    // colour all dots from the smoothed upstream to2 (or white if untinted),
+    // lifted toward white so even venous (dark blue) dots stand out on the path
     let col = 0xffffff;
     if (conn.layout.general.tinting) {
       const tgt = rgbFromTo2(tint);
       conn.cr += (tgt[0] - conn.cr) * TINT_LERP;
       conn.cg += (tgt[1] - conn.cg) * TINT_LERP;
       conn.cb += (tgt[2] - conn.cb) * TINT_LERP;
-      col = packRgb([conn.cr, conn.cg, conn.cb]);
+      col = packRgb(lerpRgb([conn.cr, conn.cg, conn.cb], WHITE_RGB, DOT_LIGHTEN));
     }
 
     const sc = DOT_SCALE * this.scaling * sizeMul;
