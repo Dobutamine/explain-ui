@@ -3276,6 +3276,36 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     },
     {
+      "caption": "pregnant",
+      "target": "pregnant",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "pregnancy GA (weeks)",
+      "target": "preg_ga",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 42,
+      "slider": true,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "couple placenta to uterine blood",
+      "target": "couple_placenta",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
       "caption": "respiratory quotient",
       "target": "resp_q",
       "type": "number",
@@ -3284,6 +3314,71 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "rounding": 2,
       "ll": 0,
       "ul": 1.5,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "pregnancy GA threshold (weeks)",
+      "target": "preg_ga_threshold",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 20,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "pregnancy GA term anchor (weeks)",
+      "target": "preg_ga_term",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 30,
+      "ul": 42,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term bed-resistance factor",
+      "target": "preg_res_term_factor",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0.05,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term bed-volume factor",
+      "target": "preg_vol_term_factor",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 1,
+      "ul": 6,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term VO2 factor",
+      "target": "preg_vo2_term_factor",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 1,
+      "ul": 15,
       "build_prop": true,
       "edit_mode": "advanced",
       "readonly": false
@@ -3322,6 +3417,14 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
     {
       "caption": "inflow resistor model",
       "target": "ut_in_res_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "drainage resistor model",
+      "target": "ut_out_res_name",
       "type": "string",
       "build_prop": true,
       "edit_mode": "advanced",
@@ -4369,6 +4472,14 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "edit_mode": "caption",
       "readonly": false,
       "caption": "umbilical vessels clamped"
+    },
+    {
+      "target": "skip_mat_gas_write",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false,
+      "caption": "maternal pool driven externally (uterine coupling)"
     },
     {
       "caption": "umb artery resistance factor",
