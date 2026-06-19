@@ -3216,6 +3216,168 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     }
   ],
+  "Uterus": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "uterus running",
+      "target": "uterus_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "metabolism active",
+      "target": "met_active",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "uterine VO2 (mL O2/kg/min)",
+      "target": "ut_vo2",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0,
+      "ul": 5,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "perfusion factor",
+      "target": "perfusion_factor",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 10,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "respiratory quotient",
+      "target": "resp_q",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1.5,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "edit_mode": "factors",
+      "caption": "uterine VO2 factor",
+      "target": "vo2_factor_ps",
+      "type": "factor",
+      "build_prop": false
+    },
+    {
+      "caption": "uterine artery model",
+      "target": "ut_art_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "uterine capillary model",
+      "target": "ut_cap_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "uterine vein model",
+      "target": "ut_ven_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "inflow resistor model",
+      "target": "ut_in_res_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "uterine blood flow (mL/min)",
+      "target": "ut_blood_flow",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 delivery DO2 (mL O2/min)",
+      "target": "ut_do2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 uptake VO2 (mL O2/min)",
+      "target": "ut_vo2_ml",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 extraction ratio (%)",
+      "target": "ut_o2er",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "a-v O2 difference (mmol/L)",
+      "target": "ut_avo2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
   "Hormones": [
     {
       "target": "description",

@@ -66,7 +66,11 @@ const DOT_SPEED = 2.0; // path fraction advanced per unit flow per frame
 const DOT_SPACING_PX = 64; // target spacing between dots along a path
 const DOT_MIN = 2; // min / max dots per connector
 const DOT_MAX = 7;
-const DOT_FLOW_REF = 0.02; // |flow| (L/s) at which dots reach full size/opacity
+const DOT_FLOW_REF = 0.004; // |flow| (L/s) at which dots reach full size/opacity.
+// Lowered from 0.02 so low-flow beds (e.g. the uterine circulation ~50 mL/min ≈
+// 0.00083 L/s) still render as full-size, opaque dot trains rather than dim
+// near-invisible specks. Controls dot size/opacity only — dot *speed* tracks raw
+// flow — so high-flow connectors simply saturate at full size sooner.
 const DOT_SCALE_MIN = 0.8; // dot size multiplier at low flow …
 const DOT_SCALE_MAX = 1.35; // … and at/above DOT_FLOW_REF
 const FLOW_LERP = 0.12; // smoothing for the per-connector flow magnitude
