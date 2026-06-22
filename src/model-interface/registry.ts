@@ -470,6 +470,24 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       ]
     },
     {
+      "caption": "set P50 (Hb-O2 affinity)",
+      "edit_mode": "advanced",
+      "target": "set_P50",
+      "type": "function",
+      "args": [
+        {
+          "caption": "P50 mmHg (fetal HbF 18.8, neonatal 20.0, adult 26.7)",
+          "target": "new_p50",
+          "type": "number",
+          "factor": 1,
+          "delta": 0.1,
+          "rounding": 1,
+          "ul": 30,
+          "ll": 15
+        }
+      ]
+    },
+    {
       "caption": "set total oxygen concentration (mmol/l)",
       "target": "set_to2",
       "edit_mode": "basic",
