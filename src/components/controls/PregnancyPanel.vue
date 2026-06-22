@@ -158,7 +158,7 @@ function onGa(v: number) {
           :min="0"
           :max="42"
           :step="1"
-          @update:model-value="(v: number) => onGa(v as number)"
+          @update:model-value="(v: number | number[]) => onGa(Array.isArray(v) ? v[0] : v)"
         />
       </div>
 
