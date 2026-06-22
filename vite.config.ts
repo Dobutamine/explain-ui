@@ -414,6 +414,30 @@ export default defineConfig(({ mode }) => {
   },
   // the ModelEngine worker is spawned as an ES module
   worker: { format: "es" },
+  // Split the heavy front-end vendors into their own chunks so no single chunk
+  // blows past the 500 kB warning and the browser can cache them independently.
+  // (mongodb/bcryptjs are server-only — lazy-imported in the dev plugins above —
+  // so they never reach the client bundle.)
+  build: {
+    // pixi.js (~554 kB) and primevue (~591 kB) are single libraries already
+    // tree-shaken to what we use; they can't be split further without dynamic
+    // imports, so lift the warning threshold above them.
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("pixi.js")) return "pixi";
+          if (id.includes("primevue") || id.includes("@primevue") || id.includes("primeicons"))
+            return "primevue";
+          if (id.includes("markdown-it")) return "markdown";
+          if (id.includes("uplot")) return "uplot";
+          if (id.includes("/vue/") || id.includes("@vue") || id.includes("vue-router") || id.includes("pinia"))
+            return "vue";
+        },
+      },
+    },
+  },
   server: { headers: crossOriginIsolation },
   preview: { headers: crossOriginIsolation },
   };
