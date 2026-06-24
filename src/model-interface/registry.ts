@@ -4712,38 +4712,14 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     },
     {
-      "caption": "baseline elastance (open duct, mmHg/L)",
-      "target": "el_base",
-      "type": "number",
-      "delta": 0.1,
-      "factor": 1,
-      "rounding": 1,
-      "build_prop": true,
-      "edit_mode": "extra",
-      "readonly": false
-    },
-    {
-      "caption": "elastance-resistance coupling alpha",
-      "target": "alpha",
+      "caption": "orifice discharge coefficient",
+      "target": "discharge_coeff",
       "type": "number",
       "delta": 0.05,
       "factor": 1,
       "rounding": 2,
-      "ul": 1.5,
-      "ll": 0,
-      "build_prop": true,
-      "edit_mode": "extra",
-      "readonly": false
-    },
-    {
-      "caption": "jet velocity exponent",
-      "target": "jet_exponent",
-      "type": "number",
-      "delta": 0.1,
-      "factor": 1,
-      "rounding": 2,
-      "ul": 3,
-      "ll": 0,
+      "ul": 1,
+      "ll": 0.3,
       "build_prop": true,
       "edit_mode": "extra",
       "readonly": false
