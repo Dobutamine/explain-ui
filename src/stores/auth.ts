@@ -18,6 +18,26 @@ export interface AuthUser {
 
 type Status = "idle" | "loading" | "authed" | "error";
 
+// In dev (`npm run dev`) we skip MongoDB auth entirely and auto-login as a local
+// `developer` account, so engine/model work doesn't require an IP-whitelisted Atlas
+// connection. A production build (`import.meta.env.DEV === false`) always uses the real
+// MongoDB login below. The developer's chosen default scenario is persisted per-device
+// in localStorage (mirrors the cloud `defaultLocalState` field).
+const DEV = import.meta.env.DEV;
+const LOCAL_DEFAULT_KEY = "explain.model.defaultLocalState";
+
+function makeDevUser(): AuthUser {
+  return {
+    email: "developer@localhost",
+    name: "developer",
+    admin: true, // so admin-only UI doesn't error; harmless on a local-only account
+    institution: "local",
+    modelDeveloper: true, // unlocks the scenario picker + star toggle
+    defaultState: null,
+    defaultLocalState: localStorage.getItem(LOCAL_DEFAULT_KEY) || null,
+  };
+}
+
 export const useAuthStore = defineStore("auth", () => {
   const user = ref<AuthUser | null>(null);
   const status = ref<Status>("idle");
@@ -26,6 +46,14 @@ export const useAuthStore = defineStore("auth", () => {
   const ready = ref(false);
 
   const isAuthenticated = computed(() => user.value !== null);
+
+  // Dev-only: persist the developer's chosen startup scenario to localStorage so this
+  // device reloads it. Pass null to clear (falls back to the bundled term_neonate).
+  function setDefaultLocalState(name: string | null) {
+    if (name) localStorage.setItem(LOCAL_DEFAULT_KEY, name);
+    else localStorage.removeItem(LOCAL_DEFAULT_KEY);
+    if (user.value) user.value.defaultLocalState = name;
+  }
 
   async function login(email: string, password: string): Promise<boolean> {
     status.value = "loading";
@@ -94,6 +122,13 @@ export const useAuthStore = defineStore("auth", () => {
   // Rehydrate the session from the HttpOnly cookie. Safe to call repeatedly;
   // the router guard calls it once before the first protected navigation.
   async function fetchMe(): Promise<boolean> {
+    // Dev bypass: auto-login as the local developer, never touch /api/auth or MongoDB.
+    if (DEV) {
+      user.value = makeDevUser();
+      status.value = "authed";
+      ready.value = true;
+      return true;
+    }
     try {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (res.ok) {
@@ -171,5 +206,6 @@ export const useAuthStore = defineStore("auth", () => {
     logout,
     listUsers,
     setModelDeveloper,
+    setDefaultLocalState,
   };
 });

@@ -32,6 +32,9 @@ interface CompNode {
   cb: number;
   label: Text | null; // caption, follows the sprite
   layout: any;
+  lastR: number; // last volume-derived disc radius (so a live rescale can
+  // re-apply sprite size immediately, even with the sim paused)
+  lastTo2: number; // last raw to2 (so a live tint-window change re-colours now)
 }
 
 interface ConnNode {
@@ -47,6 +50,7 @@ interface ConnNode {
   cb: number;
   pos: number; // normalized phase along the path [0,1)
   geom: any; // {type:'straight',x1,y1,x2,y2} | {type:'arc',cx,cy,r,from,to}
+  lastTo2: number; // last raw upstream to2 (for a live tint-window change)
 }
 
 // ---- Flow indicator: a train of small discs that stream along each connector.
@@ -62,7 +66,11 @@ const DOT_SPEED = 2.0; // path fraction advanced per unit flow per frame
 const DOT_SPACING_PX = 64; // target spacing between dots along a path
 const DOT_MIN = 2; // min / max dots per connector
 const DOT_MAX = 7;
-const DOT_FLOW_REF = 0.02; // |flow| (L/s) at which dots reach full size/opacity
+const DOT_FLOW_REF = 0.004; // |flow| (L/s) at which dots reach full size/opacity.
+// Lowered from 0.02 so low-flow beds (e.g. the uterine circulation ~50 mL/min ≈
+// 0.00083 L/s) still render as full-size, opaque dot trains rather than dim
+// near-invisible specks. Controls dot size/opacity only — dot *speed* tracks raw
+// flow — so high-flow connectors simply saturate at full size sooner.
 const DOT_SCALE_MIN = 0.8; // dot size multiplier at low flow …
 const DOT_SCALE_MAX = 1.35; // … and at/above DOT_FLOW_REF
 const FLOW_LERP = 0.12; // smoothing for the per-connector flow magnitude
@@ -115,6 +123,9 @@ export class DiagramRenderer implements RendererAdapter {
   private yOffset = 0;
   private scaling = 1;
   private speed = 1;
+  // to2 (O2 content) gradient window for tinting; per-diagram, live-editable
+  private to2Lo = TO2_LO;
+  private to2Hi = TO2_HI;
   private ro: ResizeObserver | null = null;
 
   // editor state (Phase E)
@@ -170,6 +181,8 @@ export class DiagramRenderer implements RendererAdapter {
     this.yOffset = numberOr(settings.yOffset, 0);
     this.scaling = numberOr(settings.scaling, 1);
     this.speed = numberOr(settings.speed, 1);
+    this.to2Lo = numberOr(settings.to2_lo, TO2_LO);
+    this.to2Hi = numberOr(settings.to2_hi, TO2_HI);
     this.gridOn = settings.grid === true;
     this.gridSize = settings.gridSize > 0 ? settings.gridSize : GRID_SIZE_DEFAULT;
     this.recomputeGeometry();
@@ -288,6 +301,80 @@ export class DiagramRenderer implements RendererAdapter {
     this.drawGrid();
   }
 
+  /** Set the global diagram scale live (one knob for the whole picture). Scales
+   *  the discs, captions, connector path widths and flow dots together; the ring
+   *  layout still auto-fits the panel (its margin tracks the sprite size, so the
+   *  ring nudges in/out a touch to keep room for the bigger/smaller sprites).
+   *  Persists into settings.scaling so it round-trips on export. */
+  setScaling(scaling: number) {
+    if (!(scaling > 0)) return;
+    this.scaling = scaling;
+    if (this.diagram?.settings) this.diagram.settings.scaling = scaling;
+    if (!this.ready) return;
+    // sprite margin scales with scaling → recompute the ring, then reposition
+    // and rescale everything at the new scale (mirrors onResize plus a rescale).
+    this.recomputeGeometry();
+    this.drawBackdrop();
+    this.drawGrid();
+    for (const name in this.comps) {
+      const node = this.comps[name];
+      const p = this.placeAt(node.layout);
+      node.x = p.x;
+      node.y = p.y;
+      this.syncCompartmentPos(node);
+      this.setCompartmentScale(node, node.lastR); // re-apply disc size now
+      if (node.label) {
+        const l = node.layout.label || {};
+        node.label.style.fontSize = (numberOr(l.size, 10) || 10) * this.scaling;
+      }
+      this.positionLabel(node);
+    }
+    for (const conn of this.conns) {
+      const f = this.comps[conn.from];
+      const t = this.comps[conn.to];
+      if (f && t) conn.geom = this.drawPath(conn.graphics, conn.layout, f, t);
+    }
+    this.drawSelection();
+  }
+
+  /** Set the to2 (O2 content) tint window [lo, hi] live. Compartments/dots map
+   *  their oxygenation onto the deox→ox colour ramp across this window, so a
+   *  lower-Hb circuit (adult) needs a lower `hi` than a neonate to swing arterial
+   *  blood red instead of pegging the whole circuit blue. Re-colours immediately
+   *  (so a paused sim updates) and persists into settings.to2_lo / to2_hi. */
+  setTo2Range(lo: number, hi: number) {
+    if (!(hi > lo)) return; // need a positive window
+    this.to2Lo = lo;
+    this.to2Hi = hi;
+    if (this.diagram?.settings) {
+      this.diagram.settings.to2_lo = lo;
+      this.diagram.settings.to2_hi = hi;
+    }
+    if (!this.ready) return;
+    // snap each tinted component/dot to the new window now (don't wait for a
+    // frame — the sim may be paused while the user tunes the threshold)
+    for (const name in this.comps) {
+      const node = this.comps[name];
+      if (!node.layout.general.tinting) continue;
+      const rgb = rgbFromTo2(node.lastTo2, this.to2Lo, this.to2Hi);
+      node.cr = rgb[0];
+      node.cg = rgb[1];
+      node.cb = rgb[2];
+      node.sprite.tint = packRgb(rgb);
+      if (node.rim) node.rim.tint = packRgb(lerpRgb(rgb, WHITE_RGB, RIM_LIGHTEN));
+      if (node.glow) node.glow.tint = packRgb(rgb);
+    }
+    for (const conn of this.conns) {
+      if (!conn.layout.general.tinting) continue;
+      const rgb = rgbFromTo2(conn.lastTo2, this.to2Lo, this.to2Hi);
+      conn.cr = rgb[0];
+      conn.cg = rgb[1];
+      conn.cb = rgb[2];
+      const col = packRgb(lerpRgb(rgb, WHITE_RGB, DOT_LIGHTEN));
+      for (const d of conn.dots) d.tint = col;
+    }
+  }
+
   private buildCompartments() {
     for (const [name, comp] of Object.entries<any>(this.diagram?.components ?? {})) {
       if (comp.type === "Connector") continue;
@@ -364,10 +451,12 @@ export class DiagramRenderer implements RendererAdapter {
       cb: baseRgb[2],
       label,
       layout,
+      lastR: radiusFromVolume(0.15),
+      lastTo2: this.to2Lo, // venous end until the first frame arrives
     };
     this.comps[name] = node;
     // initial visible scale/position before the first frame arrives
-    this.setCompartmentScale(node, radiusFromVolume(0.15));
+    this.setCompartmentScale(node, node.lastR);
     this.syncCompartmentPos(node);
     this.positionLabel(node);
   }
@@ -541,6 +630,7 @@ export class DiagramRenderer implements RendererAdapter {
       cb: DEOX_RGB[2],
       pos: 0,
       geom,
+      lastTo2: this.to2Lo,
     });
   }
 
@@ -610,11 +700,13 @@ export class DiagramRenderer implements RendererAdapter {
       const node = this.comps[name];
       const mag = frame[animMagOffset(idx)];
       const r = radiusFromVolume(mag > 0 ? mag : 0.15);
+      node.lastR = r;
       this.setCompartmentScale(node, r);
       if (!node.layout.general.tinting) continue;
 
       // ease the tint toward the target colour to damp per-frame to2 flicker
-      const tgt = rgbFromTo2(frame[animTintOffset(idx)]);
+      node.lastTo2 = frame[animTintOffset(idx)];
+      const tgt = rgbFromTo2(node.lastTo2, this.to2Lo, this.to2Hi);
       node.cr += (tgt[0] - node.cr) * TINT_LERP;
       node.cg += (tgt[1] - node.cg) * TINT_LERP;
       node.cb += (tgt[2] - node.cb) * TINT_LERP;
@@ -665,7 +757,8 @@ export class DiagramRenderer implements RendererAdapter {
     // lifted toward white so even venous (dark blue) dots stand out on the path
     let col = 0xffffff;
     if (conn.layout.general.tinting) {
-      const tgt = rgbFromTo2(tint);
+      conn.lastTo2 = tint;
+      const tgt = rgbFromTo2(tint, this.to2Lo, this.to2Hi);
       conn.cr += (tgt[0] - conn.cr) * TINT_LERP;
       conn.cg += (tgt[1] - conn.cg) * TINT_LERP;
       conn.cb += (tgt[2] - conn.cb) * TINT_LERP;
@@ -1122,13 +1215,14 @@ function radiusFromVolume(vol: number): number {
 // Anatomical oxygenation ramp (Theme C). Maps blood O2 content (to2) onto a
 // deoxygenated slate-blue → oxygenated brick-red gradient via linear RGB interp.
 //
-// The gradient window is a FIXED clinical range in to2 units, deliberately NOT
-// the per-diagram `max_to2` hint: that hint is unreliably set (e.g. 6 on the
-// neonate, whose blood actually spans ~4.8–8.6), which clamped almost all
-// compartments to one colour. Across scenarios venous blood bottoms out near
-// ~3 and arterial peaks near ~8.8, so this absolute window gives genuine
-// venous↔arterial separation in every diagram. The per-diagram `max_to2` hint is
-// intentionally not used.
+// The gradient window [lo, hi] is in to2 (O2 CONTENT) units, not saturation.
+// These module values are the defaults; a diagram overrides them via
+// settings.to2_lo / settings.to2_hi (live-editable, see setTo2Range). The window
+// matters because to2 content scales with Hb: at the same saturation an adult
+// with lower Hb has a lower arterial to2 than a neonate, so a fixed window would
+// peg the whole adult circuit to the venous (blue) end. Tuning the window per
+// diagram restores genuine venous↔arterial colour separation. (The legacy
+// per-diagram `max_to2` hint is unrelated and still ignored.)
 const TO2_LO = 3.0;
 const TO2_HI = 8.8;
 const DEOX_RGB = [0x16, 0x48, 0xb0]; // dark blue (deoxygenated)
@@ -1142,9 +1236,9 @@ const WHITE_RGB = [255, 255, 255];
 
 // Map blood O2 content (to2) onto the deox→ox ramp, returning unrounded rgb so
 // callers can smooth it over frames before packing to a tint int.
-function rgbFromTo2(to2: number): [number, number, number] {
+function rgbFromTo2(to2: number, lo: number, hi: number): [number, number, number] {
   if (Number.isNaN(to2)) return [0x66, 0x66, 0x66];
-  let t = (to2 - TO2_LO) / (TO2_HI - TO2_LO);
+  let t = (to2 - lo) / (hi - lo || 1e-6);
   t = t < 0 ? 0 : t > 1 ? 1 : t;
   t = Math.pow(t, RAMP_GAMMA);
   return [

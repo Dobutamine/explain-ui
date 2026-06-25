@@ -21,6 +21,7 @@ import ScalerPanel from "@/components/controls/ScalerPanel.vue";
 import VentilatorPanel from "@/components/controls/VentilatorPanel.vue";
 import EclsPanel from "@/components/controls/EclsPanel.vue";
 import ResuscitationPanel from "@/components/controls/ResuscitationPanel.vue";
+import PregnancyPanel from "@/components/controls/PregnancyPanel.vue";
 import EventSchedulerPanel from "@/components/controls/EventSchedulerPanel.vue";
 import SaveStatePanel from "@/components/controls/SaveStatePanel.vue";
 import AdminUsersButton from "@/components/controls/AdminUsersButton.vue";
@@ -111,7 +112,11 @@ onMounted(async () => {
 // at startup (overrides the cloud default). Click again to clear it.
 function toggleDefaultLocal() {
   if (!current.value) return;
-  statesStore.setDefaultLocal(auth.user?.defaultLocalState === current.value ? null : current.value);
+  const next = auth.user?.defaultLocalState === current.value ? null : current.value;
+  // In dev the developer account isn't backed by MongoDB — persist the choice to
+  // localStorage instead of POSTing to /api/states/set-default-local.
+  if (import.meta.env.DEV) auth.setDefaultLocalState(next);
+  else statesStore.setDefaultLocal(next);
 }
 
 // delete a model definition file from public/model_definitions (dev endpoint)
@@ -217,6 +222,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             <Tab value="resuscitation" v-tooltip.top="'Resuscitation'" aria-label="Resuscitation">
               <i class="pi pi-heart"></i>
             </Tab>
+            <Tab value="pregnancy" v-tooltip.top="'Pregnancy / Labor'" aria-label="Pregnancy / Labor">
+              <i class="pi pi-venus"></i>
+            </Tab>
             <Tab value="scaler" v-tooltip.top="'Scaler'" aria-label="Scaler">
               <i class="pi pi-expand"></i>
             </Tab>
@@ -243,6 +251,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             <TabPanel value="resuscitation">
               <div class="flex flex-col gap-3">
                 <ResuscitationPanel />
+              </div>
+            </TabPanel>
+            <TabPanel value="pregnancy">
+              <div class="flex flex-col gap-3">
+                <PregnancyPanel />
               </div>
             </TabPanel>
             <TabPanel value="scaler">

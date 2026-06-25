@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, computed, watch } from "vue";
+import { onMounted, onBeforeUnmount, ref, computed, watch, nextTick } from "vue";
 import Select from "primevue/select";
 import ToggleButton from "primevue/togglebutton";
 import InputText from "primevue/inputtext";
@@ -52,6 +52,14 @@ const pathB = computed(() => (modelB.value && propB.value ? `${modelB.value}.${p
 // view options
 const split = ref(false); // two separate charts
 const sharedAxis = ref(false); // single shared y-axis (ignored when split)
+const fill = ref(false); // translucent area fill under each trace (Doppler-like)
+
+// fill is held in the renderer and re-applied on every rebuild, so it survives
+// series/view changes; just push the flag to both charts when it toggles.
+watch(fill, (v) => {
+  adapterTop?.setFill(v);
+  adapterBottom?.setFill(v);
+});
 
 // presets (configuration.presets.RealTimeCharts + session-saved). Selecting one
 // fills the A/B selectors with its first two paths; from there it behaves like a
@@ -67,8 +75,10 @@ function onDeletePreset(name: string) {
   if (window.confirm(`Delete preset "${name}"?`)) deletePreset(name);
 }
 
-// load a preset into the manual selectors (one-shot action)
-watch(preset, (name) => {
+// load a preset into the manual selectors (one-shot action). A preset may also
+// ship view options — `fill` and a fixed y-scale (`autoscale:false` + yMin/yMax)
+// — which are applied after the path watchers have rebuilt the renderer(s).
+watch(preset, async (name) => {
   if (!name) return;
   const p = presets.value[name];
   const paths: string[] = Array.isArray(p?.paths) ? p.paths : [];
@@ -80,6 +90,20 @@ watch(preset, (name) => {
     sharedAxis.value = false;
   }
   preset.value = null; // selectors now drive the chart
+
+  // let the [pathA, pathB, …] watcher run applyView() (which rebuilds the
+  // renderers and resets autoY) before we layer the preset's view options on.
+  await nextTick();
+  if (typeof p?.fill === "boolean") fill.value = p.fill;
+  if (p?.autoscale === false && typeof p?.yMin === "number" && typeof p?.yMax === "number") {
+    autoY.value = false; // reflect the lock in the UI (reveals the min/max inputs)
+    await nextTick(); // onAutoYChange snapshots a range; override it with the preset's
+    const roles: ("top" | "bottom")[] = split.value ? ["top", "bottom"] : ["top"];
+    for (const role of roles) adapterFor(role)?.applyFixedYRange(p.yMin, p.yMax);
+    refreshYAxes();
+  } else if (p?.autoscale === true) {
+    autoY.value = true;
+  }
 });
 
 // minimal custom legend (uPlot's own legend is disabled). Top chart carries
@@ -325,6 +349,14 @@ onBeforeUnmount(() => {
         off-label="Shared Y"
         size="small"
         :disabled="split"
+      />
+      <ToggleButton
+        v-model="fill"
+        on-label="Fill"
+        off-label="Fill"
+        on-icon="pi pi-chart-bar"
+        off-icon="pi pi-chart-bar"
+        size="small"
       />
       <ToggleButton
         v-model="autoY"

@@ -470,6 +470,24 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       ]
     },
     {
+      "caption": "set P50 (Hb-O2 affinity)",
+      "edit_mode": "advanced",
+      "target": "set_P50",
+      "type": "function",
+      "args": [
+        {
+          "caption": "P50 mmHg (fetal HbF 18.8, neonatal 20.0, adult 26.7)",
+          "target": "new_p50",
+          "type": "number",
+          "factor": 1,
+          "delta": 0.1,
+          "rounding": 1,
+          "ul": 30,
+          "ll": 15
+        }
+      ]
+    },
+    {
       "caption": "set total oxygen concentration (mmol/l)",
       "target": "set_to2",
       "edit_mode": "basic",
@@ -3330,6 +3348,562 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     }
   ],
+  "Uterus": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "uterus running",
+      "target": "uterus_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "metabolism active",
+      "target": "met_active",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "uterine VO2 (mL O2/kg/min)",
+      "target": "ut_vo2",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0,
+      "ul": 5,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "perfusion factor",
+      "target": "perfusion_factor",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 10,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "pregnant",
+      "target": "pregnant",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "pregnancy GA (weeks)",
+      "target": "preg_ga",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 42,
+      "slider": true,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "couple placenta to uterine blood",
+      "target": "couple_placenta",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "contractions running (labor)",
+      "target": "contractions_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "contraction period (s)",
+      "target": "contraction_period",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 30,
+      "ul": 600,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "contraction duration (s)",
+      "target": "contraction_duration",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 20,
+      "ul": 180,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "contraction amplitude (mmHg)",
+      "target": "contraction_amplitude",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 120,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "resting tone (mmHg)",
+      "target": "resting_tone",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 30,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "contraction pressure gain (0-1)",
+      "target": "contraction_pres_gain",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "contraction resistance peak (x)",
+      "target": "contraction_r_peak",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "ll": 1,
+      "ul": 20,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "respiratory quotient",
+      "target": "resp_q",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1.5,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "pregnancy GA threshold (weeks)",
+      "target": "preg_ga_threshold",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 20,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "pregnancy GA term anchor (weeks)",
+      "target": "preg_ga_term",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 30,
+      "ul": 42,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term bed-resistance factor (conduits)",
+      "target": "preg_res_term_factor",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0.05,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term capillary-resistance factor (myometrium)",
+      "target": "preg_cap_res_term_factor",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0.05,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term bed-volume factor",
+      "target": "preg_vol_term_factor",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 1,
+      "ul": 6,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term VO2 factor",
+      "target": "preg_vo2_term_factor",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 1,
+      "ul": 15,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "edit_mode": "factors",
+      "caption": "uterine VO2 factor",
+      "target": "vo2_factor_ps",
+      "type": "factor",
+      "build_prop": false
+    },
+    {
+      "caption": "uterine artery model",
+      "target": "ut_art_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "uterine capillary model",
+      "target": "ut_cap_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "uterine vein model",
+      "target": "ut_ven_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "inflow resistor model",
+      "target": "ut_in_res_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "drainage resistor model",
+      "target": "ut_out_res_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "uterine blood flow (mL/min)",
+      "target": "ut_blood_flow",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 delivery DO2 (mL O2/min)",
+      "target": "ut_do2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 uptake VO2 (mL O2/min)",
+      "target": "ut_vo2_ml",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 extraction ratio (%)",
+      "target": "ut_o2er",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "a-v O2 difference (mmol/L)",
+      "target": "ut_avo2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "intrauterine pressure (mmHg)",
+      "target": "iup",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "contraction active",
+      "target": "contraction_active",
+      "type": "boolean",
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "Montevideo units",
+      "target": "montevideo_units",
+      "type": "number",
+      "factor": 1,
+      "rounding": 0,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
+  "MaternalPlacenta": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "placenta running",
+      "target": "mp_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "metabolism active",
+      "target": "met_active",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "placental VO2 (mL O2/kg/min)",
+      "target": "mp_vo2",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0,
+      "ul": 5,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "term spiral-artery resistance factor",
+      "target": "spiral_res_term_factor",
+      "type": "number",
+      "delta": 0.002,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0.001,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "contraction pressure gain (0-1)",
+      "target": "contraction_pres_gain",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "GA threshold (weeks)",
+      "target": "preg_ga_threshold",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 20,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "GA term anchor (weeks)",
+      "target": "preg_ga_term",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 30,
+      "ul": 42,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "edit_mode": "factors",
+      "caption": "placental VO2 factor",
+      "target": "vo2_factor_ps",
+      "type": "factor",
+      "build_prop": false
+    },
+    {
+      "caption": "placental blood flow (mL/min)",
+      "target": "mp_blood_flow",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "share of uterine flow (%)",
+      "target": "mp_flow_fraction",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 delivery DO2 (mL O2/min)",
+      "target": "mp_do2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 uptake VO2 (mL O2/min)",
+      "target": "mp_vo2_ml",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 extraction ratio (%)",
+      "target": "mp_o2er",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "placenta perfused (active)",
+      "target": "mp_active",
+      "type": "boolean",
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
   "Hormones": [
     {
       "target": "description",
@@ -4252,38 +4826,14 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     },
     {
-      "caption": "baseline elastance (open duct, mmHg/L)",
-      "target": "el_base",
-      "type": "number",
-      "delta": 0.1,
-      "factor": 1,
-      "rounding": 1,
-      "build_prop": true,
-      "edit_mode": "extra",
-      "readonly": false
-    },
-    {
-      "caption": "elastance-resistance coupling alpha",
-      "target": "alpha",
+      "caption": "orifice discharge coefficient",
+      "target": "discharge_coeff",
       "type": "number",
       "delta": 0.05,
       "factor": 1,
       "rounding": 2,
-      "ul": 1.5,
-      "ll": 0,
-      "build_prop": true,
-      "edit_mode": "extra",
-      "readonly": false
-    },
-    {
-      "caption": "jet velocity exponent",
-      "target": "jet_exponent",
-      "type": "number",
-      "delta": 0.1,
-      "factor": 1,
-      "rounding": 2,
-      "ul": 3,
-      "ll": 0,
+      "ul": 1,
+      "ll": 0.3,
       "build_prop": true,
       "edit_mode": "extra",
       "readonly": false
@@ -4321,6 +4871,14 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "edit_mode": "caption",
       "readonly": false,
       "caption": "umbilical vessels clamped"
+    },
+    {
+      "target": "skip_mat_gas_write",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false,
+      "caption": "maternal pool driven externally (uterine coupling)"
     },
     {
       "caption": "umb artery resistance factor",

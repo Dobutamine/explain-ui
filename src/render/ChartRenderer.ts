@@ -30,6 +30,9 @@ export class ChartRenderer implements RendererAdapter {
   // autoscaled range so the view doesn't jump.
   private autoScaleY = true;
   private fixedYRanges: Record<string, [number, number]> = {};
+  // true → fill the area between each series and the zero baseline with a
+  // translucent wash of its stroke colour (mimics a Doppler flow envelope).
+  private fill = false;
   private ro: ResizeObserver;
 
   constructor(el: HTMLElement) {
@@ -74,6 +77,24 @@ export class ChartRenderer implements RendererAdapter {
     if (!on) this.fixedYRanges = this.readYRanges();
     else this.fixedYRanges = {};
     this.autoScaleY = on;
+    this.build();
+  }
+
+  /** Lock every active y scale to an explicit [min, max] (and turn autoscaling
+   *  off). Unlike setAutoScaleY(false), which snapshots the current view, this
+   *  pins a caller-supplied range — used when a preset ships a fixed scale. */
+  applyFixedYRange(min: number, max: number) {
+    if (!(min < max)) return;
+    this.autoScaleY = false;
+    this.fixedYRanges = {};
+    for (const k of this.scaleKeys()) this.fixedYRanges[k] = [min, max];
+    this.build();
+  }
+
+  /** Toggle the translucent area fill under every series. */
+  setFill(on: boolean) {
+    if (this.fill === on) return;
+    this.fill = on;
     this.build();
   }
 
@@ -123,6 +144,15 @@ export class ChartRenderer implements RendererAdapter {
     return COLORS[(i + this.colorOffset) % COLORS.length];
   }
 
+  /** A translucent wash of series i's stroke colour for the area fill. */
+  private fillFor(i: number) {
+    const hex = this.colorFor(i);
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, 0.2)`;
+  }
+
   onRegistry(payload: ChannelsPayload) {
     this.allLabels = (payload?.chart?.slots ?? []).slice(1); // slot 0 is "time"
     this.rebuildDisplay();
@@ -162,7 +192,7 @@ export class ChartRenderer implements RendererAdapter {
       // same-unit params can be compared by magnitude. Axis text is neutral
       // since it serves multiple colours.
       this.labels.forEach((label, i) => {
-        series.push({ label, stroke: this.colorFor(i), width: 1 });
+        series.push({ label, stroke: this.colorFor(i), width: 1, ...(this.fill ? { fill: this.fillFor(i), fillTo: 0 } : {}) });
       });
       yAxes.push({
         side: 3,
@@ -178,7 +208,7 @@ export class ChartRenderer implements RendererAdapter {
       this.labels.forEach((label, i) => {
         const color = this.colorFor(i);
         const scaleKey = "y" + i;
-        series.push({ label, scale: scaleKey, stroke: color, width: 1 });
+        series.push({ label, scale: scaleKey, stroke: color, width: 1, ...(this.fill ? { fill: this.fillFor(i), fillTo: 0 } : {}) });
         yAxes.push({
           scale: scaleKey,
           side: i === 0 ? 3 : 1, // 3 = left, 1 = right

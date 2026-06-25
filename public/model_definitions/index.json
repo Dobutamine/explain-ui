@@ -1,5 +1,14 @@
 [
   "adult_female",
   "term_neonate",
-  "term_neonate_birgit"
+  "term_neonate_birgit",
+  "adult_female_uterus",
+  "term_neonate",
+  "term_fetus",
+  "pda_bidirectional",
+  "pda_bidirectional_unrestrictive",
+  "pda_unrestrictive_ltr",
+  "pda_restrictive_ltr",
+  "pda_restrictive_rtl",
+  "pda_unrestrictive_rtl"
 ]

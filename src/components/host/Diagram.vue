@@ -28,6 +28,9 @@ const editMode = ref(false);
 const connectMode = ref(false);
 const gridOn = ref(false);
 const gridSize = ref(20);
+const globalScale = ref(1);
+const to2Lo = ref(3.0);
+const to2Hi = ref(8.8);
 const addModel = ref<string | null>(null);
 const addPicto = ref("container.png");
 const selectedName = ref<string | null>(null);
@@ -95,9 +98,12 @@ async function mountRenderer(diagram: any) {
   // animation by pushing the edited diagram to the engine — no model rebuild.
   adapter.setChangeCallback(() => pushDiagram());
   if (editMode.value) adapter.setEditMode(true);
-  // reflect the diagram's own grid settings in the toolbar
+  // reflect the diagram's own grid + scale settings in the toolbar
   gridOn.value = diagram?.settings?.grid === true;
   if (diagram?.settings?.gridSize > 0) gridSize.value = diagram.settings.gridSize;
+  if (diagram?.settings?.scaling > 0) globalScale.value = diagram.settings.scaling;
+  if (diagram?.settings?.to2_lo > 0) to2Lo.value = diagram.settings.to2_lo;
+  if (diagram?.settings?.to2_hi > 0) to2Hi.value = diagram.settings.to2_hi;
   addRenderer(adapter);
   // publish to the chat/bot pipeline so it can drive diagram edits while mounted
   diagramStore.register(adapter);
@@ -177,6 +183,17 @@ function toggleGrid(on: boolean) {
 }
 function changeGridSize(size: number | null) {
   if (size && size > 0) adapter?.setGridSize(size);
+}
+// Single global scaler: drives the renderer's scaling (discs, labels, path
+// widths, dots) and persists into settings.scaling (picked up on export).
+function changeScaling(v: number | null) {
+  if (v && v > 0) adapter?.setScaling(v);
+}
+// to2 (O2 content) tint window. Lower-Hb circuits (adult) need a lower upper
+// bound so arterial blood swings red instead of pegging the circuit blue.
+// Persists into settings.to2_lo / to2_hi (picked up on export).
+function changeTo2Range() {
+  if (to2Hi.value > to2Lo.value) adapter?.setTo2Range(to2Lo.value, to2Hi.value);
 }
 function exportJson() {
   if (!adapter) return;
@@ -447,6 +464,53 @@ function download(text: string, name: string) {
         class="gridsize w-16"
         @update:model-value="changeGridSize"
       />
+      <span class="mx-1 opacity-40">|</span>
+      <label
+        v-tooltip.top="'Global diagram scale — resizes all sprites, labels, path widths and flow dots together (saved as settings.scaling)'"
+        class="flex items-center gap-1 text-sm opacity-85"
+      >
+        scale
+        <InputNumber
+          v-model="globalScale"
+          :step="0.05"
+          :min="0.1"
+          :max-fraction-digits="2"
+          size="small"
+          class="gridsize w-16"
+          @update:model-value="changeScaling"
+        />
+      </label>
+      <span class="mx-1 opacity-40">|</span>
+      <label
+        v-tooltip.top="'O₂ tint window (to2 content units): the venous→arterial gradient maps across [lo, hi]. Lower the upper bound for low-Hb circuits (e.g. adult) so arterial blood reads red. Saved as settings.to2_lo / to2_hi.'"
+        class="flex items-center gap-1 text-sm opacity-85"
+      >
+        O₂ lo
+        <InputNumber
+          v-model="to2Lo"
+          :step="0.1"
+          :min="0"
+          :max-fraction-digits="2"
+          size="small"
+          class="gridsize w-16"
+          @update:model-value="changeTo2Range"
+        />
+      </label>
+      <label
+        v-tooltip.top="'Upper bound of the O₂ tint window (to2 at which blood reads fully oxygenated / red)'"
+        class="flex items-center gap-1 text-sm opacity-85"
+      >
+        hi
+        <InputNumber
+          v-model="to2Hi"
+          :step="0.1"
+          :min="0"
+          :max-fraction-digits="2"
+          size="small"
+          class="gridsize w-16"
+          @update:model-value="changeTo2Range"
+        />
+      </label>
     </div>
   </div>
 </template>
