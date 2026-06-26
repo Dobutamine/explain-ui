@@ -5620,7 +5620,8 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "choices": [
         "PC",
         "PRVC",
-        "PS"
+        "PS",
+        "CPAP"
       ]
     },
     {

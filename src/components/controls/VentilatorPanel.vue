@@ -53,6 +53,9 @@ const MODE_FIELDS: Record<string, Field[]> = {
   PC: [PIP, RATE, TINSP, INSP_FLOW],
   PRVC: [PIP_MAX, VT, RATE, TINSP, INSP_FLOW],
   PS: [PIP, INSP_FLOW, TRIG_VOL],
+  // Pure CPAP: a single continuous distending pressure (PEEP, from COMMON) plus the
+  // bias/insp flow. No mandatory breaths — the patient breathes spontaneously on top.
+  CPAP: [INSP_FLOW],
 };
 
 // ET-tube geometry (always available; go through setters).
@@ -61,7 +64,7 @@ const TUBE: Field[] = [
   { p: "ettube_length", label: "ET length", unit: "mm", min: 50, max: 200, step: 5, rounding: 0, fn: "set_ettube_length", type: "tube" },
 ];
 
-const MODES = ["PC", "PRVC", "PS"];
+const MODES = ["PC", "PRVC", "PS", "CPAP"];
 
 const enabled = ref(false);
 const mode = ref("PRVC");
@@ -73,7 +76,7 @@ const vals = ref<Record<string, number>>({});
 // synchronized (PC/PRVC) — in PS it is already part of the mode fields.
 const activeFields = computed<Field[]>(() => {
   const out = [...(MODE_FIELDS[mode.value] ?? []), ...COMMON];
-  if (synchronized.value && mode.value !== "PS") out.push(TRIG_VOL);
+  if (synchronized.value && mode.value !== "PS" && mode.value !== "CPAP") out.push(TRIG_VOL);
   return out;
 });
 

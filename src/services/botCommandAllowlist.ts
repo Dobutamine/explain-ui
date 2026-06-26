@@ -48,7 +48,7 @@ export const COMMAND_ALLOWLIST: AllowEntry[] = [
     target: "set_ettube_length",
     note: "set endotracheal tube length (mm)",
   },
-  { op: "setProp", model: "Ventilator", target: "vent_mode", note: "ventilation mode (PC/PRVC/PS)" },
+  { op: "setProp", model: "Ventilator", target: "vent_mode", note: "ventilation mode (PC/PRVC/PS/CPAP)" },
   { op: "setProp", model: "Ventilator", target: "vent_rate", note: "ventilator rate (/min)" },
   { op: "setProp", model: "Ventilator", target: "insp_time", note: "inspiration time (s)" },
   { op: "setProp", model: "Ventilator", target: "tidal_volume", note: "target tidal volume (mL)" },
