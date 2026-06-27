@@ -24,7 +24,7 @@ Rules of thumb:
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
-Snapshot: **38 model_types**, **345 settable params**, **24 functions**
+Snapshot: **40 model_types**, **376 settable params**, **25 functions**
 (+ 26 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
@@ -37,7 +37,7 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `call` `Ventilator.set_fio2` — set inspired O2 fraction (0.21–1.0)
 - `call` `Ventilator.set_ettube_diameter` — set endotracheal tube diameter (mm)
 - `call` `Ventilator.set_ettube_length` — set endotracheal tube length (mm)
-- `setProp` `Ventilator.vent_mode` — ventilation mode (PC/PRVC/PS)
+- `setProp` `Ventilator.vent_mode` — ventilation mode (PC/PRVC/PS/CPAP)
 - `setProp` `Ventilator.vent_rate` — ventilator rate (/min)
 - `setProp` `Ventilator.insp_time` — inspiration time (s)
 - `setProp` `Ventilator.tidal_volume` — target tidal volume (mL)
@@ -97,6 +97,7 @@ _call_:
 - `set_temperature(temp (number, range 25–45); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set temperature (C)
 - `set_viscosity(viscosity (number, range 0.1–12))` — set viscosity (cP)
 - `set_haldane_coeff(new_coeff (number, 0 = off, range 0–5))` — set Haldane coefficient
+- `set_P50(new_p50 (number, fetal HbF 18.8, neonatal 20.0, adult 26.7, range 15–30))` — set P50 (Hb-O2 affinity)
 - `set_to2(to2 (number, range 0–20); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set total oxygen concentration (mmol/l)
 - `set_tco2(tco2 (number, range 0–20); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set total carbon dioxide concentration (mmol/l)
 - `set_solute(solute_name (list, one of na/k/ca/cl/lact/mg/albumin/phosphates/uma/hemoglobin); solute_value (number, range 0–1000); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set solute concentration
@@ -442,6 +443,19 @@ _setProp_:
 - `afferent_factor_max` — afferent factor max (number, range 1–20) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
 
+### MaternalPlacenta
+
+_setProp_:
+- `mp_running` — placenta running (boolean)
+- `met_active` — metabolism active (boolean)
+- `mp_vo2` — placental VO2 (mL O2/kg/min) (number, mL O2/kg/min, range 0–5)
+- `vo2_factor_ps` — placental VO2 factor (factor) _(factors)_
+- `spiral_res_term_factor` — term spiral-artery resistance factor (number, range 0.001–1) _(advanced)_
+- `contraction_pres_gain` — contraction pressure gain (0-1) (number, 0-1, range 0–1) _(advanced)_
+- `preg_ga_threshold` — GA threshold (weeks) (number, weeks, range 0–20) _(advanced)_
+- `preg_ga_term` — GA term anchor (weeks) (number, weeks, range 30–42) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
 ### Metabolism
 
 _setProp_:
@@ -487,9 +501,7 @@ _setProp_:
 - `diameter_ao_max` — max diameter aortic ampulla (mm) (number, mm) _(extra)_
 - `diameter_pa_max` — max diameter pulmonary end (mm) (number, mm) _(extra)_
 - `length` — ductus arteriosus length (mm) (number, mm) _(extra)_
-- `el_base` — baseline elastance (open duct, mmHg/L) (number, open duct, mmHg/L) _(extra)_
-- `alpha` — elastance-resistance coupling alpha (number, range 0–1.5) _(extra)_
-- `jet_exponent` — jet velocity exponent (number, range 0–3) _(extra)_
+- `discharge_coeff` — orifice discharge coefficient (number, range 0.3–1) _(extra)_
 - `is_enabled` — enabled (boolean) _(all)_
 
 ### Placenta
@@ -502,6 +514,7 @@ _setProp_:
 - `dif_co2` — co2 dioxide diffusion constant (number, range 0–0.1)
 - `mat_to2` — mat plac o2 content (mmol/L) (number, mmol/L, range 0–10)
 - `mat_tco2` — mat plac co2 content (mmol/L) (number, mmol/L, range 20–30)
+- `skip_mat_gas_write` — maternal pool driven externally (uterine coupling) (boolean, uterine coupling) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
 - `placenta_running` — placenta model running (boolean) _(caption)_
 - `umb_clamped` — umbilical vessels clamped (boolean) _(caption)_
@@ -577,10 +590,37 @@ _setProp_:
 - `el_max_factor_ps` — elastance maximum baseline factor (factor)
 - `el_k_factor_ps` — elastance non linear factor (factor)
 
+### Uterus
+
+_setProp_:
+- `uterus_running` — uterus running (boolean)
+- `met_active` — metabolism active (boolean)
+- `ut_vo2` — uterine VO2 (mL O2/kg/min) (number, mL O2/kg/min, range 0–5)
+- `perfusion_factor` — perfusion factor (number, range 0–10)
+- `pregnant` — pregnant (boolean)
+- `preg_ga` — pregnancy GA (weeks) (number, weeks, range 0–42)
+- `contractions_running` — contractions running (labor) (boolean, labor)
+- `couple_placenta` — couple placenta to uterine blood (boolean) _(extra)_
+- `contraction_period` — contraction period (s) (number, s, range 30–600) _(extra)_
+- `contraction_duration` — contraction duration (s) (number, s, range 20–180) _(extra)_
+- `contraction_amplitude` — contraction amplitude (mmHg) (number, mmHg, range 0–120) _(extra)_
+- `vo2_factor_ps` — uterine VO2 factor (factor) _(factors)_
+- `resting_tone` — resting tone (mmHg) (number, mmHg, range 0–30) _(advanced)_
+- `contraction_pres_gain` — contraction pressure gain (0-1) (number, 0-1, range 0–1) _(advanced)_
+- `contraction_r_peak` — contraction resistance peak (x) (number, x, range 1–20) _(advanced)_
+- `resp_q` — respiratory quotient (number, range 0–1.5) _(advanced)_
+- `preg_ga_threshold` — pregnancy GA threshold (weeks) (number, weeks, range 0–20) _(advanced)_
+- `preg_ga_term` — pregnancy GA term anchor (weeks) (number, weeks, range 30–42) _(advanced)_
+- `preg_res_term_factor` — term bed-resistance factor (conduits) (number, conduits, range 0.05–1) _(advanced)_
+- `preg_cap_res_term_factor` — term capillary-resistance factor (myometrium) (number, myometrium, range 0.05–1) _(advanced)_
+- `preg_vol_term_factor` — term bed-volume factor (number, range 1–6) _(advanced)_
+- `preg_vo2_term_factor` — term VO2 factor (number, range 1–15) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
 ### Ventilator
 
 _setProp_:
-- `vent_mode` — ventilator mode (list, one of PC/PRVC/PS)
+- `vent_mode` — ventilator mode (list, one of PC/PRVC/PS/CPAP)
 - `vent_rate` — ventilator rate (/min) (number, /min, range 0–100)
 - `insp_time` — inspiration time (s) (number, s, range 0.1–5)
 - `insp_flow` — inspiratory flow (l/min) (number, l/min, range 0–20)

@@ -3039,6 +3039,28 @@ matching `flow_targets`:
 ````markdown
 # Pda — Velocity Outputs
 
+> **Update (quadratic stenosis element).** The trade-off this document analyses has since been
+> resolved at the source. The duct resistance is now the standard quadratic stenosis element
+> `ΔP = R·Q + B·Q²`, where `R·Q` is the viscous (Poiseuille) loss and `B·Q²` is the Bernoulli orifice
+> loss with `B = ρ/(2·A_eff²)`. Because `B·Q²` *is* the modified-Bernoulli relation, the single output
+> `velocity_doppler = sign(Q)·√(B·Q²/4)` is now identical to continuity `Q/A_eff` through the effective
+> orifice — the two formulas that used to disagree are the same number. The element separates viscous
+> loss (which does not accelerate fluid) from kinetic energy (the jet), so `velocity_doppler` is honest
+> across the whole closure trajectory, and the empirical jet-correction outputs (`velocity_*_jet`) and
+> `jet_exponent` were removed. The continuity bulk means `velocity_ao`/`velocity_pa` remain as anatomic
+> reference values. The historical analysis below is retained for background.
+>
+> One caveat the new element makes explicit: a restrictive jet only forms in an **orifice-like (short)
+> throat**. A long, narrow duct is viscous-limited — low flow *and* low velocity even at a large
+> gradient — which is correct (the old `√(full gradient/4)` over-reported there). See `Pda.md` usage
+> notes; restrictive scenarios set a short `length` (~1–2 mm).
+>
+> The duct is now a **single resistor** `AAR → PA` (the intermediate `DA` blood-capacitance, shown in
+> the figures below, was numerically vestigial and was removed). The "noisy Bernoulli" discussion
+> below — which was rooted in the `DA` node's pressure transients feeding the velocity calc — is moot:
+> `velocity_doppler` is now derived from the resistive flow (`sign(Q)·√(B·Q²/4)`), not from any node
+> pressure. The historical analysis is retained only for background.
+
 The `Pda` model exposes several velocity properties at the pulmonary end of the duct. Two of them are computed by fundamentally different physics and behave in complementary ways: a modified-Bernoulli formulation, and a continuity (flow ÷ area) formulation. This document explains *why* each method behaves the way it does, when each one is right, and where they disagree.
 
 ## The properties
@@ -3174,49 +3196,54 @@ Two follow-up steps would resolve the trade-off without removing either existing
 ````markdown
 # Pda
 
-A `Pda` (Patent Ductus Arteriosus) is a composite component model representing the ductus arteriosus — the fetal shunt between the aortic arch and the pulmonary artery. Unlike a typical `BloodVessel`, the `Pda` is a thin coordinator: it owns three sub-models (two `Resistor`s and one `BloodCapacitance`) and drives their properties from a single set of geometric inputs (diameter, length, viscosity).
+A `Pda` (Patent Ductus Arteriosus) is a component model representing the ductus arteriosus — the fetal shunt between the aortic arch and the pulmonary artery. Unlike a typical `BloodVessel`, the `Pda` is a thin coordinator: it owns a single `Resistor` sub-model (`AAR_DA`, connecting `AAR` → `PA`) and drives its resistance from a set of geometric inputs (diameter, length, viscosity), implementing the **standard quadratic stenosis element** `ΔP = R·Q + B·Q²`.
 
-See also: [Pda-velocity.md](./Pda-velocity.md) for the rationale behind the multiple velocity outputs.
+See also: [Pda-velocity.md](./Pda-velocity.md) for the rationale behind the velocity outputs.
 
 ## Inheritance
 
 ```
 BaseModelClass
-  └── Pda    (coordinates AAR_DA, DA, DA_PA)
+  └── Pda    (coordinates the single resistor AAR_DA)
 ```
 
-The `Pda` does not extend `Capacitance` or `BloodVessel` itself. It steps once per cycle and writes derived values onto its sub-models.
+The `Pda` does not extend `Capacitance` or `BloodVessel` itself. It steps once per cycle and writes the derived resistance onto its resistor.
 
 ## What it models
 
 The ductus arteriosus is a short conical vessel (~2–3 cm) connecting the pulmonary trunk to the descending aorta. In utero it is held open by PGE₂; after birth, rising PO₂ and falling PGE₂ trigger smooth-muscle constriction that closes it functionally within 12–24 hours, followed by fibrotic remodeling over 2–3 weeks.
 
-The model represents the duct as a **linearly tapered cone**, wider at the aortic end and narrower at the pulmonary end. Closure scales both diameters together via `diameter_relative` from `1.0` (fully open) to `0.0` (closed). The cone is split at its midpoint and the two halves are modeled as separate Hagen-Poiseuille resistances feeding a small central capacitance.
+The model represents the duct as a **linearly tapered cone**, wider at the aortic end and narrower at the pulmonary end. Closure scales both diameters together via `diameter_relative` from `1.0` (fully open) to `0.0` (closed). The whole duct is a **single resistor** carrying the quadratic stenosis element `ΔP = R·Q + B·Q²`:
+
+- `R·Q` — the **viscous** (Hagen-Poiseuille) loss integrated over the full tapered cone (`res`).
+- `B·Q²` — the **convective / Bernoulli orifice** loss at the narrowest (pulmonary) end, the vena contracta. `B = K_BERNOULLI / A_eff²` with `A_eff = discharge_coeff · A_pa`. This term *is* the modified-Bernoulli relation, so the jet velocity it produces is self-consistent with the flow and with continuity through the effective orifice.
 
 ```
-AA ──[AAR_DA: Resistor]── DA ──[DA_PA: Resistor]── PA
-        r_for/r_back        (BloodCapacitance)    r_for/r_back
-        = res_ao            holds vol, el_base    = res_pa
-                            = this.el
+AAR ──[AAR_DA: Resistor]── PA
+         r_for/r_back = res + B·|Q|
+         (quadratic stenosis element; r_k = 0)
 ```
+
+There is **no intermediate compartment**: the duct was historically modeled as two resistors around a small `DA` blood-capacitance, but that capacitance was numerically vestigial (a 1000× change in its compliance moved shunt/velocity/gas by 0%, and it turned over ~2.5×/s so it neither delayed nor buffered transport), so the duct was collapsed to a single resistor between `AAR` and `PA`. Blood-gas composition propagates by the `Resistor`'s direct `volume_out`/`volume_in` mixing between the two compartments.
+
+**Numerical scheme.** The quadratic term is applied via a **semi-implicit linearization**: each step `AAR_DA.r_for/r_back` is set to `res + B·|Q_prev|` (and `r_k = 0`), so the resistor solves `Q = ΔP / (res + B·|Q_prev|)`. At steady state this reproduces `ΔP = res·Q + B·Q²` exactly, but it is unconditionally stable. The engine's native explicit quadratic term (`Resistor.r_k`, evaluating `flow = (ΔP − r_k·Q_prev²)/r_for`) is **not** used here: for an open duct the viscous resistance (~10³–10⁴) is far below `2·√(B·ΔP)` (~2×10⁴), so the explicit form diverges.
 
 ## Calculation cycle (`calc_model`)
 
 **Closed-duct fast path.** When `diameter_relative === 0` (the postnatal steady state) the cone math,
 the Bernoulli √, and the continuity divisions all degenerate, so `calc_model` short-circuits: it
-forces `no_flow = true` and `r_for/r_back = 1e8` on both resistors, zeroes the velocities, sets the
-DA elastance to `el_base × CLOSED_EL_SCALE` (a deterministic `5000×` sentinel — see the coupling
-section), and returns early. The full path below runs only while the duct is patent
+forces `no_flow = true` and `r_for/r_back = 1e8` on the resistor (`r_k = 0`, `B = 0`), zeroes the
+velocities, and returns early. The full path below runs only while the duct is patent
 (`diameter_relative > 0`).
 
 Each open-duct step executes in this order:
 
-1. **Diameters** — `diameter_ao` and `diameter_pa` from `diameter_relative` × their respective maxima.
-2. **Pull state from sub-models** — `flow_ao`, `flow_pa`, `viscosity`, `vol`.
-3. **Flow gating** — set `no_flow` on each resistor when its end is fully constricted.
-4. **Resistances** — compute the AO-half and PA-half resistances over the linear cone, push them to `AAR_DA.r_for/r_back` and `DA_PA.r_for/r_back`.
-5. **Resistance-elastance coupling** — compute `r_factor = res_total / res_open_total` and set the DA capacitance's `el_base` to `el_base * r_factor^alpha`.
-6. **Velocities** — three flavors: modified Bernoulli (`velocity_doppler`), continuity bulk mean (`velocity_ao`, `velocity_pa`), and the jet-corrected hybrid (`velocity_ao_jet`, `velocity_pa_jet`).
+1. **Viscosity** — pulled from the upstream `AAR` compartment (tracks hematocrit).
+2. **Diameters** — `diameter_ao` and `diameter_pa` from `diameter_relative` × their respective maxima.
+3. **Flow gating** — set `no_flow` when the pulmonary end is fully constricted (`diameter_pa === 0`).
+4. **Viscous resistance** — `res = calc_conical_resistance(d_ao, d_pa, length, viscosity)` over the full cone.
+5. **Bernoulli orifice term** — compute `B = K_BERNOULLI / A_eff²` from the pulmonary effective orifice area, then set `AAR_DA.r_for/r_back = res + B·|Q_prev|` (semi-implicit quadratic stenosis element).
+6. **Velocities** — the honest Bernoulli jet (`velocity_doppler = sign(Q)·√(B·Q²/4)`) plus the anatomic continuity bulk means (`velocity_ao`, `velocity_pa`) for reference.
 
 ## Properties
 
@@ -3233,9 +3260,7 @@ Each open-duct step executes in this order:
 
 | Property | Unit | Description |
 |---|---|---|
-| `el_base` | mmHg/L | Baseline (open-duct) elastance written to `DA.el_base` and scaled up by `(R/R_open)^alpha` as the duct constricts |
-| `alpha` | 0..1.5 | Resistance-elastance coupling exponent (BloodVessel α-pattern). Default `0.55` — between large-artery (0.5) and arteriole (0.63) with a bump for the PDA's smooth-muscle content |
-| `jet_exponent` | 0..3 | Exponent `n` on `(R_total / R_open_total)^(n/4)` used to amplify the continuity velocity into a jet-corrected end velocity. `n = 1` is a linear diameter correction. Default `0.6` |
+| `discharge_coeff` | 0.3..1 | Effective vena-contracta contraction `Cd` of the pulmonary orifice. The Bernoulli coefficient uses `A_eff = Cd · A_pa`, so `B ∝ 1/Cd²`. The single tuning knob for peak jet velocity (lower `Cd` → tighter jet → higher velocity). Default `0.8` |
 
 ### Dependent (recomputed each step)
 
@@ -3243,38 +3268,36 @@ Each open-duct step executes in this order:
 |---|---|---|
 | `diameter_ao` | mm | Current diameter at aortic end (= `diameter_relative · diameter_ao_max`) |
 | `diameter_pa` | mm | Current diameter at pulmonary end (= `diameter_relative · diameter_pa_max`) |
-| `viscosity` | cP | Blood viscosity pulled from `DA.viscosity` |
-| `vol` | L | Current duct volume from `DA.vol` |
-| `flow_ao` | L/s | Flow through `AAR_DA` (AA → DA) |
-| `flow_pa` | L/s | Flow through `DA_PA` (DA → PA) |
-| `res_ao` | mmHg·s/L | Resistance of the aortic half-cone (pushed to `AAR_DA.r_for/r_back`) |
-| `res_pa` | mmHg·s/L | Resistance of the pulmonary half-cone (pushed to `DA_PA.r_for/r_back`) |
-| `el` | mmHg/L | Coupled elastance, `el_base · (R/R_open)^alpha`, pushed to `DA.el_base` |
+| `viscosity` | cP | Blood viscosity pulled from the upstream `AAR` compartment |
+| `flow` | L/s | Shunt flow through the duct; +ve = L→R (aorta → pulmonary) |
+| `flow_ao`, `flow_pa` | L/s | Aliases of `flow` (single resistor now; kept for probe/back-compat) |
+| `res` | mmHg·s/L | Viscous resistance of the full cone (linear part, pushed to `AAR_DA.r_for/r_back`) |
+| `bernoulli_b` | mmHg·s²/L² | Orifice Bernoulli coefficient `B = K_BERNOULLI / A_eff²` (quadratic part, folded into `AAR_DA.r_for/r_back` as `B·|Q_prev|`) |
 
 ### Velocity outputs (dependent)
 
 | Property | Unit | Description |
 |---|---|---|
-| `velocity_doppler` | m/s | Peak velocity from modified Bernoulli on the trans-ductal gradient: `sign(ΔP)·√(|ΔP|/4)` |
-| `velocity_ao` | m/s | Bulk mean velocity at the aortic end (continuity, `Q/A`) |
-| `velocity_pa` | m/s | Bulk mean velocity at the pulmonary end (continuity, `Q/A`) |
-| `velocity_ao_jet` | m/s | `velocity_ao` amplified by stenosis: `velocity_ao · (R/R_open)^(jet_exponent/4)` |
-| `velocity_pa_jet` | m/s | `velocity_pa` amplified by stenosis: `velocity_pa · (R/R_open)^(jet_exponent/4)` |
+| `velocity_doppler` | m/s | Jet peak from the Bernoulli (kinetic) term: `sign(Q)·√(|B·Q²|/4)`. Equals continuity `Q/A_eff` through the effective orifice, so it is honest across both open and restrictive regimes and reverses sign cleanly during bidirectional / PHT shunting |
+| `velocity_ao` | m/s | Bulk mean velocity at the *anatomic* aortic end (continuity, `Q/A`) — for reference / open-duct flows |
+| `velocity_pa` | m/s | Bulk mean velocity at the *anatomic* pulmonary end (continuity, `Q/A`) — for reference / open-duct flows |
 
-Each velocity is right in a different regime. See [Pda-velocity.md](./Pda-velocity.md) for the regime analysis.
+`velocity_doppler` is now the single value to monitor. See [Pda-velocity.md](./Pda-velocity.md) for why the quadratic element makes one honest velocity possible (the old jet-correction outputs and `jet_exponent` were removed).
 
-## Resistance-elastance coupling
+## Closure
 
-This mirrors the BloodVessel α-pattern. As the duct narrows:
-
-- Resistance rises as ~`1/d⁴` (Hagen-Poiseuille over a cone).
-- The wall stiffness rises with resistance via `el = el_base · (R/R_open)^alpha`.
-
-`R_open` is computed each step from `diameter_ao_max`, `diameter_pa_max`, `length`, and `viscosity` (same conical formula). As `diameter_relative → 0`, `R → ∞` and `el → ∞` — the duct effectively seals. This reproduces the literature-described order-of-magnitude jump in total elastance during functional closure.
-
-At exactly `diameter_relative === 0` the open-path computation is not run (the geometry degenerates); the closed-duct fast path instead sets `el = el_base × CLOSED_EL_SCALE` with `CLOSED_EL_SCALE = 5000`. The exact closed elastance does not affect DA pressure once the capacitance holds its unstressed volume, so a deterministic constant is used in place of the divergent `(R/R_open)^alpha` limit.
+The duct seals purely through its resistance: as `diameter_relative → 0`, the cone collapses and
+`res → ∞` (Hagen-Poiseuille `~1/d⁴`), and at exactly `diameter_relative === 0` the closed-duct fast
+path forces `no_flow = true` with `r_for/r_back = 1e8`. (The earlier model additionally stiffened a
+`DA` capacitance via a BloodVessel-style `el = el_base · (R/R_open)^alpha` coupling; with the duct
+collapsed to a single resistor and no intermediate compartment, that coupling — and the `el_base`/
+`alpha` parameters — were removed.)
 
 ## Resistance formulas
+
+The two functions below compute only the **viscous** (`R·Q`) part of the stenosis element. The
+**Bernoulli** (`B·Q²`) part is computed inline in `calc_model` from the pulmonary effective orifice
+area: `B = K_BERNOULLI / A_eff²`, `A_eff = discharge_coeff · π·(d_pa/2)²`, with `K_BERNOULLI = ρ/(2·133.322)·1e-6 ≈ 3.976e-6` (mmHg·s²/L²·m², ρ ≈ 1060 kg/m³) — the prefactor that makes `B·Q² ≈ 4·v²`, the textbook modified-Bernoulli form.
 
 ### Uniform cylinder — `calc_resistance(diameter, length, viscosity)`
 
@@ -3300,15 +3323,16 @@ Both functions return a large sentinel (`1e8`) when the geometry collapses (`d �
 
 ## Sub-model wiring
 
-The Pda references three sub-models by name, cached in `init_model()`:
+The Pda references two models by name, cached in `init_model()`:
 
 | Reference | Looks up | Type | Role |
 |---|---|---|---|
-| `_aar_da` | `AAR_DA` | `Resistor` | AA → DA, gets `r_for/r_back = res_ao` and `no_flow` |
-| `_da` | `DA` | `BloodCapacitance` | the duct's small central volume, gets `el_base = this.el` |
-| `_da_pa` | `DA_PA` | `Resistor` | DA → PA, gets `r_for/r_back = res_pa` and `no_flow` |
+| `_aar_da` | `AAR_DA` | `Resistor` | AAR → PA, the duct; gets `r_for/r_back = res + B·|Q_prev|` (`r_k = 0`) and `no_flow` |
+| `_aar` | `AAR` | `BloodCapacitance` | upstream (aortic-arch) compartment, read-only viscosity source |
 
-These three components are declared in the Pda's `components` dictionary in the model definition JSON and instantiated by `BaseModelClass.init_model()` before `Pda.init_model()` caches the references.
+`AAR_DA` is declared in the Pda's `components` dictionary in the model definition JSON and instantiated
+by `BaseModelClass.init_model()` before `Pda.init_model()` caches the reference. `AAR` is a top-level
+circuit compartment (not owned by the Pda).
 
 ## Example definition (JSON)
 
@@ -3321,38 +3345,13 @@ These three components are declared in the Pda's `components` dictionary in the 
   "components": {
     "AAR_DA": {
       "name": "AAR_DA",
-      "description": "ductus arteriosus aorta connection",
+      "description": "ductus arteriosus (aorta-pulmonary) resistor",
       "is_enabled": true,
       "model_type": "Resistor",
       "r_for": 100000000,
       "r_back": 100000000,
       "r_k": 0,
       "comp_from": "AAR",
-      "comp_to": "DA",
-      "no_flow": true,
-      "no_back_flow": false
-    },
-    "DA": {
-      "name": "DA",
-      "description": "blood capacitance model of the ductus arteriosus",
-      "is_enabled": true,
-      "model_type": "BloodCapacitance",
-      "vol": 0.00015,
-      "u_vol": 0.00015,
-      "el_base": 30000,
-      "el_k": 0,
-      "pres_ext": 0,
-      "fixed_composition": false
-    },
-    "DA_PA": {
-      "name": "DA_PA",
-      "description": "ductus arteriosus pulmonary connection",
-      "is_enabled": true,
-      "model_type": "Resistor",
-      "r_for": 100000000,
-      "r_back": 100000000,
-      "r_k": 0,
-      "comp_from": "DA",
       "comp_to": "PA",
       "no_flow": true,
       "no_back_flow": false
@@ -3362,17 +3361,17 @@ These three components are declared in the Pda's `components` dictionary in the 
   "diameter_pa_max": 2.0,
   "diameter_relative": 0,
   "length": 20,
-  "el_base": 30000,
-  "alpha": 0.55,
-  "jet_exponent": 0.6
+  "discharge_coeff": 0.8
 }
 ```
 
 ## Usage notes
 
 - **Closure is symmetric in this model.** Real PDA closure proceeds from the pulmonary end first, but the current implementation scales both `diameter_ao` and `diameter_pa` by the same `diameter_relative`. Asymmetric closure would require independent scaling factors.
-- **`velocity_pa` is the value most UIs monitor** (see model definitions, where `Pda.velocity_pa` is the default velocity channel). It is the continuity bulk mean — smooth waveform, realistic at open-duct flows, but undershoots once the duct becomes restrictive. For restrictive regimes use `velocity_doppler` or `velocity_pa_jet`.
-- **Viscosity is dynamic.** `viscosity` is pulled from `DA.viscosity` each step (which itself follows hematocrit), so `res_ao`, `res_pa`, and the open-duct reference resistances all track viscosity changes automatically.
+- **`velocity_doppler` is the value to monitor** — it is the honest jet peak across both open and restrictive regimes (it equals continuity `Q/A_eff` through the effective orifice). `velocity_pa`/`velocity_ao` remain as anatomic continuity bulk means for reference. Some older model definitions still watch `Pda.velocity_pa`; consider repointing the chart channel to `velocity_doppler`.
+- **A restrictive jet requires an orifice-like (short) throat `length`.** Because the viscous term scales with `length` (Poiseuille over the cone) while the Bernoulli term does not, a long, narrow duct is viscous-limited and will *not* jet — flow and velocity both stay low even at a large trans-ductal gradient (this is physically correct, and is what makes the new element honest where the old `√(full gradient/4)` over-reported). To model a restrictive/closing PDA, set `length` to the throat length (~1–2 mm) and tune `discharge_coeff` (lower → tighter jet). The `preterm_28wk_restrictive_pda` scenario uses `length = 1.5`, `discharge_coeff = 0.5` (≈2.5 m/s continuous L→R, low pulsatility).
+- **Velocity is gradient-limited.** Since `B·Q² = 4·v²` and `B·Q²` can at most equal the full trans-ductal gradient, the peak jet velocity cannot exceed `√(gradient/4)`. Raising peak velocity beyond that ceiling requires a larger systemic–pulmonary pressure difference (e.g. higher SVR / lower PVR), not duct geometry.
+- **Viscosity is dynamic.** `viscosity` is pulled from the upstream `AAR` compartment each step (which itself follows hematocrit), so `res` tracks viscosity changes automatically.
 
 ````
 
@@ -3447,6 +3446,17 @@ the default volumes/resistances.)
   itself is partial-pressure driven inside `PL_GASEX`, which derives pCO₂/pO₂ from these contents.
 - **Sub-model references are required.** They are the Placenta's own `components`; `calc_model` skips
   the tick if any is missing rather than dereferencing null.
+- **The umbilical-vein → body return is an autonomous resistor under Placenta control.** The return
+  segment `PL_UMB_VEN → IVCI` is the resistor `PL_UMB_VEN_IVCI`, declared as a standalone `Resistor`
+  in the model definition — deliberately **not** an entry in `IVCI.inputs`. If it were an IVCI input,
+  `IVCI` (a `BloodVessel`) would auto-create and co-manage it, re-asserting its `is_enabled`/`no_flow`
+  every step and leaving it outside the placenta's two off-switches (a one-way leak of placental blood
+  into the fetal IVC whenever the unit was stopped or clamped). As a free resistor, nothing else owns
+  it: the `Placenta` resolves it by name in `init_model` (`_umb_ven_ret`) and drives its `is_enabled`
+  (= `placenta_running`) and `no_flow` (= `umb_clamped`) alongside the rest of the unit. Its
+  resistance is left at the scenario value, so running-unclamped hemodynamics are unchanged.
+  **When wiring a new placenta scenario, connect the umbilical vein to the IVC with a standalone
+  `PL_UMB_VEN_IVCI` resistor — do not add `PL_UMB_VEN` to `IVCI.inputs`,** or the off-switches break.
 
 ````
 
@@ -3930,6 +3940,239 @@ either a fraction or a percentage > 20).
   (very high rate); that is a configuration error, not guarded.
 
 ````
+
+### FILE: explain/docs/chd_duct_fo_dependent.md
+
+```markdown
+# Duct- and Foramen-Ovale-Dependent Congenital Heart Disease
+
+*A clinical reference and engine-mapping for the Explain neonatal simulator.*
+
+This document catalogs the **congenital heart defects (CHD) that dominate the neonatal intensive care unit because they depend on the ductus arteriosus and/or the foramen ovale (atrial septum) for survival**. These are the lesions in which a neonate is stable in utero and for the first hours-to-days of life, then collapses — with profound cyanosis or cardiogenic shock — as the duct and/or foramen ovale physiologically close. That transition, and the way it is governed by the pulmonary-to-systemic flow ratio (Qp:Qs) and the PVR/SVR balance, is exactly the physiology a simulator can teach.
+
+It is organized in four parts:
+
+1. **[Physiological taxonomy](#1-physiological-taxonomy)** — the four dependency categories.
+2. **[Lesion catalog](#2-lesion-catalog)** — the curated NICU-core set, each mapped to the engine's levers.
+3. **[Engine-lever summary & limitations](#3-engine-lever-summary--limitations)** — what is buildable today, what needs rewiring, what the engine cannot represent.
+4. **[Build roadmap](#4-build-roadmap)** and **[bibliography](#5-bibliography)**.
+
+> Scope note: this is the *curated NICU-core set* (~14 lesions across all four categories), not an exhaustive enumeration of every duct/FO-dependent variant.
+
+---
+
+## 1. Physiological taxonomy
+
+The clinical organizing principle is **what the patent channel is keeping alive**:
+
+| Category | What the duct/FO supplies | Closure event → presentation |
+|---|---|---|
+| **A. Duct-dependent pulmonary blood flow** | Lungs (systemic→pulmonary flow via PDA) | Duct closes → profound, O₂-resistant **cyanosis** |
+| **B. Duct-dependent systemic blood flow** | Body (right→left flow via PDA) | Duct closes → **cardiogenic shock** (mimics sepsis) |
+| **C. Duct- *and* FO-dependent mixing** (d-TGA) | Inter-circulatory mixing (parallel circuits) | Inadequate mixing → cyanosis; needs PDA **and** atrial shunt |
+| **D. FO / atrial-septum-dependent** | Obligatory atrial-level shunt | Restrictive/intact atrial septum → emergency |
+
+The unifying teaching concept is the **balanced parallel circulation**. In a duct-dependent lesion the systemic and pulmonary circuits run in parallel (rather than in series), sharing output across the duct and/or a septal communication; the patient's stability is set by the Qp:Qs ratio, which is in turn governed by the relative resistances of the two beds (PVR vs SVR). Lowering PVR (extra O₂, hyperventilation, alkalosis) floods the lungs at the expense of systemic flow in duct-dependent *systemic* lesions, and conversely helps in duct-dependent *pulmonary* lesions. This PVR/SVR lever is precisely what the engine exposes, which is why these lesions are well-suited to simulation (Khalil/Schranz 2019 [#1]; Martins 2008 [#16]).
+
+**Prostaglandin E1 (alprostadil, PGE1)** maintains or reopens ductal patency and is the shared pharmacological rescue across categories A, B, and C; the highest-tier evidence is the Cochrane review (Akkinapally 2018 [#4]). Category D lesions add a second rescue — **balloon atrial septostomy** (the Rashkind procedure, first described 1966 [#17]) — to enlarge the atrial communication. Pulse-oximetry screening for critical CHD (pre- and post-ductal SpO₂) is the population-level safety net (Mahle 2009 AHA/AAP statement [#6]).
+
+---
+
+## 2. Lesion catalog
+
+For each lesion: the **dependency**, the **mechanism**, and the **engine levers** that reproduce it. All cited engine identifiers were verified against the current tree:
+
+- Ductus → `Pda` model, resistor `AAR_DA` wired `AAR → PA`, levers `diameter_relative` / `length` / `discharge_coeff` (bidirectional; see [`Pda.js`](../component_models/Pda.js) and [`docs/Pda.md`](./Pda.md) if present).
+- Foramen ovale → `Shunts.diameter_fo` (LA↔RA via the split resistors `LA_RAIVCI` / `LA_RASVC`, with flap-valve asymmetry `fo_lr_factor`); restrictive/intact = `diameter_fo → 0`.
+- VSD → `Shunts.diameter_vsd` (LV↔RV). Intrapulmonary shunt → `Shunts.ips_res`. See [`Shunts.js`](../component_models/Shunts.js).
+- Valves are `Resistor`s in `Heart.components`: `LA_LV` (mitral), `RA_RV` (tricuspid), `RV_PA` (pulmonary), `LV_AA` (aortic). **Atresia** = `no_flow: true`; **stenosis** = raise `r_for`.
+- **TGA outflow tracts are pre-wired but disabled** in `term_neonate.json`: `RV_AA` (RV→AA, `is_enabled: false`) and `LV_PA` (LV→PA, `is_enabled: false`), alongside the normal `RV_PA` and `LV_AA`.
+
+### A. Duct-dependent pulmonary blood flow
+
+In these lesions the right-heart outflow to the lungs is obstructed or absent, so pulmonary blood flow arrives **backwards through the duct** (aorta → PDA → pulmonary artery). Ductal closure causes profound, oxygen-resistant cyanosis.
+
+- **A1 — Pulmonary atresia with intact ventricular septum (PA-IVS).** *Also FO-dependent.* The RV outflow is blind; lungs are fed only by the PDA, and all systemic venous return must cross the foramen ovale right→left to reach the left heart. RV and tricuspid valve are hypoplastic; ~10% have an RV-dependent coronary circulation, the key risk modifier (Chikkabyrappa 2018 [#9]; Jaggers AATS consensus 2025 [#10]).
+  *Engine:* `RV_PA.no_flow = true`; `Pda.diameter_relative > 0`; `Shunts.diameter_fo > 0` (R→L); RV hypoplasia via `Heart.components.RV` `el_min`↑ / `u_vol`. **Fully buildable.**
+  **✅ BUILT** as `pa_ivs` — `scripts/_make_paivs.mjs` → `reseed_paivs.mjs` → `probe_paivs.mjs`. Calibrated: **zero antegrade flow** (atretic `RV_PA`), the **duct is the sole pulmonary supply** (≈ 590 mL/min, aorta→PA L→R), a **suprasystemic hypertensive blind RV** (peak ≈ 70 mmHg) that decompresses only through a restrictive **tricuspid-regurgitation jet** (≈ 500 mL/min — its single outlet), and an **obligate R→L FO** (≈ 500 mL/min = the whole systemic venous return) feeding the LV-only output → cyanosis (SpO₂ ≈ 74%, pO₂ ≈ 32 mmHg), MAP preserved at 50. Levers: `RV_PA.no_flow` (atresia, not stenosis — contrast `critical_ps`), `diameter_vsd: 0` (intact septum), RV hypoplasia (`el_min: 2500`, `u_vol: 0.002`), **tricuspid regurgitation** (`RAIVCI_RV`/`RASVC_RV` `no_back_flow: false`, `r_back: 5000` — a restrictive r_back lets the blind RV pressurize to suprasystemic levels yet stay volume-stable; free TR leaves it flaccid at ~12 mmHg, no TR traps volume), `diameter_fo: 6` (left at baseline `fo_lr_factor: 25` — R→L easy), `Pda.diameter_relative: 1.0`. Left heart structurally normal → no engine change. RV-dependent coronary circulation (sinusoids, ~10% of cases) not modeled.
+
+- **A2 — Pulmonary atresia with VSD.** Lungs fed by the PDA and/or major aortopulmonary collateral arteries (MAPCAs). With a VSD the RV decompresses into the LV/aorta (Soquet 2019 [#11]; Presnell 2015 [#12]).
+  *Engine:* `RV_PA.no_flow = true`; `Shunts.diameter_vsd > 0`; `Pda` open. **Buildable without MAPCAs** — collateral vessels are not modelable (see [limitations](#3-engine-lever-summary--limitations)).
+  **✅ BUILT** as `pa_vsd` — `scripts/_make_pavsd.mjs` → `reseed_pavsd.mjs` → `probe_pavsd.mjs`. Calibrated: **zero antegrade flow** (atretic `RV_PA`), a large VSD lets the **RV decompress into the LV/aorta** (`diameter_vsd: 5`, VSD flow RV→LV ≈ 450 mL/min, **RV/LV peaks equilibrated at 71/70 mmHg** — *not* a blind hypertensive RV, contrast PA-IVS), so the atrial septum stays intact (`diameter_fo: 0` — **not** FO-dependent); the **duct is the sole pulmonary supply** (`Pda.diameter_relative: 1.0`, fat 4 mm duct, ≈ 750 mL/min, no MAPCAs), mixed aortic blood → cyanosis (SpO₂ ≈ 78%, pO₂ ≈ 34), MAP 47. **Profoundly duct-dependent** — closing the duct crashes SpO₂ to ≈ 14% (the duct is the *only* pulmonary flow). *Calibration:* both ventricles eject into one aortic outlet, which the lumped model over-pumps, so `Heart.cont_factor_left/right: 0.6` normalizes the combined systemic output (a geometry compensation, not intrinsic weakness). Left heart normal → no engine change. **Limitation:** MAPCAs (a real alternative pulmonary supply) are not modelable — so duct closure here is more catastrophic than a MAPCA-supplied patient.
+
+- **A3 — Critical pulmonary stenosis.** Severe but not complete RVOT obstruction; duct-dependent when critical. A right→left atrial "pop-off" across the FO offloads the pressured RA (Latson 2001 [#13]; Aggarwal 2018 [#14]).
+  *Engine:* `RV_PA.r_for`↑ (stenosis, keep some antegrade flow); `Pda` open; `Shunts.diameter_fo` for the atrial pop-off. **Fully buildable.**
+  **✅ BUILT** as `critical_ps` — `scripts/_make_cps.mjs` → `reseed_cps.mjs` → `probe_ps.mjs`. Calibrated: **suprasystemic, pressure-loaded RV** (peak ≈ 110 mmHg) with an 84 mmHg trans-valvular gradient and a low post-stenotic PA; antegrade flow is a trickle (≈ 180 mL/min) while the **duct supplies the majority of pulmonary flow** (≈ 310 mL/min, aorta→PA L→R — close it and pulmonary flow halves); a **right→left FO pop-off** (≈ 340 mL/min) drives cyanosis (SpO₂ ≈ 77%, pO₂ ≈ 33 mmHg), systemic MAP preserved. Levers: `RV_PA.r_for: 8000` (patent — not atretic), `Heart.cont_factor_right: 0.6` (the pressure-loaded RV beginning to fail — keeps the peak realistic and deepens the pop-off), `Pda.diameter_relative: 0.7`, `diameter_fo: 5`. *Note:* the FO is left at the baseline `fo_lr_factor: 25` — its fetal-flap asymmetry already makes R→L easy, exactly the direction this lesion needs (contrast HLHS/TGA, which need `fo_lr_factor ≈ 1`). Left heart structurally normal → no engine change. *Modeling caveat:* the linear-resistance valve + time-varying-elastance RV trade peak pressure against antegrade flow, so the realistic peak comes via a mildly failing RV rather than a 200 mmHg hypercontractile one.
+
+- **A4 — Tricuspid atresia (with pulmonary stenosis/atresia).** *Also FO-dependent.* The tricuspid valve is absent, so **all** systemic venous return is obligated right→left across the FO into the LA; the functionally single LV then supplies the body, while pulmonary flow comes via a VSD and/or the duct (Sumal 2020 [#15]). A restrictive atrial septum is poorly tolerated.
+  *Engine:* `RA_RV.no_flow = true`; `Shunts.diameter_fo` (obligate R→L); `Shunts.diameter_vsd`; RV hypoplasia; `Pda` if pulmonary atresia / severe PS. **Buildable** (functionally single LV).
+  **✅ BUILT** as `tricuspid_atresia` (type Ib — normally related great arteries, restrictive VSD + pulmonary stenosis, the cyanotic reduced-pulmonary-flow form) — `scripts/_make_ta.mjs` → `reseed_ta.mjs` → `probe_ta.mjs`. Calibrated: **obligate FO R→L** (≈ 500 mL/min = the whole systemic venous return), the **single LV** as the only pump (CO ≈ 0.78 L/min), pulmonary flow reaching the lungs only via the **VSD→RV→PA route** (≈ 465 mL/min — the hypoplastic RV acts as a conduit, so VSD flow ≈ antegrade Qp) **supplemented duct-dependently** (duct L→R ≈ 300 mL/min; closing the duct drops SpO₂ 80→74%), cyanosis (SpO₂ ≈ 80%, pO₂ ≈ 35 mmHg), MAP 49 / PAP 33. Levers: the split tricuspid `RAIVCI_RV` + `RASVC_RV` `no_flow` (atresia), RV hypoplasia (`el_min: 2200`, `u_vol: 0.0025`, VSD-fed), `diameter_fo: 6` (baseline `fo_lr_factor: 25` → R→L easy), `diameter_vsd: 2` (restrictive) + `RV_PA.r_for: 800` (pulmonary stenosis) + `Pda.diameter_relative: 0.8`. Left heart normal → no engine change (single LV uses the normal cycle path). Cross-listed as a Category-D (FO-dependent) teaching case.
+
+- **A5 — Tetralogy of Fallot with pulmonary atresia / severe RVOT obstruction.** Large VSD with an overriding aorta; in the pulmonary-atresia form, pulmonary flow is duct- (±MAPCA-) dependent (Miller AATS consensus 2022 [#18]; Bailliard 2009 [#19]).
+  *Engine:* large `Shunts.diameter_vsd`; `RV_PA.no_flow` or high `r_for`; high PVR; `Pda` open. **Partially buildable** — *aortic override* (the aorta straddling both ventricles) is not directly representable; approximate the right-to-left streaming through the VSD.
+
+- **A6 — Severe (neonatal) Ebstein anomaly with functional pulmonary atresia.** Massive tricuspid regurgitation plus high PVR leaves the RV unable to open the pulmonary valve, so pulmonary flow becomes duct-dependent; much of the RV is "atrialized" (Luxford 2017 [#20]; Linnenbank 2025 [#21]).
+  *Engine:* `RA_RV.r_back`↓ (tricuspid regurgitation), `Heart` RV contractility↓, `RV_PA` functionally closed, `Pda` open. **Partially buildable** — the *atrialized RV* cannot be represented as a separate chamber (fixed chamber set); approximate with TR + a weak RV.
+
+### B. Duct-dependent systemic blood flow
+
+Here the left-heart outflow to the body is obstructed or absent, so systemic perfusion arrives **right→left through the duct** (pulmonary artery → PDA → descending aorta). Ductal closure causes cardiogenic shock that mimics sepsis.
+
+- **B1 — Hypoplastic left heart syndrome (HLHS).** *Also FO-dependent.* The LV cannot support the systemic circulation; the entire cardiac output is delivered by the RV → PDA → aorta, perfusing the arch and coronaries **retrograde**. Pulmonary venous return is obligated left→right across the FO. An intact or highly restrictive atrial septum is a lethal combination requiring emergent decompression (Connor 2007 [#22]; Schranz duct-stenting 2024 [#23]; Vlahos 2004 [#26]; Generali 2022 [#27]).
+  *Engine:* `LV_AA.no_flow` or severe `r_for`↑ + LV hypoplasia (reuse the `cdh_lv_dysfunction` LV levers: `Heart.cont_factor_left`, LV `el_min` / `u_vol`); `LA_LV.no_flow` or high `r_for` (mitral atresia/stenosis); `Shunts.diameter_fo` L→R; `Pda` carrying R→L (PA→AAR; the `AAR_DA` resistor is bidirectional). The *restrictive/intact-septum* variant (`diameter_fo → 0`) is a high-value teaching toggle.
+  **✅ BUILT** as `hlhs` (mitral + aortic atresia → LV fully excluded) — `scripts/_make_hlhs.mjs` → `reseed_hlhs.mjs` → `probe_hlhs.mjs`. Calibrated single-RV parallel circulation: RV output ≈ 1.2 L/min split **Qp:Qs ≈ 1.7** (mild pulmonary over-circulation, the typical balance), systemic Qs ≈ 0.46 L/min via the duct (PA→aorta, R→L), **retrograde aortic-arch and coronary perfusion** (AAR→AA), obligate FO L→R ≈ 0.75 L/min, moderate cyanosis (SpO₂ ≈ 78%, pO₂ ≈ 34 mmHg), PAP > MAP (RV is the systemic pump). Levers: mitral+aortic atresia, `diameter_fo: 6` / `fo_lr_factor: 1`, `Pda.diameter_relative: 1.0` with a fat 4 mm duct, hypoplastic AA (`u_vol ×0.6`, `el_base ×1.4`), **pulmonary arteriolar resistance ×2 to balance Qp:Qs** (at baseline PVR the lungs steal the output → Qp:Qs ≈ 3.5, systemic hypoperfusion — itself a teaching failure mode). A second engine generalization was needed: `Heart.calc_model` now derives the cardiac cycle from the ventricular activation window when the LV has *no* outflow (aortic atresia → both `LV_AA` and `LV_PA` disabled), so the single-RV physiology keeps a valid cycle (and `HeartFunction` inputs); identity for any heart with a working LV outflow (normal, TGA, tricuspid atresia, PA-IVS).
+  **✅ Restrictive/intact-septum variant BUILT** as `hlhs_restrictive` (same builder, only the atrial lever differs: `diameter_fo: 1`). The atrial communication is too small to pass the whole pulmonary venous return, so the LA cannot decompress: **LA pressure rises to ≈ 21 mmHg** (vs 4.5 open — a ≈ 19 mmHg trans-septal gradient = severe pulmonary venous hypertension), the obligate shunt is choked (≈ 420 vs 750 mL/min), single-RV preload/output fall (≈ 0.8 vs 1.2 L/min), and hypoxaemia is severe (**SpO₂ ≈ 64%, pO₂ ≈ 28 mmHg, pH ≈ 7.30**) — the lethal emergency needing immediate atrial decompression (balloon/blade septostomy or stenting). It remains a stable steady state because the septum is restrictive, not fully intact (`diameter_fo → 0` would trap the LA entirely and collapse). Alveolar oedema is not separately modeled — the hypoxaemia arises from the reduced pulmonary flow + obligatory mixing.
+
+- **B2 — Critical aortic stenosis.** The LV cannot eject across the valve, so systemic perfusion becomes duct-dependent; high LV wall stress impairs coronary perfusion and drives LV dysfunction (Affolter 2014 [#24]).
+  *Engine:* `LV_AA.r_for`↑; LV strain via the existing `HeartFunction` load-induced contractility model; `Pda` open. **Fully buildable.**
+  **✅ BUILT** as `critical_as` — `scripts/_make_cas.mjs` → `reseed_cas.mjs` → `probe_as.mjs`. Calibrated (left-sided mirror of `critical_ps`): **pressure-loaded, failing LV** (peak ≈ 127 mmHg, 83 mmHg trans-valvular gradient — a low-flow/low-gradient state) with reduced antegrade aortic flow (≈ 190 mL/min) while the **duct supplies ~40% of systemic flow** (R→L ≈ 125 mL/min, PA→aorta — close it → systemic shock); **differential cyanosis** (pre-ductal SpO₂ ≈ 96% from the LV-fed upper body vs post-ductal ≈ 85% from the duct-fed lower body); mild LA congestion (≈ 7.5 mmHg) decompressing L→R across the FO; low MAP (≈ 39) with compensatory tachycardia — the decompensating low-output picture. Levers: `LV_AA.r_for: 8000` (patent — not atretic, contrast HLHS), `Heart.cont_factor_left: 0.4` (failing LV — keeps the peak realistic ~110–130 not ~190 and deepens duct-dependence + differential cyanosis), `Pda.diameter_relative: 1.0`, `diameter_fo: 2.5` / `fo_lr_factor: 4` (modest L→R LA decompression). Aortic valve patent → no engine change. *Same modeling caveat as critical PS:* the realistic LV peak comes via a failing LV rather than a 190 mmHg hypercontractile one.
+
+- **B3 — Critical coarctation of the aorta.** A discrete narrowing at the isthmus; the lower body is perfused by right→left ductal flow into the descending aorta, and abrupt ductal closure causes shock (Ganigara 2019 [#25]; Egan 2009 [#28]).
+  *Engine:* `AAR_AD.r_for`↑ (or `no_flow` for near-atretic); `Pda` open feeding the lower body. **Buildable with a wiring note** — see B3/B4 caveat in [§3](#3-engine-lever-summary--limitations).
+  **✅ BUILT** as `coarctation` — `scripts/_make_coarc.mjs` → `reseed_coarc.mjs` → `probe_coarc.mjs`. Calibrated: a tight but patent isthmus gives the hallmark **pre/post-ductal pressure gradient** (upper body 101/55 vs lower 30/16, ≈ 55 mmHg mean — upper-body hypertension / weak femorals), a duct-dependent lower body (an antegrade isthmus trickle ≈ 130 mL/min plus the duct R→L ≈ 15 mL/min), and **differential cyanosis** (pre-ductal 97% vs post-ductal 87%). *Two engine facts resolved the wiring note (both JSON-only, no code change):* (1) re-point the duct to the descending aorta — `Pda.components.AAR_DA.comp_from: "AD"` (the `Pda` model drives whatever endpoints its resistor names, so the duct desaturates only the lower body → correct differential cyanosis); (2) the isthmus lever is **`Circulation.components.AD.r_for`** (= 30000 here), *not* `AAR_AD.r_for` — the `AD` BloodVessel adopts its same-named input resistor `AAR_AD` and overwrites `r_for` with `AD.r_for_eff` every step, so a direct edit to `AAR_AD.r_for` is wiped.
+
+- **B4 — Interrupted aortic arch (IAA).** The aortic arch is discontinuous; the descending aorta is perfused entirely through the duct. Almost always with a VSD and a strong association with 22q11 deletion (DiGeorge). PGE1 "revolutionized" its management (Jonas 2015 [#29]; Burbano-Vera 2018 [#30]).
+  *Engine:* `AAR_AD.no_flow = true`; `Shunts.diameter_vsd`; ductal lower-body path. **Buildable with rewire** (same caveat as B3).
+  **✅ BUILT** as `iaa` (same builder as `coarctation`) — interruption is **`Circulation.components.AD.no_flow = true`** (the `AD` vessel propagates `no_flow` to the `AAR_AD` isthmus resistor). The lower body is **entirely duct-dependent** (isthmus flow = 0, duct R→L ≈ 210 mL/min into the descending aorta), with the characteristic **VSD** (`diameter_vsd: 4`, L→R ≈ 780 mL/min) and **differential cyanosis** (pre-ductal 97% vs post-ductal 84%). Same duct re-point as B3. 22q11/DiGeorge association is clinical context only (not modeled).
+
+### C. Duct- and FO-dependent mixing
+
+- **C1 — d-Transposition of the great arteries (d-TGA).** The aorta arises from the RV and the pulmonary artery from the LV, creating **two circulations in parallel** rather than in series. Survival is impossible without mixing — at the atrial level (FO/ASD), through the duct, and/or via a VSD. Cyanosis is inversely proportional to the amount of mixing. The classic neonatal rescue is PGE1 plus balloon atrial septostomy (Rashkind), pending the arterial switch (Martins 2008 [#16]; Rashkind 1966 [#17]; Cucerea 2024 [#33]; Beitzke 1983 [#35]).
+  *Engine:* enable `RV_AA` + `LV_PA` and disable `RV_PA` + `LV_AA` (**all four already pre-wired in `term_neonate.json`**); mixing via `Shunts.diameter_fo` + `Pda` (+ optional `diameter_vsd`). A septostomy is demonstrable by ramping `diameter_fo` via the event scheduler.
+  **✅ BUILT** as `dtga` (intact ventricular septum) — `scripts/_make_dtga.mjs` → `reseed_dtga.mjs` → `probe_dtga.mjs`. Calibrated to a stable parallel circulation (Qp:Qs ≈ 1, balanced ~0.8 L/min outputs) with cyanosis (SpO₂ ≈ 59%, pO₂ ≈ 25 mmHg). Mixing levers: `diameter_fo: 6`, `fo_lr_factor: 1` (a true ASD/septostomy hole is symmetric — a high flap factor would throttle the LA→RA flow that oxygenates the systemic circuit), `Pda.diameter_relative: 1.0`, `diameter_vsd: 0`. *Note:* FO ≥ ~7 mm at `fo_lr_factor 1` makes the Hagen-Poiseuille atrial resistance so low the explicit solver oscillates — keep septostomy demos at/below 6 mm or raise `atrial_septal_width`. One small engine generalization was needed: `Heart.calc_model` now detects end-systole from whichever LV outflow valve is active (`LV_AA` if enabled, else `LV_PA`), so the cardiac-cycle analysis and `HeartFunction` wall-stress inputs stay valid with the great arteries transposed (identity for normal anatomy).
+
+### D. Foramen-ovale / atrial-septum-dependent
+
+These lesions depend on an **obligatory atrial-level shunt**; a restrictive or intact atrial septum turns them into an emergency.
+
+- **D1 — Total anomalous pulmonary venous connection (TAPVC), especially obstructed.** The pulmonary veins drain to the systemic venous side instead of the LA, so an obligatory right→left atrial shunt across the FO is the only way to fill the left heart. The obstructed form presents with severe cyanosis and low output, is **unresponsive to prostaglandin**, and is one of the few true neonatal cardiac-surgical emergencies (Ross 2017 [#36]; Vanderlaan 2018 [#37]; Campbell 2022 [#38]).
+  *Engine:* reroute the pulmonary venous return (`PV_LA`) so it enters the right side, adding the anomalous connection with high `r_for` for the obstructed variant; `Shunts.diameter_fo` obligate R→L. **Buildable with a pulmonary-venous rewire.**
+  **✅ BUILT** as `tapvc` (unobstructed) + `tapvc_obstructed` — `scripts/_make_tapvc.mjs` → `reseed_tapvc.mjs` → `probe_tapvc.mjs`. The reroute is **JSON-only**: `PV_LA.comp_to: "SVC"` (the pulmonary veins drain to the SVC — supracardiac, the commonest type). `PV_LA` is a free-standing Resistor (the `LA` HeartChamber doesn't adopt it), so its `comp_to` *and* `r_for` set directly — the channel `r_for` is the obstruction lever. The FO is opened (`diameter_fo: 6`, baseline `fo_lr_factor: 25` → R→L easy) to carry the obligate shunt that fills the *entire* left heart; the duct stays closed (TAPVC is FO-dependent, not duct-dependent → PGE1-unresponsive). Calibrated — **unobstructed** (`PV_LA.r_for: 335`): full mixing in the RA, normal PV pressure ≈ 10 mmHg, CO ≈ 0.6 L/min, mild cyanosis (SpO₂ ≈ 87%, pO₂ ≈ 42). **Obstructed** (`PV_LA.r_for: 5000`): **pulmonary venous hypertension** (PV pressure ≈ 37 mmHg, vs a near-normal LA — the pathology is upstream, not in the left atrium), secondary **suprasystemic PAP** (≈ 51 ≥ MAP), low output (CO ≈ 0.43 L/min, MAP ≈ 44), severe cyanosis (SpO₂ ≈ 73%, pO₂ ≈ 31) — the surgical emergency. Alveolar oedema not separately modeled (the hypoxaemia arises from the reduced pulmonary flow + complete mixing).
+
+> Cross-listed: **A1 (PA-IVS)**, **A4 (tricuspid atresia)**, and the **B1 (HLHS) restrictive-septum variant** are equally FO-dependent and double as Category-D teaching cases.
+
+---
+
+## 3. Engine-lever summary & limitations
+
+**Directly available — JSON-only, no engine code change:**
+
+| Defect feature | Lever |
+|---|---|
+| Ductus arteriosus | `Pda.diameter_relative` / `length` / `discharge_coeff` (AAR↔PA, bidirectional) |
+| Foramen ovale | `Shunts.diameter_fo` (LA↔RA, flap-valve asymmetry via `fo_lr_factor`); restrictive/intact = `→0` |
+| VSD | `Shunts.diameter_vsd` (LV↔RV) |
+| Valve atresia | `RV_PA` / `LV_AA` / `LA_LV` / `RA_RV` → `no_flow: true` |
+| Valve stenosis | same valves → raise `r_for` |
+| Valve regurgitation | lower `r_back` (e.g. tricuspid for Ebstein) |
+| TGA outflow swap | enable `RV_AA` + `LV_PA`, disable `RV_PA` + `LV_AA` (pre-wired) |
+| Chamber hypoplasia / dysfunction | `Heart.cont_factor_left/right`, `relax_factor_*`, chamber `el_min` / `u_vol`; `HeartFunction` load-induced contractility |
+| Arch obstruction | `Circulation` `AAR_AD` / `AA_AAR` → `r_for`↑ or `no_flow` |
+| Qp:Qs / PVR-SVR balance | pulmonary (`PAAL` / `PAAR` / `LL_ART` / `RL_ART`) and systemic bed resistances |
+
+**Needs minor rewiring (JSON, possibly one small helper):**
+
+- ~~**Descending-aorta ductal path (B3 coarctation, B4 IAA).**~~ **RESOLVED — JSON-only, no helper needed.** Re-point the duct with `Pda.components.AAR_DA.comp_from: "AD"` (the `Pda` model drives whatever endpoints its resistor names). The isthmus lever is `Circulation.components.AD.r_for` (coarctation) / `AD.no_flow` (IAA), because the `AD` BloodVessel adopts its same-named input resistor `AAR_AD` and overwrites it each step. Both `coarctation` and `iaa` are built this way.
+- ~~**Anomalous pulmonary venous drainage (D1 TAPVC).**~~ **RESOLVED — JSON-only.** `PV_LA.comp_to: "SVC"` (free-standing resistor; the `LA` chamber doesn't adopt it, so `comp_to` and `r_for` both set directly). Built as `tapvc` / `tapvc_obstructed`.
+
+**Genuine engine limitations — document and scope separately:**
+
+- **MAPCAs** (A2, A5) — there is no collateral-vessel model; pulmonary supply must come from the duct alone.
+- **Aortic override** (A5 TOF) — a single aortic root straddling both ventricles is not representable; approximate the right-to-left streaming through the VSD.
+- **Atrialized RV** (A6 Ebstein) — the chamber set is fixed at build time; approximate with severe TR (`RA_RV.r_back`↓) plus a weak RV.
+
+---
+
+## 4. Build roadmap
+
+Each scenario follows the established workflow used for the CDH and PDA families: a `_make_*.mjs` deriver (load `term_neonate.json`, apply a lever table, write JSON) → a `reseed_*.mjs` warm-to-steady-state pass → a `probe_*.mjs` validator. Tiering is by engine friction × clinical importance × reuse of existing assets.
+
+**Tier 1 — build first (JSON-only, highest yield):**
+- **d-TGA** (C1) — ✅ **built** (`dtga`); outflow swap pre-wired; flagship.
+- **HLHS** (B1) — ✅ **built** (`hlhs`, mitral+aortic atresia) + ✅ **restrictive-septum variant** (`hlhs_restrictive`).
+- **Critical pulmonary stenosis** (A3) — ✅ **built** (`critical_ps`).
+- **PA-IVS** (A1) — ✅ **built** (`pa_ivs`).
+- **Critical aortic stenosis** (B2) — ✅ **built** (`critical_as`).
+
+**Tier 2 — build after a small rewire helper:**
+- **Coarctation** (B3) + **IAA** (B4) — ✅ **built** (`coarctation`, `iaa`); the descending-aorta ductal path turned out JSON-only (re-point `AAR_DA.comp_from` to `AD`).
+- **TAPVC** (D1) — ✅ **built** (`tapvc` + `tapvc_obstructed`); the pulmonary-venous rewire was JSON-only (`PV_LA.comp_to`).
+- **Tricuspid atresia** (A4) — ✅ **built** (`tricuspid_atresia`).
+- **PA + VSD** (A2) — ✅ **built** (`pa_vsd`, without MAPCAs).
+
+**Tier 3 — needs an engine extension or accepts an approximation:**
+- **TOF with pulmonary atresia** (A5) — aortic-override approximation.
+- **Severe neonatal Ebstein** (A6) — atrialized-RV approximation.
+
+**Shared tooling to add alongside Tier 1:**
+- `probe_chd.mjs` — extend the `probe_cdh.mjs` pattern to report shunt directions and volumes (ductal, atrial), atrial pressures, the pre-/post-ductal SpO₂ split, and the Qp:Qs ratio.
+- A **"close the duct" / "open the septum" event demo** using the existing event scheduler (`TaskScheduler`) to show decompensation as the duct closes and rescue as PGE1 reopens it or septostomy enlarges the FO.
+
+---
+
+## 5. Bibliography
+
+All PMIDs were retrieved and confirmed via PubMed metadata; Rashkind 1966 [#17] and Martins 2008 [#16] were additionally confirmed to resolve. No single dedicated "parallel vs series circulation" paper exists — that concept is anchored to Martins 2008 [#16] and Khalil/Schranz 2019 [#1]. No standalone AHA/AAP PGE1 guideline surfaced; the Cochrane review [#4] is the highest-tier PGE1 source.
+
+### Overarching — ductal-dependent circulation, PGE1, screening
+1. Khalil M, … Schranz D. *Transl Pediatr* 2019. PMID 31161078 — classifies critical CHD into duct-dependent systemic / pulmonary / TGA; balanced parallel circulation and PVR/SVR management.
+2. Strobel AM. *Emerg Med Clin North Am* 2015. PMID 26226862 — cyanosis-vs-shock presentation framework.
+3. Barata IA. *Emerg Med Clin North Am* 2013. PMID 23915599 — early neonatal CHD = ductal-dependent presentations.
+4. Akkinapally S, et al. *Cochrane Database Syst Rev* 2018. PMID 29486048 — **PGE1 for ductal patency** (top-tier evidence).
+5. Gordon CM, et al. *J Pediatr Pharmacol Ther* 2024. PMID 38332962 — alprostadil dosing / effectiveness.
+6. Mahle WT, et al. *Pediatrics* 2009. PMID 19581259 — **AHA/AAP pulse-ox CCHD screening statement**.
+7. Mahle WT, et al. *Pediatrics* 2012. PMID 22201143 — AAP/AHA/ACC endorsement adopting CCHD pulse-ox screening.
+8. Martin GR, et al. *Pediatrics* 2013. PMID 23776113 — implementation of the screening algorithm.
+
+### Group A — duct-dependent pulmonary
+9. Chikkabyrappa SM, et al. *Semin Cardiothorac Vasc Anesth* 2018. PMID 29411679 — PA-IVS preoperative physiology / imaging / management.
+10. Jaggers J, et al. *J Thorac Cardiovasc Surg* 2025. PMID 40320005 — 2025 AATS consensus on PA-IVS.
+11. Soquet J, Barron DJ, d'Udekem Y. *Ann Thorac Surg* 2019. PMID 30831109 — PA/VSD/MAPCAs management.
+12. Presnell LB, et al. *World J Pediatr Congenit Heart Surg* 2015. PMID 26467877 — overview of PA and MAPCAs.
+13. Latson LA. *J Interv Cardiol* 2001. PMID 12053395 — critical pulmonary stenosis.
+14. Aggarwal V, et al. *Am J Cardiol* 2018. PMID 29681368 — balloon valvuloplasty outcomes in critical PS.
+15. Sumal AS, et al. *J Card Surg* 2020. PMID 32484582 — tricuspid atresia review.
+18. Miller JR, et al. *J Thorac Cardiovasc Surg* 2022. PMID 36522807 — AATS consensus on TOF in neonates/infants.
+19. Bailliard F, Anderson RH. *Orphanet J Rare Dis* 2009. PMID 19144126 — Tetralogy of Fallot (open access).
+20. Luxford JC, et al. *Semin Thorac Cardiovasc Surg* 2017. PMID 28823330 — neonatal Ebstein, 30-year review.
+21. Linnenbank P, et al. *Children (Basel)* 2025. PMID 40564740 — Starnes→Cone strategy in severe Ebstein.
+
+### Group B — duct-dependent systemic
+22. Connor JA, Thiagarajan R. *Orphanet J Rare Dis* 2007. PMID 17498282 — HLHS (open access).
+23. Schranz D. *Pediatr Cardiol* 2024. PMID 38664298 — duct stenting in duct-dependent systemic flow.
+24. Affolter JT, Ghanayem NS. *Cardiol Young* 2014. PMID 25647388 — critical aortic stenosis, preoperative management.
+25. Ganigara M, et al. *Semin Cardiothorac Vasc Anesth* 2019. PMID 31535945 — coarctation, preoperative physiology.
+28. Egan M, Holzer RJ. *Expert Rev Cardiovasc Ther* 2009. PMID 19900023 — coarctation treatment comparison.
+29. Jonas RA. *Semin Thorac Cardiovasc Surg* 2015. PMID 26686446 — management of interrupted aortic arch.
+30. Burbano-Vera N, et al. *Semin Cardiothorac Vasc Anesth* 2018. PMID 29742969 — IAA perioperative considerations.
+
+### Group C — duct/FO-dependent mixing (d-TGA)
+16. Martins P, Castela E. *Orphanet J Rare Dis* 2008. PMID 18851735 — **parallel circulations, mixing** (open access).
+17. Rashkind WJ, Miller WW. *JAMA* 1966;196(11):991-2. PMID 4160716 — **balloon atrial septostomy** (founding paper).
+31. Séguéla PE, et al. *Arch Cardiovasc Dis* 2016. PMID 28024917 — tailored preoperative management of TGA.
+32. Zaleski KL, et al. *Pediatr Cardiol* 2021. PMID 33492430 — selective/elective BAS does not eliminate PGE1 need.
+33. Cucerea M, et al. *Biomedicines* 2024. PMID 39335532 — PGE1/BAS effects on cerebral oxygenation in d-TGA.
+34. Gilg S, et al. *Pediatr Investig* 2024. PMID 38910849 — BAS and continued PGE1 to repair.
+35. Beitzke A. *Br Heart J* 1983. PMID 6572529 — prostaglandin raises PaO₂ before septostomy in TGA.
+
+### Group D — FO / atrial-septum-dependent
+36. Ross FJ, et al. *Semin Cardiothorac Vasc Anesth* 2017. PMID 27694572 — TAPVC physiology; obstructed = PGE1-unresponsive emergency.
+37. Vanderlaan RD, et al. *Semin Thorac Cardiovasc Surg Pediatr Card Surg Annu* 2018. PMID 29425529 — surgical approaches to TAPVC.
+38. Campbell MJ, et al. *J Am Soc Echocardiogr* 2022. PMID 35863543 — fetal Doppler predicts severe postnatal obstruction.
+39. White BR, et al. *Ann Thorac Surg* 2019. PMID 30885849 — risk factors for postoperative pulmonary venous obstruction.
+40. Bravo-Valenzuela NJM, et al. *J Clin Ultrasound* 2021. PMID 33398887 — prenatal diagnosis of TAPVC.
+41. Rychik J, et al. *Circulation* 2019. PMID 31256636 — AHA Fontan scientific statement (single-ventricle context).
+26. Vlahos AP, et al. *Circulation* 2004. PMID 15136496 — HLHS with intact/restrictive atrial septum; emergent septostomy.
+27. Generali T, et al. *World J Pediatr Congenit Heart Surg* 2022. PMID 35446214 — HLHS restrictive/intact septum; left-atrial decompression.
+42. Mustafa HJ, et al. *Prenat Diagn* 2023. PMID 37596875 — fetal cardiac intervention in HLHS with restrictive septum (meta-analysis).
+43. Arai S, et al. *Asian Cardiovasc Thorac Ann* 2015. PMID 26405018 — surgical outcome of HLHS with intact atrial septum.
+44. Sukhavasi A, et al. *J Thorac Cardiovasc Surg* 2022. PMID 35414413 — PA-IVS strategies / long-term outcomes.
+45. LaPar DJ, et al. *Semin Thorac Cardiovasc Surg Pediatr Card Surg Annu* 2019. PMID 31027561 — PA-IVS with borderline tricuspid valve.
+46. Cheung EW, et al. *Ann Thorac Surg* 2023. PMID 36070807 — PA-IVS neonatal procedural outcomes (19-center study).
+
+*Bibliographic data retrieved from PubMed; DOI links available per article.*
+
+```
 
 
 ## 4. Engine source
@@ -4481,6 +4724,13 @@ export default class Model extends ModelEmitter {
     delete model_state["DataCollector"];
     delete model_state["TaskScheduler"];
     delete model_state["ModelScaler"];
+    // diagram_definition / animation_definition are copied onto the live model at build (so the
+    // worker AnimationPacker can read them) but they have a top-level home in the scenario file —
+    // the save path re-adds them from loadedFileData. Strip them here so they are not baked into
+    // model_definition as a stale duplicate that Model.load would then prefer over the top-level
+    // copy (an edit to the top-level diagram would otherwise be silently ignored by the engine).
+    delete model_state["diagram_definition"];
+    delete model_state["animation_definition"];
     // remove the ncc counters
     for (const key in model_state) {
       if (key.startsWith("ncc")) {
@@ -5527,6 +5777,7 @@ export { Fluids } from "./component_models/Fluids";
 
 export { HeartValve } from "./component_models/HeartValve";
 export { Placenta } from "./component_models/Placenta";
+export { MaternalPlacenta } from "./component_models/MaternalPlacenta";
 export { Shunts } from "./component_models/Shunts";
 export { Pda } from "./component_models/Pda";
 
@@ -5545,6 +5796,7 @@ export { AnsAfferent } from "./component_models/AnsAfferent";
 export { AnsEfferent } from "./component_models/AnsEfferent";
 export { Metabolism } from "./component_models/Metabolism";
 export { Kidneys } from "./component_models/Kidneys";
+export { Uterus } from "./component_models/Uterus";
 export { Hormones } from "./component_models/Hormones";
 export { Drugs } from "./component_models/Drugs";
 
@@ -6831,8 +7083,12 @@ export class Blood extends BaseModelClass {
       const model = this._model_engine.models[model_name];
       if (this.blood_containing_modeltypes.includes(model.model_type)) {
         this._blood_components.push(model);
-        // propagate the Haldane coefficient to every blood component (outside the bootstrap guard)
+        // propagate the Haldane coefficient and O2-Hb affinity baseline to every blood component
+        // (outside the bootstrap guard). P50_0 lets a scenario pick the dissociation curve —
+        // e.g. fetal HbF (18.8) vs neonatal (20.0) vs adult (26.7). A per-compartment P50_0 already
+        // present in the loaded state is respected (e.g. a maternal pool kept at adult affinity).
         model.haldane_coeff = this.haldane_coeff;
+        if (model.P50_0 === undefined) model.P50_0 = this.P50_0;
         // only bootstrap composition for freshly-constructed compartments (empty solutes). A
         // restored/loaded state already carries per-compartment composition, so guarding on
         // empty solutes (rather than the to2/tco2==0 proxy) preserves it even when a restored
@@ -6889,6 +7145,9 @@ export class Blood extends BaseModelClass {
       // venous bloodgas
       calc_blood_composition(this._model_engine.models["IVCI"])
       calc_blood_composition(this._model_engine.models["SVC"])
+      // right-atrial (mixed-venous) bloodgas — the Monitor reads SvO2 from RAIVCI, so its
+      // composition must be solved here too (otherwise so2 stays at the -1 sentinel)
+      if (this._model_engine.models["RAIVCI"]) calc_blood_composition(this._model_engine.models["RAIVCI"])
 
       // arterial solute concentrations
       this.art_solutes = { ...this._descending_aorta.solutes };
@@ -6918,6 +7177,15 @@ export class Blood extends BaseModelClass {
     this.haldane_coeff = new_coeff;
     this._blood_components.forEach((model) => {
       model.haldane_coeff = new_coeff;
+    });
+  }
+
+  // set the O2-Hb affinity baseline (P50 at standard conditions) on every blood compartment —
+  // e.g. fetal HbF (18.8), neonatal (20.0), adult (26.7). Lower P50 = higher affinity = higher SaO2 at a given pO2.
+  set_P50(new_p50) {
+    this.P50_0 = new_p50;
+    this._blood_components.forEach((model) => {
+      model.P50_0 = new_p50;
     });
   }
 
@@ -7161,6 +7429,7 @@ function _calc_blood_composition_js(bc) {
     uma = sol["uma"];
     hemoglobin = sol["hemoglobin"];
     temp = bc.temp;
+    P50_0 = bc.P50_0 ?? 20.0; // per-compartment O2-Hb affinity baseline (HbF≈18.8, neonatal 20.0, adult 26.7); falls back to the historical 20.0
     prev_ph = bc.prev_ph || 7.37; // previous pH value, used to set the limits for H⁺ concentration
     prev_po2 = bc.prev_po2 || 18.7; // previous pO2 value, used to set the limits for pO2
 
@@ -7607,6 +7876,7 @@ export class BloodVessel extends BloodCapacitance {
         { key: "name", value: inputName + "_" + this.name},
         { key: "description", value: "input connector for " + this.name },
         { key: "is_enabled", value: this.is_enabled },
+        { key: "is_externally_managed", value: true },
         { key: "model_type", value: "Resistor" },
         { key: "r_for", value: this.r_for },
         { key: "r_back", value: this.r_back },
@@ -7869,21 +8139,31 @@ export class Breathing extends BaseModelClass {
 
     this._breath_timer += this._t;
 
+    // flow at the airway opening, route-agnostic: the natural airway when it is open, the ET tube
+    // when the patient is intubated. Both resistors feed DS with the same sign (positive =
+    // inspiration), so a disabled/blocked inlet contributes 0 and the sum collapses to the single
+    // active route. When the ventilator is off, VENT_ETTUBE is disabled → this is exactly MOUTH_DS,
+    // preserving the spontaneous-breathing baseline. When the vent is on (e.g. CPAP) MOUTH_DS is
+    // blocked → this becomes VENT_ETTUBE, so the tidal-volume feedback loop keeps working.
+    const mouth_ds = this._model_engine.models["MOUTH_DS"];
+    const ettube = this._model_engine.models["VENT_ETTUBE"];
+    let _aw_flow = 0.0;
+    if (mouth_ds && !mouth_ds.no_flow) _aw_flow += mouth_ds.flow;
+    if (ettube && ettube.is_enabled && !ettube.no_flow) _aw_flow += ettube.flow;
+
     if (this._insp_running) {
       this._insp_timer += this._t;
       this.ncc_insp += 1;
-      if (this._model_engine.models["MOUTH_DS"].flow > 0) {
-        this._temp_insp_volume +=
-          this._model_engine.models["MOUTH_DS"].flow * this._t;
+      if (_aw_flow > 0) {
+        this._temp_insp_volume += _aw_flow * this._t;
       }
     }
 
     if (this._exp_running) {
       this._exp_timer += this._t;
       this.ncc_exp += 1;
-      if (this._model_engine.models["MOUTH_DS"].flow < 0) {
-        this._temp_exp_volume +=
-          this._model_engine.models["MOUTH_DS"].flow * this._t;
+      if (_aw_flow < 0) {
+        this._temp_exp_volume += _aw_flow * this._t;
       }
     }
 
@@ -9276,23 +9556,34 @@ export class Heart extends BaseModelClass {
     // store the previous state
     this.prev_cardiac_cycle_state = this.cardiac_cycle_state
 
-    // when then mitral valve closes the systole starts
-    if (this.prev_la_lv_flow > 0.0 && this._la_lv.flow <= 0.0) {
+    // The cardiac cycle (systole/diastole) is normally detected from left-heart valve events: systole
+    // starts when the mitral valve closes and ends when the LV outflow valve closes. In TGA the LV ejects
+    // through the pulmonary valve (LV_PA) rather than the aortic valve, so we use whichever LV outflow
+    // valve is active. In hypoplastic-left-heart / single-(right)-ventricle physiology the LV has NO
+    // outflow (aortic atresia) and usually no inflow (mitral atresia), so neither valve event can fire —
+    // there we derive the cycle from the ventricular activation window instead. This branch is identity for
+    // any heart with a working LV outflow (normal anatomy, TGA, tricuspid atresia, PA-IVS, ...).
+    const lv_out = this._lv_aa && this._lv_aa.is_enabled ? this._lv_aa : this._lv_pa;
+    if (lv_out && lv_out.is_enabled) {
       // mitral valve closes so the systole starts
-      this._systole_running = true
-    }
-    // store the previous flow
-    this.prev_la_lv_flow = this._la_lv.flow
-
-    if (this._systole_running) {
-      // check whether the aortic valve closes
-      if (this.prev_lv_aa_flow > 0.0 && this._lv_aa.flow <= 0.0) {
-        // aortic valve closes so the systole ends
-        this._systole_running = false
+      if (this.prev_la_lv_flow > 0.0 && this._la_lv.flow <= 0.0) {
+        this._systole_running = true
       }
+      this.prev_la_lv_flow = this._la_lv.flow
+
+      // LV outflow valve closes so the systole ends
+      if (this._systole_running) {
+        if (this.prev_lv_aa_flow > 0.0 && lv_out.flow <= 0.0) {
+          this._systole_running = false
+        }
+      }
+      this.prev_lv_aa_flow = lv_out.flow
+    } else {
+      // single working right ventricle (HLHS / aortic atresia): the ventricle is in systole during its
+      // activation window (ncc_ventricular sweeps [0, ventricular_duration) each beat)
+      const ventricular_duration = (this.qrs_time + this.cqt_time) / this._t;
+      this._systole_running = this.ncc_ventricular >= 0 && this.ncc_ventricular < ventricular_duration;
     }
-    // store the previous flow
-    this.prev_lv_aa_flow = this._lv_aa.flow
 
     // set the cardiac cycle
     if (this._systole_running) {
@@ -10765,6 +11056,206 @@ export class Kidneys extends BaseModelClass {
 
 ```
 
+### FILE: explain/component_models/MaternalPlacenta.js
+
+```javascript
+import { BaseModelClass } from "../base_models/BaseModelClass.js";
+
+/*
+  The MaternalPlacenta class models the MATERNAL side of the placenta: the perfused intervillous
+  space (PL_IVS), a low-resistance blood lake fed by the SPIRAL ARTERIES off the uterine arterial
+  supply (UT_ART) and draining to the uterine veins (UT_VEN), in parallel with the non-placental
+  uterine tissue (UT_CAP). Like Uterus/Placenta it is a controller/process model: it owns no blood
+  itself but operates on the existing PL_IVS compartment that Circulation supplies.
+
+  Scope (Part 5 — build the maternal placenta):
+    - GROWTH WITH GESTATION: the spiral arteries dilate as pregnancy advances, so maternal placental
+      blood flow grows from ~0 (non-pregnant: the placenta does not exist) to the DOMINANT share of
+      uterine flow at term. Driven by the Uterus's pregnancy gestational age (preg_ga) — the single
+      source of truth — scaling PL_IVS's resistance (the spiral-artery resistor IS PL_IVS's input
+      resistor) via the persistent r_factor_scaling_ps layer.
+    - GATING: when not pregnant the bed is held no_flow (zero perturbation to the calibrated uterine
+      baseline). PL_IVS stays enabled but inert.
+    - PLACENTAL METABOLISM: a dedicated placental VO2 applied to PL_IVS (same molar conversion as
+      Metabolism: 0.039 mmol O2/mL), giving real O2 extraction across the intervillous space even
+      before a fetus exists.
+    - CONTRACTION COMPRESSION: the uterine intrauterine pressure (Uterus.iup) is applied as external
+      pressure on PL_IVS, so contractions throttle placental perfusion (the contraction -> placental
+      flow effect).
+    - READ-OUTS: placental blood flow (mL/min), its share of uterine flow (%), DO2/VO2/O2ER/AVO2.
+
+  NOT in this version: fetal coupling (PL_GASEX exchanging between PL_IVS and a fetal placental
+  capillary) — needs a fetal circulation (combined mother+fetus scenario). The legacy fixed PL_MAT
+  pool is left untouched.
+*/
+
+// O2 molar density at 37 C, 1 atm (mmol O2 per mL) — same constant Metabolism/Uterus use.
+const O2_MMOL_PER_ML = 0.039;
+
+export class MaternalPlacenta extends BaseModelClass {
+  // static properties
+  static model_type = "MaternalPlacenta";
+
+  constructor(model_ref, name = "") {
+    super(model_ref, name);
+
+    // -----------------------------------------------
+    // independent parameters (config)
+    this.mp_running = true; // master gate (flow is additionally gated by pregnancy via the Uterus)
+    this.pl_ivs_name = "PL_IVS"; // intervillous-space compartment (the blood lake)
+    this.spiral_res_name = "UT_ART_PL_IVS"; // spiral-artery resistor (owned by PL_IVS; = its r_for_eff)
+    this.drain_res_name = "PL_IVS_UT_VEN"; // drainage resistor (owned by UT_VEN)
+    this.ut_art_name = "UT_ART"; // arterial source (for arterial O2 content read-outs)
+    this.ut_in_res_name = "AD_UT_ART"; // total uterine inflow resistor (for the flow-share read-out)
+    this.uterus_name = "Uterus"; // read preg_ga / pregnant / iup from here (single source of truth)
+
+    // GA-scaled spiral-artery dilation: PL_IVS.r_factor_scaling_ps ramps from 1.0 (non-pregnant,
+    // ~no flow) to spiral_res_term_factor at term, so placental flow grows through pregnancy.
+    this.preg_ga_threshold = 4.0; // below this GA the placenta is treated as absent (no flow)
+    this.preg_ga_term = 40.0; // GA anchor at which the term dilation is reached
+    this.spiral_res_term_factor = 0.01; // PL_IVS resistance multiplier at term (small -> large flow)
+
+    // placental metabolism — dedicated rate applied to PL_IVS (mirrors Uterus / Metabolism)
+    this.met_active = true;
+    this.mp_vo2 = 0.04; // placental oxygen use (mL O2/kg/min) — SCENARIO-CALIBRATED
+    this.vo2_factor = 1.0; // non-persistent VO2 multiplier (reset each step)
+    this.vo2_factor_ps = 1.0; // persistent VO2 multiplier
+    this.resp_q = 0.8; // respiratory quotient
+
+    // contraction compression: fraction of the uterine IUP applied as pres_ext on PL_IVS
+    this.contraction_pres_gain = 0.6;
+
+    // -----------------------------------------------
+    // dependent parameters (read-outs)
+    this.mp_blood_flow = 0.0; // maternal placental blood flow (mL/min)
+    this.mp_flow_fraction = 0.0; // placental flow as % of total uterine inflow
+    this.mp_do2 = 0.0; // oxygen delivery (mL O2/min)
+    this.mp_vo2_ml = 0.0; // oxygen uptake (mL O2/min)
+    this.mp_o2er = 0.0; // oxygen extraction ratio (%)
+    this.mp_avo2 = 0.0; // arterio-venous O2 content difference (mmol/L)
+    this.mp_active = false; // whether the placental bed is perfused (pregnant + running)
+
+    // -----------------------------------------------
+    // local references / state
+    this._pl_ivs = null;
+    this._spiral_res = null;
+    this._drain_res = null;
+    this._ut_art = null;
+    this._ut_in_res = null;
+    this._uterus = null;
+    this._flow_ema = 0.0; // smoothed spiral-artery inflow (L/s)
+    this._ut_in_ema = 0.0; // smoothed total uterine inflow (L/s) — for the flow-share read-out
+    this._flow_tc = 5.0; // smoothing time constant (s)
+  }
+
+  init_model(args) {
+    super.init_model(args);
+    // PL_IVS, the spiral/drainage resistors and the Uterus are resolved lazily in calc_model() since
+    // they may be instantiated after this controller in build order.
+  }
+
+  calc_model() {
+    // lazy reference resolution (build-order independent)
+    if (!this._pl_ivs) this._pl_ivs = this._model_engine.models[this.pl_ivs_name] ?? null;
+    if (!this._spiral_res) this._spiral_res = this._model_engine.models[this.spiral_res_name] ?? null;
+    if (!this._drain_res) this._drain_res = this._model_engine.models[this.drain_res_name] ?? null;
+    if (!this._ut_art) this._ut_art = this._model_engine.models[this.ut_art_name] ?? null;
+    if (!this._ut_in_res) this._ut_in_res = this._model_engine.models[this.ut_in_res_name] ?? null;
+    if (!this._uterus) this._uterus = this._model_engine.models[this.uterus_name] ?? null;
+
+    if (!this._pl_ivs) return;
+
+    // pregnancy progress from the Uterus (single source of truth)
+    const ga = this._uterus ? this._uterus.preg_ga : 0.0;
+    const pregnant = this._uterus ? this._uterus.pregnant : false;
+    let frac = 0.0;
+    if (pregnant && ga > this.preg_ga_threshold) {
+      frac = (ga - this.preg_ga_threshold) / (this.preg_ga_term - this.preg_ga_threshold);
+      if (frac > 1.0) frac = 1.0;
+    }
+    const active = this.mp_running && frac > 0.0;
+    this.mp_active = active;
+
+    // gate flow on/off via no_flow on BOTH the spiral inflow and the drainage so a non-pregnant
+    // (or stopped) placenta is perfectly inert and does not perturb the uterine baseline. PL_IVS
+    // stays enabled (an inert pool) so it still has a defined pressure. Re-asserted every step.
+    this._pl_ivs.no_flow = !active;
+    if (this._drain_res) this._drain_res.no_flow = !active;
+
+    if (!active) {
+      this._pl_ivs.r_factor_scaling_ps = 1.0; // restore the layer we own
+      this._zero_outputs();
+      return;
+    }
+
+    // spiral-artery dilation: scale PL_IVS resistance down with GA (-> placental flow grows). Written
+    // every step (idempotent — engine recomputes r_for_eff from base each step). BloodVessel composes
+    // r_factor_scaling_ps multiplicatively, disjoint from the layers anything else writes.
+    const res_factor = 1.0 + frac * (this.spiral_res_term_factor - 1.0);
+    this._pl_ivs.r_factor_scaling_ps = res_factor;
+
+    // contraction compression: apply the uterine IUP as external pressure on the intervillous space
+    // (re-asserted each step; the compartment resets pres_ext after use)
+    const iup = this._uterus ? this._uterus.iup : 0.0;
+    this._pl_ivs.pres_ext += iup * this.contraction_pres_gain;
+
+    // placental O2 consumption / CO2 production on PL_IVS (same molar conversion as Metabolism).
+    // VO2 scales with placental PERFUSION (flow ~ spiral_res_term_factor/res_factor: ~1 at term,
+    // ~0 early) so a small early-gestation placenta with little flow consumes little O2 and the
+    // placental O2ER stays physiologic across gestation (a full-strength VO2 on a tiny early flow
+    // would drive O2ER far above 100%).
+    if (this.met_active && this._pl_ivs.vol > 0.0) {
+      const flow_ratio = res_factor > 0.0 ? this.spiral_res_term_factor / res_factor : 0.0; // 0..1
+      const vo2_eff = this.mp_vo2 * this.vo2_factor * this.vo2_factor_ps * flow_ratio; // mL O2/kg/min
+      const vo2_step = ((O2_MMOL_PER_ML * vo2_eff * this._model_engine.weight) / 60.0) * this._t; // mmol/step
+      const vol = this._pl_ivs.vol;
+      let new_to2 = (this._pl_ivs.to2 * vol - vo2_step) / vol;
+      if (new_to2 < 0) new_to2 = 0;
+      let new_tco2 = (this._pl_ivs.tco2 * vol + vo2_step * this.resp_q) / vol;
+      if (new_tco2 < 0) new_tco2 = 0;
+      this._pl_ivs.to2 = new_to2;
+      this._pl_ivs.tco2 = new_tco2;
+      this.mp_vo2_ml = vo2_eff * this._model_engine.weight;
+    } else {
+      this.mp_vo2_ml = 0.0;
+    }
+    this.vo2_factor = 1.0; // reset the non-persistent layer
+
+    // smoothed placental blood flow from the spiral-artery resistor (L/s -> mL/min)
+    if (this._spiral_res) {
+      const alpha = this._t / (this._flow_tc + this._t);
+      this._flow_ema += (this._spiral_res.flow - this._flow_ema) * alpha;
+    }
+    this.mp_blood_flow = this._flow_ema * 60000.0;
+
+    // share of total uterine inflow (placental / [placental + non-placental uterine]). Both the
+    // numerator and denominator are EMA-smoothed so the ratio isn't polluted by pulsatile sampling.
+    if (this._ut_in_res) {
+      const alpha = this._t / (this._flow_tc + this._t);
+      this._ut_in_ema += (this._ut_in_res.flow - this._ut_in_ema) * alpha;
+    }
+    this.mp_flow_fraction = this._ut_in_ema > 0.0 ? (this._flow_ema / this._ut_in_ema) * 100.0 : 0.0;
+
+    // oxygen delivery / extraction read-outs. Arterial content = UT_ART; venous = PL_IVS.
+    const art_to2 = this._ut_art ? this._ut_art.to2 : this._pl_ivs.to2;
+    const flow_l_min = this._flow_ema * 60.0;
+    this.mp_do2 = (flow_l_min * art_to2) / O2_MMOL_PER_ML; // mL O2/min
+    this.mp_avo2 = art_to2 - this._pl_ivs.to2; // mmol/L
+    this.mp_o2er = this.mp_do2 > 0.0 ? (this.mp_vo2_ml / this.mp_do2) * 100.0 : 0.0; // %
+  }
+
+  _zero_outputs() {
+    this.mp_blood_flow = 0.0;
+    this.mp_flow_fraction = 0.0;
+    this.mp_do2 = 0.0;
+    this.mp_vo2_ml = 0.0;
+    this.mp_o2er = 0.0;
+    this.mp_avo2 = 0.0;
+  }
+}
+
+```
+
 ### FILE: explain/component_models/Metabolism.js
 
 ```javascript
@@ -11170,11 +11661,13 @@ const RESISTANCE_PREFACTOR = (8.0 / Math.PI) * PA_S_PER_M3_TO_MMHG_S_PER_L;
 const CONICAL_RESISTANCE_PREFACTOR = (8.0 / (3.0 * Math.PI)) * PA_S_PER_M3_TO_MMHG_S_PER_L;
 // Resistance returned when geometry collapses to zero (sentinel "no flow").
 const RESISTANCE_NO_FLOW = 1e8;
-// Multiplier on el_base used when the duct is fully closed. The full computation
-// yields el ≈ el_base · (R_no_flow / R_open)^alpha ≈ el_base · few-thousand for
-// typical neonatal geometry; the exact value doesn't affect DA pressure when the
-// capacitance holds u_vol, so a deterministic constant is sufficient.
-const CLOSED_EL_SCALE = 5000;
+
+// Bernoulli orifice coefficient prefactor: B = K_BERNOULLI / A_eff² gives the
+// quadratic pressure loss ΔP_kinetic (mmHg) = B · Q² with Q in L/s and A_eff in m².
+// Derivation: ΔP_kinetic = ½·ρ·v², v = (Q·1e-3)/A, ρ ≈ 1060 kg/m³, Pa→mmHg ÷133.322.
+//   ΔP[mmHg] = (0.5·ρ / 133.322) · (Q·1e-3 / A)² = (ρ · 3.75e-9) · Q²/A²
+// With ρ = 1060 this is ≈ 3.976e-6, i.e. ΔP ≈ 4·v² — the textbook modified-Bernoulli form.
+const K_BERNOULLI = 1060.0 * 3.75e-9;
 
 export class Pda extends BaseModelClass {
   // static properties
@@ -11190,42 +11683,32 @@ export class Pda extends BaseModelClass {
     this.diameter_pa_max = 2.0;   // max diameter at pulmonary end (mm)
     this.diameter_relative = 0.0; // relative diameter [0..1], scales both ends together
     this.length = 20;             // length (mm)
-    this.el_base = 30000;         // baseline (open-duct) elastance (mmHg/L); scaled by (R/R_open)^alpha as the duct constricts
-    // alpha: resistance-elastance coupling exponent (BloodVessel-style). Between the large-artery
-    // thin-wall value (0.5, gives the literature "order of magnitude" elastance rise for ~100x R
-    // rise during functional closure) and the arteriole value (0.63), with a small bump for the
-    // PDA's high SM content.
-    this.alpha = 0.55;
-    // jet_exponent: exponent n on (R_total / R_open_total)^(n/4) used to amplify the continuity
-    // velocity into a jet-corrected end velocity. Same driver as the elastance α-coupling; the /4
-    // normalization makes n = 1 behave like a linear diameter correction (matches the original
-    // empirical (d_max/d_pa)^1 formula).
-    this.jet_exponent = 0.6;
+    // discharge_coeff: effective vena-contracta contraction of the pulmonary-end orifice (Cd, 0..1).
+    // The Bernoulli coefficient uses the *effective* orifice area A_eff = Cd · A_pa, so B scales as
+    // 1/Cd². This is the single tuning knob for peak jet velocity (lower Cd → tighter jet → higher
+    // velocity). Cd ≈ 0.8 is typical for a smooth converging duct.
+    this.discharge_coeff = 0.8;
 
     // -----------------------------------------------
     // dependent properties (recomputed each step)
     // -----------------------------------------------
     this.diameter_ao = 0.0;       // current diameter at aortic origin (mm)
     this.diameter_pa = 0.0;       // current diameter at pulmonary end (mm)
-    this.viscosity = 6;           // blood viscosity (cP), pulled from the DA capacitance
-    this.vol = 0;                 // duct volume (L), pulled from the DA capacitance
-    this.flow_ao = 0;             // flow at the aortic resistor (L/s)
-    this.flow_pa = 0;             // flow at the pulmonary resistor (L/s)
-    this.res_ao = 1500;           // resistance of the AO-half of the cone (mmHg·s/L)
-    this.res_pa = 1500;           // resistance of the PA-half of the cone (mmHg·s/L)
-    this.el = 30000;              // current elastance, el_base * (R/R_open)^alpha (mmHg/L)
+    this.viscosity = 6;           // blood viscosity (cP), pulled from the upstream (AAR) compartment
+    this.res = 1500;              // viscous resistance of the full cone (mmHg·s/L)
+    this.bernoulli_b = 0;         // orifice Bernoulli coefficient B = K/A_eff² (mmHg·s²/L²)
+    this.flow = 0;                // shunt flow through the duct (L/s); +ve = L->R (aorta -> pulmonary)
+    this.flow_ao = 0;             // alias of `flow` (kept for probe/back-compat; single resistor now)
+    this.flow_pa = 0;             // alias of `flow` (kept for probe/back-compat; single resistor now)
     this.velocity_ao = 0;         // bulk mean velocity at aortic end, Q/A (m/s)
     this.velocity_pa = 0;         // bulk mean velocity at pulmonary end, Q/A (m/s)
-    this.velocity_doppler = 0;    // peak velocity from modified Bernoulli, sign(ΔP)·√(|ΔP|/4) (m/s)
-    this.velocity_ao_jet = 0;     // velocity_ao amplified by stenosis factor (m/s)
-    this.velocity_pa_jet = 0;     // velocity_pa amplified by stenosis factor (m/s)
+    this.velocity_doppler = 0;    // jet peak from the Bernoulli term, sign(Q)·√(|B·Q²|/4) (m/s)
 
     // -----------------------------------------------
     // local references (preceded with _)
     // -----------------------------------------------
-    this._da = null;     // BloodCapacitance (DA)
-    this._aar_da = null; // Resistor (AA → DA)
-    this._da_pa = null;  // Resistor (DA → PA)
+    this._aar_da = null; // Resistor (AAR -> PA), the single "Bernoulli resistor"
+    this._aar = null;    // BloodCapacitance (AAR), upstream end (viscosity source)
   }
 
   init_model(args = {}) {
@@ -11233,45 +11716,36 @@ export class Pda extends BaseModelClass {
 
     // cache sub-model references so we don't hash-lookup every step
     this._aar_da = this._model_engine.models["AAR_DA"] || null;
-    this._da     = this._model_engine.models["DA"]     || null;
-    this._da_pa  = this._model_engine.models["DA_PA"]  || null;
+    this._aar    = this._model_engine.models["AAR"]    || null;
   }
 
   calc_model() {
     const aar_da = this._aar_da;
-    const da_pa = this._da_pa;
-    const da = this._da;
 
-    // the duct coordinates all three sub-models; skip if any is missing (e.g. a configuration
-    // without a DA capacitance or its connecting resistors) rather than dereferencing null
-    if (!da || !aar_da || !da_pa) return;
+    // the duct is now a single resistor AAR -> PA carrying the full quadratic stenosis element;
+    // skip if it is missing (a configuration without the duct connection) rather than dereferencing null
+    if (!aar_da) return;
+
+    // viscosity from the upstream (AAR) compartment, falling back to the resistor's resolved
+    // inlet or a sane default; tracks hematocrit changes automatically
+    this.viscosity = this._aar?.viscosity ?? aar_da._comp_from?.viscosity ?? 6;
 
     // ----- closed-duct fast path -----
-    // diameter_relative === 0 is the postnatal steady state. The cone math, the
-    // Bernoulli sqrt, and the continuity divisions all degenerate; set sentinel
-    // values and skip the rest.
+    // diameter_relative === 0 is the postnatal steady state. The cone math, the Bernoulli sqrt, and
+    // the continuity divisions all degenerate; seal the resistor and zero the outputs.
     if (this.diameter_relative === 0) {
       this.diameter_ao = 0;
       this.diameter_pa = 0;
-      this.viscosity = da.viscosity;
-      this.flow_ao = aar_da.flow;
-      this.flow_pa = da_pa.flow;
       aar_da.no_flow = true;
-      da_pa.no_flow = true;
-      this.res_ao = RESISTANCE_NO_FLOW;
-      this.res_pa = RESISTANCE_NO_FLOW;
       aar_da.r_for = RESISTANCE_NO_FLOW;
       aar_da.r_back = RESISTANCE_NO_FLOW;
-      da_pa.r_for = RESISTANCE_NO_FLOW;
-      da_pa.r_back = RESISTANCE_NO_FLOW;
-      this.el = this.el_base * CLOSED_EL_SCALE;
-      da.el_base = this.el;
+      aar_da.r_k = 0;
+      this.res = RESISTANCE_NO_FLOW;
+      this.bernoulli_b = 0;
+      this.flow = this.flow_ao = this.flow_pa = aar_da.flow;
       this.velocity_doppler = 0;
       this.velocity_ao = 0;
       this.velocity_pa = 0;
-      this.velocity_ao_jet = 0;
-      this.velocity_pa_jet = 0;
-      this.vol = da.vol;
       return;
     }
 
@@ -11281,73 +11755,53 @@ export class Pda extends BaseModelClass {
     this.diameter_ao = d_ao;
     this.diameter_pa = d_pa;
 
-    // pull current flows and viscosity from the underlying models
-    this.flow_ao = aar_da.flow;
-    this.flow_pa = da_pa.flow;
-    this.viscosity = da.viscosity;
+    // expose the current shunt flow (single resistor; flow_ao/flow_pa are aliases for back-compat)
+    this.flow = this.flow_ao = this.flow_pa = aar_da.flow;
 
-    // when fully constricted, force no flow on both resistors
-    aar_da.no_flow = d_ao === 0;
-    da_pa.no_flow  = d_pa === 0;
+    // when fully constricted, force no flow
+    aar_da.no_flow = d_pa === 0;
 
-    // ----- resistance: linearly tapered cone, split at the midpoint -----
-    const half_length = this.length * 0.5;
-    const d_mid = (d_ao + d_pa) * 0.5;
-    const res_ao = this.calc_conical_resistance(d_ao, d_mid, half_length, this.viscosity);
-    const res_pa = this.calc_conical_resistance(d_mid, d_pa, half_length, this.viscosity);
-    this.res_ao = res_ao;
-    this.res_pa = res_pa;
-    aar_da.r_for = res_ao;
-    aar_da.r_back = res_ao;
-    da_pa.r_for = res_pa;
-    da_pa.r_back = res_pa;
+    // ----- quadratic stenosis element on the single resistor: ΔP = res·Q + B·Q² -----
+    // res: viscous Hagen-Poiseuille loss over the full linearly tapered cone (AAR end -> PA end).
+    const res = this.calc_conical_resistance(d_ao, d_pa, this.length, this.viscosity);
+    this.res = res;
 
-    // ----- resistance-elastance coupling (BloodVessel α-pattern) -----
-    // As the duct constricts, R rises as ~1/d^4 and the wall stiffness rises as (R / R_open)^alpha,
-    // reproducing the literature-described order-of-magnitude jump in total elastance during
-    // functional closure. The result is unbounded — the closed-duct case naturally drives the
-    // elastance toward effective infinity.
-    const d_mid_max = (this.diameter_ao_max + this.diameter_pa_max) * 0.5;
-    const res_open_ao = this.calc_conical_resistance(this.diameter_ao_max, d_mid_max, half_length, this.viscosity);
-    const res_open_pa = this.calc_conical_resistance(d_mid_max, this.diameter_pa_max, half_length, this.viscosity);
-    const res_open_total = res_open_ao + res_open_pa;
-    const res_total = res_ao + res_pa;
-    const r_factor = res_open_total > 0 ? res_total / res_open_total : 1.0;
-    this.el = this.el_base * Math.pow(r_factor, this.alpha);
-    da.el_base = this.el;
+    // B: convective / Bernoulli orifice loss at the narrowest (pulmonary) end, the vena contracta.
+    //   B = K_BERNOULLI / A_eff²,  A_eff = discharge_coeff · (anatomic pulmonary area)
+    const r_eff_m = this.discharge_coeff * d_pa * 0.0005; // effective orifice radius (mm/2 → m)
+    const area_eff = Math.PI * r_eff_m * r_eff_m;
+    const b = area_eff > 0 ? K_BERNOULLI / (area_eff * area_eff) : RESISTANCE_NO_FLOW;
+    this.bernoulli_b = b;
+
+    // Semi-implicit linearization of the quadratic term: fold B·Q² into the linear resistance as a
+    // flow-dependent resistance B·|Q_prev|, so the resistor solves flow = ΔP/(res + B·|Q_prev|). At
+    // steady state this reproduces ΔP = res·Q + B·Q² exactly, but unlike the engine's explicit
+    // r_k·Q_prev² term it is unconditionally stable — the explicit form diverges here because the
+    // open-duct viscous resistance (~1e3-1e4) is far below 2·√(B·ΔP) (~2e4). Keep r_k = 0.
+    const r_bernoulli = b * Math.abs(aar_da.flow); // mmHg·s/L, the linearized orifice resistance
+    aar_da.r_for = res + r_bernoulli;
+    aar_da.r_back = res + r_bernoulli;
+    aar_da.r_k = 0;
 
     // ----- velocity outputs -----
-    // Modified Bernoulli at the trans-ductal gradient:
-    //   ΔP (mmHg) = 4 · v²   →   v_jet (m/s) = sign(ΔP) · √(|ΔP|/4)
-    // The signed gradient (p_aa − p_pa) keeps the sign of all outputs consistent during flow
-    // reversal (PHT / bidirectional shunting); using a local p_da would let the DA capacitance's
-    // transient pressure swings flip the sign of one half independently of the other.
-    const closed = aar_da.no_flow || da_pa.no_flow;
-    let v_doppler = 0.0;
-    if (!closed) {
-      const p_aa = aar_da._comp_from?.pres ?? 0.0;
-      const p_pa = da_pa._comp_to?.pres ?? 0.0;
-      const dp = p_aa - p_pa;
-      v_doppler = Math.sign(dp) * Math.sqrt(Math.abs(dp) / 4.0);
-    }
-    this.velocity_doppler = v_doppler;
+    // Jet peak from the Bernoulli (kinetic) term only: B·Q² (mmHg) = 4·v² → v = sign(Q)·√(B·Q²/4).
+    // Because B = K_BERNOULLI/A_eff², this is identically the continuity velocity Q/A_eff through the
+    // effective orifice — the modified-Bernoulli jet and continuity are the same number, so this is
+    // honest across the whole closure trajectory (no viscous loss is attributed to velocity). Driven
+    // by the resistive flow, so it carries the sign of the shunt and reverses cleanly during
+    // bidirectional / PHT shunting.
+    const q = aar_da.flow; // L/s, +ve = L->R
+    this.velocity_doppler = aar_da.no_flow ? 0.0 : Math.sign(q) * Math.sqrt(Math.abs(b * q * q) / 4.0);
 
-    // Continuity (Q/A) bulk mean velocities at each end.
+    // Continuity (Q/A) bulk mean velocities at each *anatomic* end (for reference / open-duct flows).
     // diameter is in mm; convert to m by *1e-3, then radius = d/2, area = π·r².
     const r_ao_m = d_ao * 0.0005;
     const r_pa_m = d_pa * 0.0005;
     const area_ao = Math.PI * r_ao_m * r_ao_m;
     const area_pa = Math.PI * r_pa_m * r_pa_m;
     // flow is L/s; multiply by 1e-3 to get m³/s so Q/A is in m/s.
-    this.velocity_ao = area_ao > 0 ? (aar_da.flow * 0.001) / area_ao : 0.0;
-    this.velocity_pa = area_pa > 0 ? (da_pa.flow * 0.001) / area_pa : 0.0;
-
-    // Jet correction: amplify the smooth continuity waveform as the duct constricts.
-    const jet_scale = Math.pow(r_factor, this.jet_exponent * 0.25);
-    this.velocity_ao_jet = this.velocity_ao * jet_scale;
-    this.velocity_pa_jet = this.velocity_pa * jet_scale;
-
-    this.vol = da.vol;
+    this.velocity_ao = area_ao > 0 ? (q * 0.001) / area_ao : 0.0;
+    this.velocity_pa = area_pa > 0 ? (q * 0.001) / area_pa : 0.0;
   }
 
   calc_resistance(diameter, length = 20.0, viscosity = 6.0) {
@@ -11415,6 +11869,8 @@ export class Placenta extends BaseModelClass {
     // initialize independent parameters
     this.placenta_running = false
     this.umb_clamped = true; // flags whether the umbilical vessels are clamped or not
+    this.skip_mat_gas_write = false; // when true, do NOT write PL_MAT gas here — another model (Uterus
+    // coupling) is authoritative for the maternal pool. Prevents a double-write on PL_MAT.
     this.umb_art_res = 800; // resistance of the umbilical arteries (mmHg*s/L)
     this.umb_art_res_factor = 1.0; // factor for the resistance of the umbilical arteries
     this.umb_ven_res = 100; // resistance of the umbilical vein (mmHg*s/L)
@@ -11445,6 +11901,7 @@ export class Placenta extends BaseModelClass {
     this._plf_ven = null;
     this._plm = null;
     this._gas_exchanger = null;
+    this._umb_ven_ret = null; // umbilical-vein → body return resistor (PL_UMB_VEN → IVCI)
   }
 
   init_model(args) {
@@ -11457,6 +11914,12 @@ export class Placenta extends BaseModelClass {
     this._plf_ven = this._model_engine.models["PL_FETAL_VEN"];
     this._plm = this._model_engine.models["PL_MAT"];
     this._gas_exchanger = this._model_engine.models["PL_GASEX"];
+
+    // The umbilical-vein → body return is an autonomous Resistor (PL_UMB_VEN → IVCI): it is NOT
+    // listed in IVCI's `inputs`, so no BloodVessel co-manages it. The Placenta owns its enable/clamp
+    // state so that stopping or clamping the unit halts the venous return too — otherwise it would
+    // leak placental blood into the fetal IVC. Its resistance is left at the scenario value.
+    this._umb_ven_ret = this._model_engine.models["PL_UMB_VEN_IVCI"] || null;
   }
 
   calc_model() {
@@ -11477,6 +11940,8 @@ export class Placenta extends BaseModelClass {
       this._plf_ven.is_enabled = this.placenta_running;
       this._plm.is_enabled = this.placenta_running;
       this._gas_exchanger.is_enabled = this.placenta_running;
+      // the return resistor we took over from IVCI follows the same enable state
+      if (this._umb_ven_ret) this._umb_ven_ret.is_enabled = this.placenta_running;
 
       // the settings below are only meaningful while the placenta is running
       if (!this.placenta_running) return;
@@ -11487,6 +11952,8 @@ export class Placenta extends BaseModelClass {
       this._plf_art.no_flow = this.umb_clamped;
       this._plf_cap.no_flow = this.umb_clamped;
       this._plf_ven.no_flow = this.umb_clamped;
+      // also clamp the umbilical-vein → body return so a clamp stops flow on BOTH sides
+      if (this._umb_ven_ret) this._umb_ven_ret.no_flow = this.umb_clamped;
 
       // set the resistances of the associated models
       const umb_art_r = this.umb_art_res * this.umb_art_res_factor;
@@ -11503,9 +11970,13 @@ export class Placenta extends BaseModelClass {
       this._plf_ven.r_for = plf_r;
       this._plf_ven.r_back = plf_r;
 
-      // set the maternal placenta oxygen and carbon dioxide partial pressures in the gas exchanger
-      this._plm.to2 = this.mat_to2;
-      this._plm.tco2 = this.mat_tco2;
+      // set the maternal placenta oxygen and carbon dioxide partial pressures in the gas exchanger.
+      // Skipped when another model (the Uterus, via couple_placenta) drives PL_MAT instead, so the
+      // maternal pool has exactly one authoritative writer per step.
+      if (!this.skip_mat_gas_write) {
+        this._plm.to2 = this.mat_to2;
+        this._plm.tco2 = this.mat_tco2;
+      }
 
       // set the diffusion constants in the gas exchanger
       this._gas_exchanger.dif_o2 = this.dif_o2;
@@ -11853,6 +12324,320 @@ export class Shunts extends BaseModelClass {
     } else {
       return 100000000; // a very high resistance to represent no flow
     }
+  }
+}
+
+```
+
+### FILE: explain/component_models/Uterus.js
+
+```javascript
+import { BaseModelClass } from "../base_models/BaseModelClass.js";
+
+/*
+  The Uterus class turns the (otherwise passive) uterine vascular bed
+  (UT_ART -> UT_CAP -> UT_VEN) into a living organ. Like Kidneys/Placenta it is a
+  controller/process model: it holds no blood itself but operates on the existing
+  uterine capillary (UT_CAP) that Circulation supplies.
+
+  Scope (Part 2):
+    - Uterine OXYGEN CONSUMPTION / CO2 PRODUCTION: a dedicated uterine VO2 (ut_vo2,
+      mL O2/kg/min) is applied directly to UT_CAP using the SAME molar conversion as the
+      whole-body Metabolism model (0.039 mmol O2/mL at 37 C). It is deliberately NOT
+      registered in Metabolism.metabolic_active_models, so the calibrated whole-body VO2
+      map is left untouched and the uterus carries an independent, pregnancy-scalable O2
+      demand of its own.
+    - READ-OUTS: uterine blood flow (mL/min), O2 delivery (DO2), O2 uptake (VO2), O2
+      extraction ratio (O2ER) and the arterio-venous O2 content difference.
+    - A transient PERFUSION knob (perfusion_factor) modulates uterine inflow resistance.
+
+  Part 3 (pregnancy adaptation): a pregnancy gestational age (preg_ga, weeks; distinct from the
+  engine-level model.gestational_age which is the mother's OWN birth GA) scales the uterine bed and
+  its O2 demand. As GA rises from a threshold to term, the bed resistance drops and its unstressed
+  volume + VO2 rise (linear ramp between non-pregnant baseline and term anchors), expanding uterine
+  blood flow from ~50 mL/min toward ~500-700 mL/min at term. Scaling is written to the persistent
+  *_scaling_ps layers every step (idempotent — never mutate vol/r_for directly), which compose
+  multiplicatively with the ANS, the SVR layer (r_factor_ps) and the transient perfusion_factor
+  (r_factor). A maternal-placental coupling hook drives the (otherwise constant) maternal placenta
+  pool PL_MAT from uterine arterial blood when enabled.
+
+  Part 4 (uterine contractions / labor): a periodic intrauterine-pressure (IUP) waveform — a resting
+  tone plus a smooth half-sine contraction recurring every contraction_period seconds — throttles the
+  uterine bed by BOTH (1) physical compression, applying the IUP as external pressure (pres_ext) to
+  UT_ART/CAP/VEN, which impedes arterial inflow and squeezes venous blood out (the "uterine pump"),
+  and (2) a transient resistance rise on the bed (r_factor), giving controllable flow reduction. The
+  read-outs (iup, contraction_active, montevideo_units) make the cycle clinically legible. Default
+  off so the calibrated bed is untouched until labor is enabled.
+
+  NOT in this version: a running/calibrated placental circuit (the coupling plumbing ships but the
+  placenta stays disabled by default).
+*/
+
+// O2 molar density at 37 C, 1 atm (mmol O2 per mL) — same constant the Metabolism model uses, so
+// the VO2 (mL/min) and DO2 (mL/min) read-outs share one unit system and O2ER is self-consistent.
+const O2_MMOL_PER_ML = 0.039;
+
+export class Uterus extends BaseModelClass {
+  // static properties
+  static model_type = "Uterus";
+
+  constructor(model_ref, name = "") {
+    super(model_ref, name);
+
+    // -----------------------------------------------
+    // independent parameters (config)
+    this.uterus_running = true; // master gate for uterine organ function
+    this.ut_art_name = "UT_ART"; // arteriolar inflow vessel
+    this.ut_cap_name = "UT_CAP"; // capillary (metabolism / gas-exchange site)
+    this.ut_ven_name = "UT_VEN"; // venular outflow vessel
+    this.ut_in_res_name = "AD_UT_ART"; // inflow resistor (uterine blood-flow source)
+    this.ut_out_res_name = "UT_VEN_VLB"; // venular drainage resistor (owned by VLB; we scale it in pregnancy)
+
+    // uterine metabolism — dedicated rate applied to UT_CAP (mirrors Metabolism.calc_model)
+    this.met_active = true; // uterine O2 consumption on/off
+    this.ut_vo2 = 0.04; // uterine oxygen use (mL O2/kg/min) — SCENARIO-CALIBRATED (~25% O2ER)
+    this.vo2_factor = 1.0; // non-persistent VO2 multiplier (reset to 1.0 each step)
+    this.vo2_factor_ps = 1.0; // persistent VO2 multiplier (interventions / pregnancy scaling)
+    this.resp_q = 0.8; // respiratory quotient (CO2 produced / O2 consumed)
+
+    // transient vaso-tone knob. Written to UT_ART.r_factor (the NON-persistent layer) every step
+    // so it composes multiplicatively with Circulation's r_factor_ps without colliding with it.
+    // <1 = vasodilation (more flow), >1 = vasoconstriction. The hook for contractions later.
+    this.perfusion_factor = 1.0;
+
+    // --- pregnancy adaptation ---
+    this.pregnant = false; // master pregnancy gate (default off -> preserves the non-pregnant calibration)
+    this.preg_ga = 0.0; // pregnancy gestational age, weeks (0 = non-pregnant ... 40 = term).
+    // NOTE: distinct from model.gestational_age (the mother's own birth GA = 40).
+    this.preg_ga_threshold = 4.0; // below this GA the bed is treated as non-pregnant (no scaling)
+    this.preg_ga_term = 40.0; // GA anchor at which the term target multipliers below are reached
+    this.preg_res_term_factor = 0.083; // conduit (UT_ART/UT_VEN) resistance multiplier at term
+    // UT_CAP (non-placental myometrium) dilates SEPARATELY from the conduits: when a maternal
+    // placenta carries the dominant share of uterine flow, the myometrial capillary should stay a
+    // modest minority. Defaults to the conduit factor (= old uniform behavior) unless overridden.
+    this.preg_cap_res_term_factor = 0.083;
+    this.preg_vol_term_factor = 3.0; // bed unstressed-volume multiplier at term (engorgement)
+    this.preg_vo2_term_factor = 8.0; // uterine/conceptus VO2 multiplier at term
+
+    // maternal-placental coupling: when pregnant && couple_placenta, drive the maternal placenta
+    // pool (PL_MAT) O2/CO2 content from uterine arterial blood instead of the Placenta's constant.
+    this.couple_placenta = false;
+    this.pl_mat_name = "PL_MAT";
+
+    // --- uterine contractions (labor) ---
+    this.contractions_running = false; // master gate for contractions (default off -> bed untouched)
+    this.contraction_period = 180.0; // s between contraction onsets (active labor ~ every 3 min)
+    this.contraction_duration = 60.0; // s duration of each contraction (rise + fall)
+    this.resting_tone = 8.0; // baseline IUP between contractions (mmHg)
+    this.contraction_amplitude = 50.0; // peak IUP above resting tone (mmHg)
+    this.contraction_pres_gain = 0.6; // fraction of IUP applied as pres_ext to the bed (0..1)
+    this.contraction_r_peak = 2.0; // bed resistance multiplier at peak contraction (>= 1)
+
+    // -----------------------------------------------
+    // dependent parameters (read-outs)
+    this.ut_blood_flow = 0.0; // uterine blood flow (mL/min)
+    this.ut_do2 = 0.0; // oxygen delivery (mL O2/min)
+    this.ut_vo2_ml = 0.0; // oxygen uptake (mL O2/min)
+    this.ut_o2er = 0.0; // oxygen extraction ratio (%)
+    this.ut_avo2 = 0.0; // arterio-venous O2 content difference (mmol/L)
+    this.iup = 0.0; // current intrauterine pressure (mmHg)
+    this.contraction_active = false; // currently within a contraction
+    this.montevideo_units = 0.0; // MVU = peak amplitude x contractions per 10 min (labor adequacy)
+
+    // -----------------------------------------------
+    // local references / state
+    this._ut_art = null;
+    this._ut_cap = null;
+    this._ut_ven = null;
+    this._ut_in_res = null;
+    this._ut_out_res = null; // venular drainage resistor (UT_VEN -> VLB)
+    this._pl_mat = null; // lazily-resolved maternal placental pool (for coupling)
+    this._flow_ema = 0.0; // smoothed inflow (L/s) — tames the pulsatile resistor flow for the read-out
+    this._flow_tc = 5.0; // smoothing time constant (s) — long enough to average several cardiac cycles
+    this._contraction_timer = 0.0; // s elapsed within the current contraction cycle
+  }
+
+  init_model(args) {
+    // base applies the args (the Uterus owns no components of its own)
+    super.init_model(args);
+    // UT_ART/UT_CAP/UT_VEN and the inflow resistor are Circulation components that may be
+    // instantiated AFTER us in build order, so they are resolved lazily in calc_model().
+  }
+
+  calc_model() {
+    // lazy reference resolution (build-order independent)
+    if (!this._ut_art) this._ut_art = this._model_engine.models[this.ut_art_name] ?? null;
+    if (!this._ut_cap) this._ut_cap = this._model_engine.models[this.ut_cap_name] ?? null;
+    if (!this._ut_ven) this._ut_ven = this._model_engine.models[this.ut_ven_name] ?? null;
+    if (!this._ut_in_res) this._ut_in_res = this._model_engine.models[this.ut_in_res_name] ?? null;
+    if (!this._ut_out_res) this._ut_out_res = this._model_engine.models[this.ut_out_res_name] ?? null;
+
+    // gating + wiring guards
+    if (!this.uterus_running) {
+      // restore the pregnancy scaling layers we own so disabling the organ doesn't strand them
+      this._reset_preg_scaling();
+      this._zero_outputs();
+      return;
+    }
+    if (!this._ut_art || !this._ut_cap || !this._ut_ven) return;
+    if (this._ut_cap.vol <= 0.0) {
+      this._zero_outputs();
+      return;
+    }
+
+    // --- pregnancy bed scaling ---
+    // Linear ramp of GA -> term multipliers. Written to the persistent *_scaling_ps layers every
+    // step: that is IDEMPOTENT (the engine recomputes *_eff from the base each step), whereas
+    // mutating vol/u_vol/r_for directly would compound. These layers are disjoint from the ANS
+    // (ans_*), the SVR layer (r_factor_ps) and the transient perfusion_factor (r_factor), and
+    // BloodVessel composes them multiplicatively, so they stack cleanly. When non-pregnant frac=0
+    // and all factors are 1.0, so this is a true no-op that also auto-resets when GA drops.
+    const frac = this._preg_frac();
+    const res_factor = 1.0 + frac * (this.preg_res_term_factor - 1.0); // conduits (UT_ART/UT_VEN)
+    const cap_res_factor = 1.0 + frac * (this.preg_cap_res_term_factor - 1.0); // UT_CAP (myometrium)
+    const vol_factor = 1.0 + frac * (this.preg_vol_term_factor - 1.0);
+
+    this._ut_art.r_factor_scaling_ps = res_factor;
+    this._ut_cap.r_factor_scaling_ps = cap_res_factor;
+    this._ut_ven.r_factor_scaling_ps = res_factor;
+    this._ut_art.u_vol_factor_scaling_ps = vol_factor;
+    this._ut_cap.u_vol_factor_scaling_ps = vol_factor;
+    this._ut_ven.u_vol_factor_scaling_ps = vol_factor;
+    // The UT_VEN -> VLB drainage resistor is owned by VLB (it re-asserts its base r_for each step),
+    // but its r_factor_scaling_ps layer is free, so we scale it here too. Without this the unscaled
+    // drainage resistance becomes the dominant series resistor at term and caps flow at ~385 mL/min
+    // (and pins UT_VEN pressure high). It is a separate resistor per organ, so only uterine drainage
+    // is affected. Reads the value VLB set last step; idempotent at steady state regardless of order.
+    if (this._ut_out_res) this._ut_out_res.r_factor_scaling_ps = res_factor;
+
+    // VO2 expansion tracks the FLOW expansion (~1/res_factor), not GA linearly. Flow is convex in GA
+    // (flow ~ 1/R, R linear in GA) so a GA-linear VO2 would outpace perfusion at mid-gestation and
+    // drive O2ER unphysiologically high. Tying VO2 to the flow factor keeps O2ER physiologic across
+    // gestation, reaching preg_vo2_term_factor exactly when flow reaches its term expansion.
+    const flow_factor = 1.0 / cap_res_factor; // myometrial (UT_CAP) flow expansion vs baseline
+    const flow_factor_term = 1.0 / this.preg_cap_res_term_factor;
+    const preg_vo2 = flow_factor_term > 1.0
+      ? 1.0 + ((flow_factor - 1.0) / (flow_factor_term - 1.0)) * (this.preg_vo2_term_factor - 1.0)
+      : 1.0;
+
+    // --- uterine contractions ---
+    // Advance the cycle timer and derive the current IUP from a smooth half-sine contraction
+    // (intensity 0..1 over the contraction window, flat between contractions). The IUP is applied
+    // both as external pressure on the bed (pres_ext, re-asserted each step since the compartment
+    // resets it) and as a transient resistance rise (contraction_r_factor on r_factor).
+    let contraction_r_factor = 1.0;
+    if (this.contractions_running) {
+      this._contraction_timer += this._t;
+      if (this._contraction_timer >= this.contraction_period) {
+        this._contraction_timer -= this.contraction_period;
+      }
+      let intensity = 0.0; // 0..1
+      if (this._contraction_timer < this.contraction_duration) {
+        intensity = Math.sin(Math.PI * this._contraction_timer / this.contraction_duration);
+      }
+      this.contraction_active = intensity > 0.0;
+      this.iup = this.resting_tone + this.contraction_amplitude * intensity;
+
+      // physical compression: IUP as external pressure on each uterine compartment
+      const pe = this.iup * this.contraction_pres_gain;
+      this._ut_art.pres_ext += pe;
+      this._ut_cap.pres_ext += pe;
+      this._ut_ven.pres_ext += pe;
+
+      // controllable flow reduction: bed resistance rises with contraction intensity
+      contraction_r_factor = 1.0 + intensity * (this.contraction_r_peak - 1.0);
+
+      // labor adequacy: Montevideo units = peak amplitude x contractions per 10 min
+      this.montevideo_units = this.contraction_amplitude * (600.0 / this.contraction_period);
+    } else {
+      this._contraction_timer = 0.0;
+      this.contraction_active = false;
+      this.iup = 0.0;
+      this.montevideo_units = 0.0;
+    }
+
+    // transient perfusion knob + contraction resistance -> non-persistent r_factor layer (the
+    // vessels reset r_factor to 1.0 each step, so we re-assert it every step). perfusion_factor is
+    // the user/scenario vaso-tone knob (UT_ART); the contraction factor compresses the whole bed.
+    this._ut_art.r_factor = this.perfusion_factor * contraction_r_factor;
+    this._ut_cap.r_factor = contraction_r_factor;
+    this._ut_ven.r_factor = contraction_r_factor;
+
+    // uterine O2 consumption / CO2 production on UT_CAP (same molar conversion as Metabolism)
+    if (this.met_active) {
+      const vo2_eff = this.ut_vo2 * this.vo2_factor * this.vo2_factor_ps * preg_vo2; // mL O2/kg/min
+      const vo2_step = ((O2_MMOL_PER_ML * vo2_eff * this._model_engine.weight) / 60.0) * this._t; // mmol/step
+      const vol = this._ut_cap.vol;
+
+      let new_to2 = (this._ut_cap.to2 * vol - vo2_step) / vol;
+      if (new_to2 < 0) new_to2 = 0;
+      let new_tco2 = (this._ut_cap.tco2 * vol + vo2_step * this.resp_q) / vol;
+      if (new_tco2 < 0) new_tco2 = 0;
+      this._ut_cap.to2 = new_to2;
+      this._ut_cap.tco2 = new_tco2;
+
+      // O2 uptake read-out as a rate (mL O2/min): vo2_eff (mL/kg/min) * body weight (kg)
+      this.ut_vo2_ml = vo2_eff * this._model_engine.weight;
+    } else {
+      this.ut_vo2_ml = 0.0;
+    }
+    this.vo2_factor = 1.0; // reset the non-persistent layer
+
+    // smoothed uterine blood flow from the inflow resistor (L/s), then -> mL/min
+    if (this._ut_in_res) {
+      const alpha = this._t / (this._flow_tc + this._t);
+      this._flow_ema += (this._ut_in_res.flow - this._flow_ema) * alpha;
+    }
+    this.ut_blood_flow = this._flow_ema * 60000.0; // L/s -> mL/min
+
+    // oxygen delivery / extraction read-outs. O2 content (mL O2/L) = to2 (mmol/L) / O2_MMOL_PER_ML.
+    const flow_l_min = this._flow_ema * 60.0; // L/s -> L/min
+    this.ut_do2 = (flow_l_min * this._ut_art.to2) / O2_MMOL_PER_ML; // mL O2/min
+    this.ut_avo2 = this._ut_art.to2 - this._ut_ven.to2; // mmol/L (whole-uterus a-v difference)
+    // whole-uterus O2 extraction ratio from the actual content difference (Ca-Cv)/Ca — flow- and
+    // VO2-source-independent, so it stays correct now that UT_VEN is the COMMON outflow of both the
+    // myometrial (UT_CAP) and placental (PL_IVS) beds. At baseline this equals the old VO2/DO2 form.
+    this.ut_o2er = this._ut_art.to2 > 0.0 ? (this.ut_avo2 / this._ut_art.to2) * 100.0 : 0.0; // %
+
+    // --- maternal-placental coupling ---
+    // Drive the maternal placenta pool (PL_MAT) gas content from uterine arterial blood so the
+    // placental maternal supply tracks uterine perfusion. Placenta is the OTHER writer of PL_MAT;
+    // its skip_mat_gas_write flag must be set so exactly one model is authoritative per step.
+    if (this.pregnant && this.couple_placenta) {
+      if (!this._pl_mat) this._pl_mat = this._model_engine.models[this.pl_mat_name] ?? null;
+      if (this._pl_mat) {
+        this._pl_mat.to2 = this._ut_art.to2;
+        this._pl_mat.tco2 = this._ut_art.tco2;
+      }
+    }
+  }
+
+  // normalized pregnancy progress in [0, 1]: 0 at/below threshold, 1 at/above term
+  _preg_frac() {
+    if (!this.pregnant || this.preg_ga <= this.preg_ga_threshold) return 0.0;
+    const f = (this.preg_ga - this.preg_ga_threshold) / (this.preg_ga_term - this.preg_ga_threshold);
+    return f > 1.0 ? 1.0 : f;
+  }
+
+  // restore the pregnancy scaling layers this model owns back to 1.0 (used when the organ is gated off)
+  _reset_preg_scaling() {
+    for (const v of [this._ut_art, this._ut_cap, this._ut_ven]) {
+      if (!v) continue;
+      v.r_factor_scaling_ps = 1.0;
+      v.u_vol_factor_scaling_ps = 1.0;
+    }
+    if (this._ut_out_res) this._ut_out_res.r_factor_scaling_ps = 1.0;
+  }
+
+  _zero_outputs() {
+    this.ut_blood_flow = 0.0;
+    this.ut_do2 = 0.0;
+    this.ut_vo2_ml = 0.0;
+    this.ut_o2er = 0.0;
+    this.ut_avo2 = 0.0;
+    this.iup = 0.0;
+    this.contraction_active = false;
+    this.montevideo_units = 0.0;
   }
 }
 
@@ -12282,6 +13067,8 @@ export class Monitor extends BaseModelClass {
     this.flow_avg_beats = 1;
     this.rr_avg_time = 20;
     this.sat_avg_time = 5;
+    this.etco2_source = "DS"; // airway (dead-space) gas compartment whose end-expiratory pCO2 is the
+                              // spontaneous end-tidal CO2; mirrored from the ventilator instead when ventilated
 
     // local properties
     this._heart = null; // reference to the heart model, for tracking the cardiac cycle
@@ -12290,6 +13077,8 @@ export class Monitor extends BaseModelClass {
     this._ra_ivci = null; // reference to the right atrium / IVC (venous O2 saturation)
     this._breathing = null; // reference to the spontaneous breathing model (breath events)
     this._ventilator = null; // reference to the mechanical ventilator model (breath events)
+    this._ds = null; // reference to the airway gas compartment for spontaneous end-tidal CO2
+    this._etco2_peak = 0.0; // running peak airway pCO2 over the current breath (latched as etco2 at breath onset)
     this._rr_intervals = []; // rolling window of breath-to-breath intervals spanning ~rr_avg_time s
     this._rr_window_sum = 0.0; // running sum of _rr_intervals (s)
     this._resp_interval_counter = 0.0; // time since the previous breath; reset on each breath
@@ -12330,6 +13119,7 @@ export class Monitor extends BaseModelClass {
         name: t.name,
         _model: this._model_engine.models[String(t.model ?? "").split(".")[0]] ?? null,
         pres_min: 1000.0, pres_max: -1000.0, vol_min: 1000.0, vol_max: -1000.0,
+        pres_sum: 0.0, pres_n: 0, // running accumulators for a true time-averaged mean over the beat
       }))
       .filter((t) => t.name && t._model);
     // flat keys (name_field) so the watch paths stay 3 levels deep — Monitor.minmax.<name>_<field>
@@ -12369,6 +13159,9 @@ export class Monitor extends BaseModelClass {
     this._breathing = this._model_engine.models["Breathing"] ?? null;
     this._ventilator = this._model_engine.models["Ventilator"] ?? null;
 
+    // airway gas compartment for the spontaneous end-tidal CO2 read-out (may be absent)
+    this._ds = this._model_engine.models[this.etco2_source] ?? null;
+
     // flag that the model is initialized
     this._is_initialized = true;
   }
@@ -12386,8 +13179,9 @@ export class Monitor extends BaseModelClass {
     // average respiratory rate
     this.calc_resp_rate();
 
-    // mirror the end-tidal CO2 from the ventilator (last value kept if no ventilator is present)
-    this.etco2 = this._ventilator ? this._ventilator.etco2 : this.etco2;
+    // end-tidal CO2: mirror the ventilator while it is actively ventilating, otherwise derive it
+    // from the spontaneous breath (peak end-expiratory airway pCO2, latched in calc_resp_rate)
+    if (this._ventilator && this._ventilator.is_enabled) this.etco2 = this._ventilator.etco2;
 
     // mirror the blood temperature from the ascending aorta (last value kept if AA is absent)
     this.temp = this._aa ? this._aa.temp : this.temp;
@@ -12420,10 +13214,14 @@ export class Monitor extends BaseModelClass {
       this._minmax_targets.forEach((t) => {
         this.minmax[t.name + "_pres_min"] = t.pres_min;
         this.minmax[t.name + "_pres_max"] = t.pres_max;
-        this.minmax[t.name + "_pres_mean"] = (2 * t.pres_min + t.pres_max) / 3.0;
+        // true time-averaged mean over the beat. The arterial estimate (2·min+max)/3 is only
+        // valid for arterial waveforms; it badly underestimates atrial/venous means (CVP), whose
+        // a/c/v waves dip well below the diastolic value. A real integral mean is correct for all.
+        this.minmax[t.name + "_pres_mean"] = t.pres_n > 0 ? t.pres_sum / t.pres_n : 0.0;
         this.minmax[t.name + "_vol_min"] = t.vol_min * 1000.0;
         this.minmax[t.name + "_vol_max"] = t.vol_max * 1000.0;
         t.pres_min = 1000.0; t.pres_max = -1000.0;
+        t.pres_sum = 0.0; t.pres_n = 0;
         t.vol_min = 1000.0; t.vol_max = -1000.0;
       });
     }
@@ -12472,6 +13270,18 @@ export class Monitor extends BaseModelClass {
         // average respiratory rate = breaths in window / window time × 60
         this.resp_rate = this._rr_window_sum > 0 ? (this._rr_intervals.length / this._rr_window_sum) * 60.0 : 0.0;
       }
+      // spontaneous end-tidal CO2: at the onset of a spontaneous breath, the airway gas just
+      // expired holds the end-expiratory peak pCO2 — latch it and reset the per-breath peak.
+      // (Skipped while the ventilator is actively ventilating; that path mirrors the ventilator.)
+      if (spont && this._ds && !(this._ventilator && this._ventilator.is_enabled)) {
+        this.etco2 = this._etco2_peak;
+        this._etco2_peak = 0.0;
+      }
+    }
+
+    // accumulate the per-breath peak airway pCO2 for the spontaneous end-tidal read-out
+    if (this._ds && typeof this._ds.pco2 === "number" && this._ds.pco2 > this._etco2_peak) {
+      this._etco2_peak = this._ds.pco2;
     }
 
     this._resp_interval_counter += this._t;
@@ -12490,7 +13300,7 @@ export class Monitor extends BaseModelClass {
     this._minmax_targets.forEach((t) => {
       const p = t._model.pres;
       const v = t._model.vol;
-      if (typeof p === "number") { t.pres_max = Math.max(t.pres_max, p); t.pres_min = Math.min(t.pres_min, p); }
+      if (typeof p === "number") { t.pres_max = Math.max(t.pres_max, p); t.pres_min = Math.min(t.pres_min, p); t.pres_sum += p; t.pres_n += 1; }
       if (typeof v === "number") { t.vol_max = Math.max(t.vol_max, v); t.vol_min = Math.min(t.vol_min, v); }
     });
   }
@@ -12783,7 +13593,7 @@ export class Ventilator extends BaseModelClass {
     this._pip_max = this.pip_cmh2o_max / 1.35951;
     this._peep = this.peep_cmh2o / 1.35951;
 
-    if (this.synchronized) {
+    if (this.synchronized && this.vent_mode !== "CPAP") {
       this.triggering();
     }
 
@@ -12798,11 +13608,19 @@ export class Ventilator extends BaseModelClass {
       this.pressure_control();
     }
 
+    if (this.vent_mode === "CPAP") {
+      this.cpap_control();
+    }
+
     this.pres = (this._vent_gascircuit.pres - this.pres_atm) * 1.35951;
     this.flow = this._vent_ettube.flow * 60.0;
     this.vol += this._vent_ettube.flow * 1000 * this._t;
     this.co2 = this._model_engine.models["DS"]?.pco2 ?? this.co2;
-    this.minute_volume = this.exp_tidal_volume * this.vent_rate;
+    // CPAP reports a spontaneous minute volume from cpap_control (patient's own rate), so don't
+    // overwrite it here with the mechanical vent_rate
+    if (this.vent_mode !== "CPAP") {
+      this.minute_volume = this.exp_tidal_volume * this.vent_rate;
+    }
     // compliance is measured per breath at end-expiration in time_cycling (mL/cmH2O); it is not
     // recomputed here — the previous every-step formula used inconsistent units (L/mmHg) and
     // overwrote that per-breath value
@@ -12953,6 +13771,45 @@ export class Ventilator extends BaseModelClass {
         this._exp_tidal_volume_counter += this._vent_ettube.flow * this._t;
       }
     }
+  }
+
+  cpap_control() {
+    // Continuous positive airway pressure: hold the circuit at the CPAP level (= peep_cmh2o)
+    // and let the patient breathe spontaneously through the ET tube. Both valves stay open.
+    // NOTE: CPAP only ventilates a spontaneously breathing patient (Breathing.breathing_enabled);
+    // with breathing off it holds pressure but delivers no tidal volume (as in reality).
+
+    // inspiratory valve: feed fresh gas toward the CPAP target, shut off once at/above it
+    this._vent_insp_valve.no_flow = false;
+    this._vent_insp_valve.no_back_flow = true;
+    this._vent_insp_valve.r_for =
+      (this._vent_gasin.pres - this.pres_atm - this._peep) / (this.insp_flow / 60.0);
+    if (this._vent_gascircuit.pres > this._peep + this.pres_atm) {
+      this._vent_insp_valve.no_flow = true;
+    }
+
+    // expiratory valve: open, reservoir pinned at CPAP so the circuit floats at CPAP
+    this._vent_exp_valve.no_flow = false;
+    this._vent_exp_valve.no_back_flow = true;
+    this._vent_exp_valve.r_for = 10;
+    this._vent_gasout.vol =
+      this._peep / this._vent_gasout.el_base + this._vent_gasout.u_vol;
+
+    // spontaneous-breath monitoring: close out a breath at each spontaneous inspiration start
+    // (Breathing.ncc_insp === 1 marks the first step of a new spontaneous inspiration)
+    if (this._breathing_model?.ncc_insp === 1) {
+      this.exp_tidal_volume = -this._exp_tidal_volume_counter;
+      this.insp_tidal_volume = this._insp_tidal_volume_counter;
+      this._exp_tidal_volume_counter = 0.0;
+      this._insp_tidal_volume_counter = 0.0;
+      this.vol = 0.0;
+    }
+    if (this._vent_ettube.flow > 0) {
+      this._insp_tidal_volume_counter += this._vent_ettube.flow * this._t;
+    } else {
+      this._exp_tidal_volume_counter += this._vent_ettube.flow * this._t;
+    }
+    this.minute_volume = this.exp_tidal_volume * (this._breathing_model?.resp_rate ?? 0);
   }
 
   pressure_regulated_volume_control() {
@@ -13111,6 +13968,12 @@ export class Ventilator extends BaseModelClass {
     this.vent_mode = "PS";
   }
 
+  set_cpap(cpap = 5.0, insp_flow = 8.0) {
+    this.peep_cmh2o = cpap;
+    this.insp_flow = insp_flow;
+    this.vent_mode = "CPAP";
+  }
+
   trigger_breath(
     pip = 14.0,
     peep = 4.0,
@@ -13213,15 +14076,25 @@ export default class AnimationPacker {
   /**
    * Pick the model whose `to2` should colour this component. Compartments tint
    * from the first of their own models carrying a `to2`; connectors tint from
-   * the upstream (dbcFrom) compartment the blood flows out of.
+   * the upstream blood they draw from.
    */
   _resolveTintRef(comp, magRefs) {
-    // Connector: source colour from the upstream compartment.
+    // Connector: a connector's model is a resistor whose `comp_from` names the
+    // true upstream blood compartment model (e.g. LL_VEN_PV draws from LL_VEN).
+    // Prefer that — the diagram's `dbcFrom` is a diagram component name (e.g.
+    // "LL"), which for grouped multi-model compartments is not itself an engine
+    // model and so can't be resolved to a `to2` directly.
+    for (const ref of magRefs) {
+      const up = ref?.comp_from && this._model.models[ref.comp_from];
+      if (up && "to2" in up) return up;
+    }
+    // Fallback: a connector endpoint that maps straight to a model (single-model
+    // compartments whose diagram name equals the model name).
     const up = comp.dbcFrom || comp.dbcTo;
     if (up && this._model.models[up] && "to2" in this._model.models[up]) {
       return this._model.models[up];
     }
-    // Compartment (or connector fallback): first own model exposing to2.
+    // Compartment (or last-resort connector fallback): first own model with to2.
     for (const ref of magRefs) {
       if (ref && "to2" in ref) return ref;
     }
@@ -15547,6 +16420,24 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "rounding": 2,
           "ul": 5,
           "ll": 0
+        }
+      ]
+    },
+    {
+      "caption": "set P50 (Hb-O2 affinity)",
+      "edit_mode": "advanced",
+      "target": "set_P50",
+      "type": "function",
+      "args": [
+        {
+          "caption": "P50 mmHg (fetal HbF 18.8, neonatal 20.0, adult 26.7)",
+          "target": "new_p50",
+          "type": "number",
+          "factor": 1,
+          "delta": 0.1,
+          "rounding": 1,
+          "ul": 30,
+          "ll": 15
         }
       ]
     },
@@ -18297,6 +19188,562 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     }
   ],
+  "Uterus": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "uterus running",
+      "target": "uterus_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "metabolism active",
+      "target": "met_active",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "uterine VO2 (mL O2/kg/min)",
+      "target": "ut_vo2",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0,
+      "ul": 5,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "perfusion factor",
+      "target": "perfusion_factor",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 10,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "pregnant",
+      "target": "pregnant",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "pregnancy GA (weeks)",
+      "target": "preg_ga",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 42,
+      "slider": true,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "couple placenta to uterine blood",
+      "target": "couple_placenta",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "contractions running (labor)",
+      "target": "contractions_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "contraction period (s)",
+      "target": "contraction_period",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 30,
+      "ul": 600,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "contraction duration (s)",
+      "target": "contraction_duration",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 20,
+      "ul": 180,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "contraction amplitude (mmHg)",
+      "target": "contraction_amplitude",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 120,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "resting tone (mmHg)",
+      "target": "resting_tone",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 30,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "contraction pressure gain (0-1)",
+      "target": "contraction_pres_gain",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "contraction resistance peak (x)",
+      "target": "contraction_r_peak",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "ll": 1,
+      "ul": 20,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "respiratory quotient",
+      "target": "resp_q",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1.5,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "pregnancy GA threshold (weeks)",
+      "target": "preg_ga_threshold",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 20,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "pregnancy GA term anchor (weeks)",
+      "target": "preg_ga_term",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 30,
+      "ul": 42,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term bed-resistance factor (conduits)",
+      "target": "preg_res_term_factor",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0.05,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term capillary-resistance factor (myometrium)",
+      "target": "preg_cap_res_term_factor",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0.05,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term bed-volume factor",
+      "target": "preg_vol_term_factor",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 1,
+      "ul": 6,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "term VO2 factor",
+      "target": "preg_vo2_term_factor",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 1,
+      "ul": 15,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "edit_mode": "factors",
+      "caption": "uterine VO2 factor",
+      "target": "vo2_factor_ps",
+      "type": "factor",
+      "build_prop": false
+    },
+    {
+      "caption": "uterine artery model",
+      "target": "ut_art_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "uterine capillary model",
+      "target": "ut_cap_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "uterine vein model",
+      "target": "ut_ven_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "inflow resistor model",
+      "target": "ut_in_res_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "drainage resistor model",
+      "target": "ut_out_res_name",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "uterine blood flow (mL/min)",
+      "target": "ut_blood_flow",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 delivery DO2 (mL O2/min)",
+      "target": "ut_do2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 uptake VO2 (mL O2/min)",
+      "target": "ut_vo2_ml",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 extraction ratio (%)",
+      "target": "ut_o2er",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "a-v O2 difference (mmol/L)",
+      "target": "ut_avo2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "intrauterine pressure (mmHg)",
+      "target": "iup",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "contraction active",
+      "target": "contraction_active",
+      "type": "boolean",
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "Montevideo units",
+      "target": "montevideo_units",
+      "type": "number",
+      "factor": 1,
+      "rounding": 0,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
+  "MaternalPlacenta": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "placenta running",
+      "target": "mp_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "metabolism active",
+      "target": "met_active",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "placental VO2 (mL O2/kg/min)",
+      "target": "mp_vo2",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0,
+      "ul": 5,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "term spiral-artery resistance factor",
+      "target": "spiral_res_term_factor",
+      "type": "number",
+      "delta": 0.002,
+      "factor": 1,
+      "rounding": 3,
+      "ll": 0.001,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "contraction pressure gain (0-1)",
+      "target": "contraction_pres_gain",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "GA threshold (weeks)",
+      "target": "preg_ga_threshold",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 20,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "GA term anchor (weeks)",
+      "target": "preg_ga_term",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 30,
+      "ul": 42,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "edit_mode": "factors",
+      "caption": "placental VO2 factor",
+      "target": "vo2_factor_ps",
+      "type": "factor",
+      "build_prop": false
+    },
+    {
+      "caption": "placental blood flow (mL/min)",
+      "target": "mp_blood_flow",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "share of uterine flow (%)",
+      "target": "mp_flow_fraction",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 delivery DO2 (mL O2/min)",
+      "target": "mp_do2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 uptake VO2 (mL O2/min)",
+      "target": "mp_vo2_ml",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "O2 extraction ratio (%)",
+      "target": "mp_o2er",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "placenta perfused (active)",
+      "target": "mp_active",
+      "type": "boolean",
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
   "Hormones": [
     {
       "target": "description",
@@ -19219,38 +20666,14 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     },
     {
-      "caption": "baseline elastance (open duct, mmHg/L)",
-      "target": "el_base",
-      "type": "number",
-      "delta": 0.1,
-      "factor": 1,
-      "rounding": 1,
-      "build_prop": true,
-      "edit_mode": "extra",
-      "readonly": false
-    },
-    {
-      "caption": "elastance-resistance coupling alpha",
-      "target": "alpha",
+      "caption": "orifice discharge coefficient",
+      "target": "discharge_coeff",
       "type": "number",
       "delta": 0.05,
       "factor": 1,
       "rounding": 2,
-      "ul": 1.5,
-      "ll": 0,
-      "build_prop": true,
-      "edit_mode": "extra",
-      "readonly": false
-    },
-    {
-      "caption": "jet velocity exponent",
-      "target": "jet_exponent",
-      "type": "number",
-      "delta": 0.1,
-      "factor": 1,
-      "rounding": 2,
-      "ul": 3,
-      "ll": 0,
+      "ul": 1,
+      "ll": 0.3,
       "build_prop": true,
       "edit_mode": "extra",
       "readonly": false
@@ -19288,6 +20711,14 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "edit_mode": "caption",
       "readonly": false,
       "caption": "umbilical vessels clamped"
+    },
+    {
+      "target": "skip_mat_gas_write",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false,
+      "caption": "maternal pool driven externally (uterine coupling)"
     },
     {
       "caption": "umb artery resistance factor",
@@ -20143,7 +21574,8 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "choices": [
         "PC",
         "PRVC",
-        "PS"
+        "PS",
+        "CPAP"
       ]
     },
     {
@@ -20910,7 +22342,7 @@ Rules of thumb:
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
-Snapshot: **38 model_types**, **345 settable params**, **24 functions**
+Snapshot: **40 model_types**, **376 settable params**, **25 functions**
 (+ 26 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
@@ -20923,7 +22355,7 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `call` `Ventilator.set_fio2` — set inspired O2 fraction (0.21–1.0)
 - `call` `Ventilator.set_ettube_diameter` — set endotracheal tube diameter (mm)
 - `call` `Ventilator.set_ettube_length` — set endotracheal tube length (mm)
-- `setProp` `Ventilator.vent_mode` — ventilation mode (PC/PRVC/PS)
+- `setProp` `Ventilator.vent_mode` — ventilation mode (PC/PRVC/PS/CPAP)
 - `setProp` `Ventilator.vent_rate` — ventilator rate (/min)
 - `setProp` `Ventilator.insp_time` — inspiration time (s)
 - `setProp` `Ventilator.tidal_volume` — target tidal volume (mL)
@@ -20983,6 +22415,7 @@ _call_:
 - `set_temperature(temp (number, range 25–45); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set temperature (C)
 - `set_viscosity(viscosity (number, range 0.1–12))` — set viscosity (cP)
 - `set_haldane_coeff(new_coeff (number, 0 = off, range 0–5))` — set Haldane coefficient
+- `set_P50(new_p50 (number, fetal HbF 18.8, neonatal 20.0, adult 26.7, range 15–30))` — set P50 (Hb-O2 affinity)
 - `set_to2(to2 (number, range 0–20); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set total oxygen concentration (mmol/l)
 - `set_tco2(tco2 (number, range 0–20); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set total carbon dioxide concentration (mmol/l)
 - `set_solute(solute_name (list, one of na/k/ca/cl/lact/mg/albumin/phosphates/uma/hemoglobin); solute_value (number, range 0–1000); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set solute concentration
@@ -21328,6 +22761,19 @@ _setProp_:
 - `afferent_factor_max` — afferent factor max (number, range 1–20) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
 
+### MaternalPlacenta
+
+_setProp_:
+- `mp_running` — placenta running (boolean)
+- `met_active` — metabolism active (boolean)
+- `mp_vo2` — placental VO2 (mL O2/kg/min) (number, mL O2/kg/min, range 0–5)
+- `vo2_factor_ps` — placental VO2 factor (factor) _(factors)_
+- `spiral_res_term_factor` — term spiral-artery resistance factor (number, range 0.001–1) _(advanced)_
+- `contraction_pres_gain` — contraction pressure gain (0-1) (number, 0-1, range 0–1) _(advanced)_
+- `preg_ga_threshold` — GA threshold (weeks) (number, weeks, range 0–20) _(advanced)_
+- `preg_ga_term` — GA term anchor (weeks) (number, weeks, range 30–42) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
 ### Metabolism
 
 _setProp_:
@@ -21373,9 +22819,7 @@ _setProp_:
 - `diameter_ao_max` — max diameter aortic ampulla (mm) (number, mm) _(extra)_
 - `diameter_pa_max` — max diameter pulmonary end (mm) (number, mm) _(extra)_
 - `length` — ductus arteriosus length (mm) (number, mm) _(extra)_
-- `el_base` — baseline elastance (open duct, mmHg/L) (number, open duct, mmHg/L) _(extra)_
-- `alpha` — elastance-resistance coupling alpha (number, range 0–1.5) _(extra)_
-- `jet_exponent` — jet velocity exponent (number, range 0–3) _(extra)_
+- `discharge_coeff` — orifice discharge coefficient (number, range 0.3–1) _(extra)_
 - `is_enabled` — enabled (boolean) _(all)_
 
 ### Placenta
@@ -21388,6 +22832,7 @@ _setProp_:
 - `dif_co2` — co2 dioxide diffusion constant (number, range 0–0.1)
 - `mat_to2` — mat plac o2 content (mmol/L) (number, mmol/L, range 0–10)
 - `mat_tco2` — mat plac co2 content (mmol/L) (number, mmol/L, range 20–30)
+- `skip_mat_gas_write` — maternal pool driven externally (uterine coupling) (boolean, uterine coupling) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
 - `placenta_running` — placenta model running (boolean) _(caption)_
 - `umb_clamped` — umbilical vessels clamped (boolean) _(caption)_
@@ -21463,10 +22908,37 @@ _setProp_:
 - `el_max_factor_ps` — elastance maximum baseline factor (factor)
 - `el_k_factor_ps` — elastance non linear factor (factor)
 
+### Uterus
+
+_setProp_:
+- `uterus_running` — uterus running (boolean)
+- `met_active` — metabolism active (boolean)
+- `ut_vo2` — uterine VO2 (mL O2/kg/min) (number, mL O2/kg/min, range 0–5)
+- `perfusion_factor` — perfusion factor (number, range 0–10)
+- `pregnant` — pregnant (boolean)
+- `preg_ga` — pregnancy GA (weeks) (number, weeks, range 0–42)
+- `contractions_running` — contractions running (labor) (boolean, labor)
+- `couple_placenta` — couple placenta to uterine blood (boolean) _(extra)_
+- `contraction_period` — contraction period (s) (number, s, range 30–600) _(extra)_
+- `contraction_duration` — contraction duration (s) (number, s, range 20–180) _(extra)_
+- `contraction_amplitude` — contraction amplitude (mmHg) (number, mmHg, range 0–120) _(extra)_
+- `vo2_factor_ps` — uterine VO2 factor (factor) _(factors)_
+- `resting_tone` — resting tone (mmHg) (number, mmHg, range 0–30) _(advanced)_
+- `contraction_pres_gain` — contraction pressure gain (0-1) (number, 0-1, range 0–1) _(advanced)_
+- `contraction_r_peak` — contraction resistance peak (x) (number, x, range 1–20) _(advanced)_
+- `resp_q` — respiratory quotient (number, range 0–1.5) _(advanced)_
+- `preg_ga_threshold` — pregnancy GA threshold (weeks) (number, weeks, range 0–20) _(advanced)_
+- `preg_ga_term` — pregnancy GA term anchor (weeks) (number, weeks, range 30–42) _(advanced)_
+- `preg_res_term_factor` — term bed-resistance factor (conduits) (number, conduits, range 0.05–1) _(advanced)_
+- `preg_cap_res_term_factor` — term capillary-resistance factor (myometrium) (number, myometrium, range 0.05–1) _(advanced)_
+- `preg_vol_term_factor` — term bed-volume factor (number, range 1–6) _(advanced)_
+- `preg_vo2_term_factor` — term VO2 factor (number, range 1–15) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
 ### Ventilator
 
 _setProp_:
-- `vent_mode` — ventilator mode (list, one of PC/PRVC/PS)
+- `vent_mode` — ventilator mode (list, one of PC/PRVC/PS/CPAP)
 - `vent_rate` — ventilator rate (/min) (number, /min, range 0–100)
 - `insp_time` — inspiration time (s) (number, s, range 0.1–5)
 - `insp_flow` — inspiratory flow (l/min) (number, l/min, range 0–20)
@@ -21560,532 +23032,38 @@ Available scenarios are listed in `public/model_definitions/index.json`.
 ```json
 [
   "adult_female",
-  "term_neonate"
+  "adult_female_uterus",
+  "term_neonate",
+  "term_fetus",
+  "preterm_24wk",
+  "preterm_26wk",
+  "preterm_28wk",
+  "preterm_30wk",
+  "preterm_32wk",
+  "preterm_34wk",
+  "preterm_36wk",
+  "cdh_severe",
+  "cdh_moderate",
+  "cdh_lv_dysfunction",
+  "dtga",
+  "hlhs",
+  "hlhs_restrictive",
+  "critical_ps",
+  "pa_ivs",
+  "pa_vsd",
+  "tricuspid_atresia",
+  "critical_as",
+  "iaa",
+  "tapvc_obstructed",
+  "tapvc",
+  "coarctation",
+  "pda_bidirectional",
+  "pda_bidirectional_unrestrictive",
+  "pda_unrestrictive_ltr",
+  "pda_restrictive_ltr",
+  "pda_restrictive_rtl",
+  "pda_unrestrictive_rtl",
+  "bischoff_cohort"
 ]
-```
 
-### EXCERPT: model_definition (trimmed)
-
-```json
-{
-  "//": "model_definition excerpt from explain/model_definitions/term_neonate_clean.json. Top-level wrapper keys present in the full file: explain_version, user, name, description, protected, shared, shared_category, animation_definition, diagram_definition, model_definition, configuration. The engine consumes only model_definition (Model.load unwraps it). This excerpt shows 3 of 18 entries in models{}.",
-  "scaler_config": {
-    "blood": {
-      "volume": [
-        "PA",
-        "PAAL",
-        "PAAR",
-        "LL_ART",
-        "RL_ART",
-        "LL_CAP",
-        "RL_CAP",
-        "LL_VEN",
-        "RL_VEN",
-        "PV",
-        "AA",
-        "AAR",
-        "AD",
-        "INT_ART",
-        "KID_ART",
-        "LS_ART",
-        "BR_ART",
-        "INT_CAP",
-        "KID_CAP",
-        "LS_CAP",
-        "BR_CAP",
-        "INT_VEN",
-        "KID_VEN",
-        "LS_VEN",
-        "BR_VEN",
-        "IVCI",
-        "SVC",
-        "VLB",
-        "VUB",
-        "RLB",
-        "RUB",
-        "DA",
-        "COR"
-      ],
-      "el_base": [
-        "PA",
-        "PAAL",
-        "PAAR",
-        "LL_ART",
-        "RL_ART",
-        "LL_CAP",
-        "RL_CAP",
-        "LL_VEN",
-        "RL_VEN",
-        "PV",
-        "AA",
-        "AAR",
-        "AD",
-        "INT_ART",
-        "KID_ART",
-        "LS_ART",
-        "BR_ART",
-        "INT_CAP",
-        "KID_CAP",
-        "LS_CAP",
-        "BR_CAP",
-        "INT_VEN",
-        "KID_VEN",
-        "LS_VEN",
-        "BR_VEN",
-        "IVCI",
-        "SVC",
-        "VLB",
-        "VUB",
-        "RLB",
-        "RUB",
-        "DA",
-        "COR"
-      ],
-      "resistance": [
-        "PA",
-        "PAAL",
-        "PAAR",
-        "LL_ART",
-        "RL_ART",
-        "LL_CAP",
-        "RL_CAP",
-        "LL_VEN",
-        "RL_VEN",
-        "PV",
-        "AA",
-        "AAR",
-        "AD",
-        "INT_ART",
-        "KID_ART",
-        "LS_ART",
-        "BR_ART",
-        "INT_CAP",
-        "KID_CAP",
-        "LS_CAP",
-        "BR_CAP",
-        "INT_VEN",
-        "KID_VEN",
-        "LS_VEN",
-        "BR_VEN",
-        "IVCI",
-        "SVC",
-        "VLB",
-        "VUB",
-        "RLB",
-        "RUB",
-        "DA",
-        "IVCI_RAIVC",
-        "SVC_RASVC",
-        "PV_LA",
-        "PV_RAIVC",
-        "PV_RASVC"
-      ]
-    },
-    "blood_pulmonary": {
-      "el_base": [
-        "PA",
-        "PAAL",
-        "PAAR",
-        "LL_ART",
-        "RL_ART",
-        "LL_CAP",
-        "RL_CAP",
-        "LL_VEN",
-        "RL_VEN",
-        "PV"
-      ],
-      "resistance": [
-        "PA",
-        "PAAL",
-        "PAAR",
-        "LL_ART",
-        "RL_ART",
-        "LL_CAP",
-        "RL_CAP",
-        "LL_VEN",
-        "RL_VEN",
-        "PV",
-        "PV_LA",
-        "PV_RAIVC",
-        "PV_RASVC"
-      ]
-    },
-    "blood_systemic": {
-      "el_base": [
-        "AA",
-        "AAR",
-        "AD",
-        "INT_ART",
-        "KID_ART",
-        "LS_ART",
-        "BR_ART",
-        "INT_CAP",
-        "KID_CAP",
-        "LS_CAP",
-        "BR_CAP",
-        "INT_VEN",
-        "KID_VEN",
-        "LS_VEN",
-        "BR_VEN",
-        "IVCI",
-        "SVC",
-        "VLB",
-        "VUB",
-        "RLB",
-        "RUB",
-        "DA",
-        "COR"
-      ],
-      "resistance": [
-        "AA",
-        "AAR",
-        "AD",
-        "INT_ART",
-        "KID_ART",
-        "LS_ART",
-        "BR_ART",
-        "INT_CAP",
-        "KID_CAP",
-        "LS_CAP",
-        "BR_CAP",
-        "INT_VEN",
-        "KID_VEN",
-        "LS_VEN",
-        "BR_VEN",
-        "IVCI",
-        "SVC",
-        "VLB",
-        "VUB",
-        "RLB",
-        "RUB",
-        "DA",
-        "IVCI_RAIVC",
-        "SVC_RASVC"
-      ]
-    },
-    "heart": {
-      "volume": [
-        "LA",
-        "LV",
-        "RAIVCI",
-        "RASVC",
-        "RV",
-        "COR"
-      ],
-      "el_min": [
-        "LA",
-        "LV",
-        "RAIVCI",
-        "RASVC",
-        "RV",
-        "COR"
-      ],
-      "el_max": [
-        "LA",
-        "LV",
-        "RAIVCI",
-        "RASVC",
-        "RV",
-        "COR"
-      ],
-      "resistance": [
-        "LA_LV",
-        "LV_AA",
-        "RV_PA",
-        "RAIVCI_RV",
-        "RASVC_RV",
-        "LV_PA",
-        "RV_AA",
-        "COR_RA"
-      ]
-    },
-    "heart_left": {
-      "el_min": [
-        "LA",
-        "LV"
-      ],
-      "el_max": [
-        "LA",
-        "LV"
-      ]
-    },
-    "heart_right": {
-      "el_min": [
-        "RAIVCI",
-        "RASVC",
-        "RV"
-      ],
-      "el_max": [
-        "RAIVCI",
-        "RASVC",
-        "RV"
-      ]
-    },
-    "lung": {
-      "volume": [
-        "ALL",
-        "ALR",
-        "DS"
-      ],
-      "el_base": [
-        "ALL",
-        "ALR",
-        "DS"
-      ],
-      "resistance": [
-        "MOUTH_DS",
-        "DS_ALL",
-        "DS_ALR"
-      ]
-    },
-    "thorax": [
-      "THORAX"
-    ],
-    "pericardium": [
-      "PERICARDIUM"
-    ]
-  },
-  "weight": 3.545,
-  "height": 0.519,
-  "gestational_age": 40,
-  "age": 0,
-  "modeling_stepsize": 0.0005,
-  "model_time_total": 0,
-  "models": {
-    "//": "18 models total in this scenario; full list of names: Heart, Breathing, Metabolism, Ans, Mob, HeartFunction, Ventilator, Fluids, Circulation, Placenta, Ecls, Respiration, Pda, Shunts, Blood, Gas, Resuscitation, Monitor",
-    "Heart": {
-      "name": "Heart",
-      "description": "heart contraction model",
-      "is_enabled": true,
-      "model_type": "Heart",
-      "components": {
-        "LA": {
-          "name": "LA",
-          "description": "timevarying elastance model of the left atrium",
-          "is_enabled": true,
-          "model_type": "HeartChamber",
-          "vol": 0.004792942755716486,
-          "u_vol": 0,
-          "el_min": 1173,
-          "el_max": 3053,
-          "el_k": 0,
-          "ans_sens": 1
-        },
-        "RAIVCI": {
-          "name": "RAIVCI",
-          "description": "timevarying elastance model of the right atrium",
-          "is_enabled": true,
-          "model_type": "HeartChamber",
-          "vol": 0.00237336192360594,
-          "u_vol": 0,
-          "el_min": 2346,
-          "el_max": 6104,
-          "el_k": 0,
-          "ans_sens": 1
-        },
-        "RASVC": {
-          "name": "RASVC",
-          "description": "timevarying elastance model of the right atrium",
-          "is_enabled": true,
-          "model_type": "HeartChamber",
-          "vol": 0.0022062124318543135,
-          "u_vol": 0,
-          "el_min": 2346,
-          "el_max": 6104,
-          "el_k": 0,
-          "ans_sens": 1
-        },
-        "LV": {
-          "name": "LV",
-          "description": "timevarying elastance model of the left ventricle",
-          "is_enabled": true,
-          "model_type": "HeartChamber",
-          "components": {},
-          "vol": 0.006758873195717388,
-          "u_vol": 0.000733,
-          "el_min": 1137,
-          "el_max": 27200,
-          "el_k": 0,
-          "ans_sens": 1
-        },
-        "RV": {
-          "name": "RV",
-          "description": "timevarying elastance model of the right ventricle",
-          "is_enabled": true,
-          "model_type": "HeartChamber",
-          "components": {},
-          "vol": 0.008308104276082626,
-          "u_vol": 0.004,
-          "el_min": 1079,
-          "el_max": 22200,
-          "el_k": 0,
-          "ans_sens": 1
-        },
-        "LA_LV": {
-          "name": "LA_LV",
-          "description": "mitral valve",
-          "is_enabled": true,
-          "model_type": "HeartValve",
-          "r_for": 55,
-          "r_back": 55,
-          "r_k": 0,
-          "comp_from": "LA",
-          "comp_to": "LV",
-          "no_flow": false,
-          "no_back_flow": true
-        },
-        "RAIVCI_RV": {
-          "name": "RAIVCI_RV",
-          "description": "tricuspid valve",
-          "is_enabled": true,
-          "model_type": "Resistor",
-          "r_for": 55,
-          "r_back": 55,
-          "r_k": 0,
-          "comp_from": "RAIVCI",
-          "comp_to": "RV",
-          "no_flow": false,
-          "no_back_flow": true
-        },
-        "RASVC_RV": {
-          "name": "RASVC_RV",
-          "description": "tricuspid valve",
-          "is_enabled": true,
-          "model_type": "Resistor",
-          "r_for": 55,
-          "r_back": 55,
-          "r_k": 0,
-          "comp_from": "RASVC",
-          "comp_to": "RV",
-          "no_flow": false,
-          "no_back_flow": true
-        },
-        "RV_PA": {
-          "name": "RV_PA",
-          "description": "pulmonary valve",
-          "is_enabled": true,
-          "model_type": "HeartValve",
-          "r_for": 55,
-          "r_back": 55,
-          "r_k": 0,
-          "comp_from": "RV",
-          "comp_to": "PA",
-          "no_flow": false,
-          "no_back_flow": true
-        },
-        "RV_AA": {
-          "name": "RV_AA",
-          "description": "pulmonary valve TGA or TOF",
-          "is_enabled": false,
-          "model_type": "HeartValve",
-          "r_for": 55,
-          "r_back": 55,
-          "r_k": 0,
-          "comp_from": "RV",
-          "comp_to": "AA",
-          "no_flow": true,
-          "no_back_flow": true
-        },
-        "LV_AA": {
-          "name": "LV_AA",
-          "description": "aortic valve",
-          "is_enabled": true,
-          "model_type": "HeartValve",
-          "r_for": 55,
-          "r_back": 55,
-          "r_k": 0,
-          "comp_from": "LV",
-          "comp_to": "AA",
-          "no_flow": false,
-          "no_back_flow": true
-        },
-        "LV_PA": {
-          "name": "LV_PA",
-          "description": "aortic valve TGA",
-          "is_enabled": false,
-          "model_type": "HeartValve",
-          "r_for": 55,
-          "r_back": 55,
-          "r_k": 0,
-          "comp_from": "LV",
-          "comp_to": "PA",
-          "no_flow": true,
-          "no_back_flow": true
-        },
-        "RAIVCI_RASVC": {
-          "name": "RAIVCI_RASVC",
-          "description": "intra-atrial shunt",
-          "is_enabled": true,
-          "model_type": "Resistor",
-          "r_for": 55,
-          "r_back": 55,
-          "r_k": 0,
-          "comp_from": "RAIVCI",
-          "comp_to": "RASVC",
-          "no_flow": true,
-          "no_back_flow": true
-        },
-        "PERICARDIUM": {
-          "name": "PERICARDIUM",
-          "description": "container model of the pericardium",
-          "is_enabled": true,
-          "model_type": "Container",
-          "vol": 0.0250517965311343,
-          "u_vol": 0,
-          "el_base": 10,
-          "el_k": 1,
-          "contained_components": [
-            "RAIVCI",
-            "RASVC",
-            "RV",
-            "LA",
-            "LV",
-            "COR"
-          ]
-        }
-      },
-      "heart_rate_ref": 125,
-      "pq_time": 0.1,
-      "qrs_time": 0.075,
-      "qt_time": 0.25,
-      "av_delay": 0.0005,
-      "ans_sens": 1
-    },
-    "Breathing": {
-      "name": "Breathing",
-      "description": "spontaneous breathing model",
-      "is_enabled": true,
-      "model_type": "Breathing",
-      "breathing_enabled": true,
-      "minute_volume_ref": 0.2,
-      "vt_rr_ratio": 0.00012,
-      "rmp_gain_max": 100,
-      "ie_ratio": 0.3,
-      "thorax": [
-        "THORAX"
-      ]
-    },
-    "Metabolism": {
-      "name": "Metabolism",
-      "description": "Metabolism model",
-      "is_enabled": true,
-      "model_type": "Metabolism",
-      "components": {},
-      "met_active": true,
-      "vo2": 8.1,
-      "vo2_factor": 1,
-      "resp_q": 0.8,
-      "metabolic_active_models": {
-        "RLB": 0.15,
-        "INT_CAP": 0.15,
-        "LS_CAP": 0.1,
-        "KID_CAP": 0.1,
-        "RUB": 0.1,
-        "AA": 0.005,
-        "AD": 0.01,
-        "BR_CAP": 0.453
-      }
-    }
-  }
-}
 ```
