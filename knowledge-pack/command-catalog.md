@@ -25,7 +25,7 @@ Rules of thumb:
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
 Snapshot: **45 model_types**, **410 settable params**, **28 functions**
-(+ 27 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
+(+ 29 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
 ## Guided mode — curated safe set
@@ -59,6 +59,8 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `setProp` `Resuscitation.chest_comp_freq` — chest compression frequency (/min)
 - `start`  — start the realtime simulation loop
 - `stop`  — stop the realtime simulation loop
+- `revert`  — undo all live changes — reload the patient as it was loaded
+- `tune`  — tune the live model to target value(s): map/co/hr/po2/spo2/pco2/be/ph/blood_volume (Full scope)
 - `loadDefinition`  — load+run a bot-built calibrated patient (Full scope; definition rides in response.artifact)
 
 ---

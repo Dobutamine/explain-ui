@@ -8,6 +8,10 @@ import ToggleSwitch from "primevue/toggleswitch";
 import SelectButton from "primevue/selectbutton";
 import type { CommandScope } from "@/services/botCommands";
 import { useChatStore, type ChatAttachment } from "@/stores/chat";
+import { useExplain } from "@/composables/useExplain";
+
+// live-tune status + "undo my changes" (revert to the patient as loaded)
+const { tuning, revert } = useExplain();
 
 // Chat with the "explain-labs_claude" bot (built specifically for this project).
 // State + the /api/chat call live in the chat store; this is just the
@@ -147,6 +151,15 @@ watch(
             <span :class="chat.autoApply ? 'text-amber-400' : ''">Auto-apply</span>
           </label>
           <Button
+            v-tooltip.top="'Revert all live changes — reload the patient as it was loaded'"
+            icon="pi pi-undo"
+            text
+            rounded
+            size="small"
+            aria-label="Revert changes"
+            @click="revert()"
+          />
+          <Button
             v-tooltip.top="'New conversation'"
             icon="pi pi-plus"
             text
@@ -255,6 +268,9 @@ watch(
         </div>
         <div v-if="chat.isLoading" class="self-start text-xs opacity-60 px-2 py-1">
           <i class="pi pi-spin pi-spinner mr-1"></i> thinking…
+        </div>
+        <div v-if="tuning" class="self-start text-xs text-amber-400 px-2 py-1">
+          <i class="pi pi-spin pi-spinner mr-1"></i> tuning the model to target…
         </div>
         <div ref="scrollEnd"></div>
       </div>

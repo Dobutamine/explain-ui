@@ -15,7 +15,8 @@
 
 import { getInterfaceForType } from "@/model-interface/registry";
 import type { InterfaceField } from "@/model-interface/types";
-import { isAllowed, isDiagramAction, type CommandOp, type DiagramAction } from "./botCommandAllowlist";
+import { isAllowed, isDiagramAction, isScaleGroup, SCALE_GROUPS, type CommandOp, type DiagramAction } from "./botCommandAllowlist";
+import { LIVE_TARGETS } from "@explain/helpers/Calibrator";
 import { PICTOS, PATH_TYPES, LAYOUT_PATCH_WHITELIST } from "@/render/diagramConstants";
 // type-only import keeps this module Vue/Pinia-free (the value lives in the store)
 import type { EventChange } from "@/stores/events";
@@ -68,6 +69,9 @@ export type NormalizedCommand =
   | { kind: "setProp"; prop: string; value: number | boolean | string; it: number; at: number }
   | { kind: "event"; name: string; fire_at: number | null; changes: EventChange[] }
   | { kind: "loadDefinition"; name: string; summary: string; definition?: unknown }
+  | { kind: "scale"; group: string; factor: number }
+  | { kind: "tune"; targets: Record<string, number> }
+  | { kind: "revert" }
   | { kind: "start" }
   | { kind: "stop" }
   | DiagramNormalized;
@@ -325,6 +329,58 @@ function validateLoadDefinition(cmd: BotCommand, scope: CommandScope): Validatio
   };
 }
 
+// Validate an `op:"tune"` command: closed-loop drive measured quantities of the
+// running model to exact target values. Full scope only. `changes` is a list of
+// { target, value } where target ∈ LIVE_TARGETS (map/co/hr/po2/spo2/pco2/be/ph/
+// blood_volume) and value is a finite number. Builds the {target:value} map the
+// engine's tune() consumes.
+function validateTuneCommand(cmd: BotCommand, scope: CommandScope): ValidationResult {
+  const label = cmd.reason || "tune";
+  if (scope === "guided")
+    return reject(label, "tune is disabled in Guided scope — switch to Full scope");
+  const changes = Array.isArray(cmd.changes) ? cmd.changes : [];
+  if (!changes.length) return reject(label, "tune requires a non-empty 'changes' array of {target, value}");
+  const targets: Record<string, number> = {};
+  const parts: string[] = [];
+  for (const ch of changes) {
+    const t = (ch.target ?? "").trim();
+    const v = ch.value;
+    if (!t || !(LIVE_TARGETS as readonly string[]).includes(t))
+      return reject(label, `unknown tune target "${t}" — allowed: ${LIVE_TARGETS.join(", ")}`);
+    if (typeof v !== "number" || !Number.isFinite(v))
+      return reject(label, `tune target "${t}" needs a numeric value`);
+    targets[t] = v;
+    parts.push(`${t}→${v}`);
+  }
+  return {
+    ok: true,
+    normalized: { kind: "tune", targets },
+    description: cmd.reason || `tune ${parts.join(", ")}`,
+  };
+}
+
+// Validate an `op:"scale"` command: multiply a whole ModelScaler group by a
+// factor (1.0 = baseline). Full scope only — it touches many parameters at once.
+// The group must be in the curated SCALE_GROUPS allowlist and the factor a
+// positive number.
+function validateScaleCommand(cmd: BotCommand, scope: CommandScope): ValidationResult {
+  const group = (cmd.group ?? "").trim();
+  const factor = cmd.factor;
+  const label = cmd.reason || `scale ${group || "?"}`;
+  if (scope === "guided")
+    return reject(label, "scale is disabled in Guided scope — switch to Full scope");
+  if (!group) return reject(label, "scale requires a 'group'");
+  if (!isScaleGroup(group))
+    return reject(label, `unknown scale group "${group}" — allowed: ${SCALE_GROUPS.join(", ")}`);
+  if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0)
+    return reject(label, "scale 'factor' must be a positive number (1.0 = baseline)");
+  return {
+    ok: true,
+    normalized: { kind: "scale", group, factor },
+    description: cmd.reason || `scale ${group} ×${factor}`,
+  };
+}
+
 // Validate a single parsed command against the scope gate + the model-interface
 // schema, converting display units to raw. Pure (no engine access) so it can be
 // unit-tested with a plain modelState object. `scope` selects the gate: "guided"
@@ -347,10 +403,16 @@ export function validateCommand(
     return { ok: true, normalized: { kind: "start" }, description: cmd.reason || "start simulation" };
   if (op === "stop")
     return { ok: true, normalized: { kind: "stop" }, description: cmd.reason || "stop simulation" };
+  if (op === "revert")
+    return { ok: true, normalized: { kind: "revert" }, description: cmd.reason || "revert to the loaded patient" };
   // event: a named bundle of scheduled changes; gated per-change (no early gate)
   if (op === "event") return validateEventCommand(cmd, modelState, scope);
   // loadDefinition: replace the whole model with a bot-built patient (Full scope only)
   if (op === "loadDefinition") return validateLoadDefinition(cmd, scope);
+  // scale: multiply a whole parameter group (blood volume, SVR, contractility…) live
+  if (op === "scale") return validateScaleCommand(cmd, scope);
+  // tune: closed-loop drive measured quantities to exact target values, in place
+  if (op === "tune") return validateTuneCommand(cmd, scope);
   if (op !== "setProp" && op !== "call")
     return reject(label, `unsupported op "${op}"`);
 
@@ -604,6 +666,9 @@ export interface ExplainHandle {
   start: () => void;
   stop: () => void;
   loadFromObject: (obj: any) => void;
+  scale: (group: string, factor: number) => void;
+  tune: (targets: Record<string, number>, opts?: Record<string, unknown>) => void;
+  revert: () => void;
 }
 
 // Thin, renderer-backed handle for diagram edits (keeps this module Pixi-free).
@@ -634,6 +699,15 @@ export function executeCommand(norm: NormalizedCommand, explain: ExplainHandle):
       break;
     case "stop":
       explain.stop();
+      break;
+    case "scale":
+      explain.scale(norm.group, norm.factor);
+      break;
+    case "tune":
+      explain.tune(norm.targets);
+      break;
+    case "revert":
+      explain.revert();
       break;
     case "loadDefinition":
       // inline-definition fallback only; the normal artifact path is handled in

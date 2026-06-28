@@ -15,6 +15,8 @@ const error = ref<string | null>(null);
 const modelState = shallowRef<any>(null);
 const slowValues = shallowRef<any>(null); // latest `rts` slow-stream payload
 const savedState = shallowRef<any>(null); // last saved state snapshot
+const tuning = ref(false); // a live closed-loop tune is running in the worker
+const tuneResult = shallowRef<any>(null); // last tune outcome { converged, residuals, iters }
 
 function ensure() {
   if (_model) return _model;
@@ -45,6 +47,10 @@ function ensure() {
   _model.on("state_saved", () => {
     savedState.value = _model.savedState;
   });
+  _model.on("tuned", (r: any) => {
+    tuning.value = false;
+    tuneResult.value = r;
+  });
   return _model;
 }
 
@@ -59,6 +65,8 @@ export function useExplain() {
     modelState,
     slowValues,
     savedState,
+    tuning,
+    tuneResult,
     load: (name: string) => {
       modelReady.value = false;
       isRunning.value = false; // rebuilding stops the realtime loop
@@ -78,6 +86,22 @@ export function useExplain() {
         def.animation_definition = obj.animation_definition;
       model.build(def);
     },
+    // revert all live changes (tunes / scales / setProps) by rebuilding the patient
+    // exactly as it was loaded — loadedFileData is the originally-loaded object and
+    // is NOT touched by live mutations, so this is a clean "undo my changes".
+    revert: () => {
+      const obj = (model as any).loadedFileData;
+      if (!obj) return;
+      modelReady.value = false;
+      isRunning.value = false;
+      error.value = null;
+      const def = obj.model_definition || obj;
+      if (obj.diagram_definition && def.diagram_definition === undefined)
+        def.diagram_definition = obj.diagram_definition;
+      if (obj.animation_definition && def.animation_definition === undefined)
+        def.animation_definition = obj.animation_definition;
+      model.build(def);
+    },
     start: () => model.start(),
     stop: () => model.stop(),
     calculate: (seconds: number) => model.calculate(seconds),
@@ -90,6 +114,10 @@ export function useExplain() {
     call: (fn: string, args: any[] = [], at = 0) =>
       model.callModelFunction(fn, args, at),
     scale: (group: string, factor = 1.0) => model.scaleModel(group, factor),
+    tune: (targets: Record<string, number>, opts: Record<string, unknown> = {}) => {
+      tuning.value = true;
+      model.tune(targets, opts);
+    },
     refreshState: () => model.getModelState(),
     watchSlow: (paths: string | string[]) => model.watchModelPropsSlow(paths),
     watch: (paths: string | string[]) => model.watchModelProps(paths),

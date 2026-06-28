@@ -40,6 +40,9 @@ One JSON object per block. Fields by `op`:
 | `event` | `name`, `changes` (array) | build a **named, saved event** of timed property changes (see Scheduling) |
 | `start` | — | start the realtime simulation loop |
 | `stop` | — | stop the realtime simulation loop |
+| `scale` | `group`, `factor` | multiply a whole parameter group live (e.g. total blood volume) — see "Changing the running patient" |
+| `tune` | `changes` (array of `{target,value}`) | closed-loop drive a measured quantity to an exact value in place — see "Changing the running patient" |
+| `revert` | — | undo all live changes: reload the patient as it was loaded |
 | `diagram` | `action`, + per-action fields | edit the diagram (see below) |
 
 To **build a brand-new calibrated patient** you instead emit a separate `explain-build`
@@ -185,6 +188,43 @@ reference, PO2/SpO2←alveolar O₂ diffusion, **pCO2←spontaneous ventilatory 
 assumes the patient breathes spontaneously — for a ventilated patient set ventilator
 rate/Vt instead), BE/pH←Stewart unmeasured anions, CO←contractility. Targets it can't
 reach in `max_iters` are reported `INCOMPLETE`; don't claim a value the report didn't hit.
+
+## Changing the running patient by physiological effect
+
+When the user asks to change a **physiological outcome** of the *current* patient
+("lower the cardiac output", "drop the blood volume", "give a fluid bolus", "raise the
+SVR"), you have three tools — pick by whether they want a *nudge* or an *exact number*:
+
+**1. Qualitative nudge — `scale` (one command moves a whole group).** factor 1.0 =
+baseline, `<1` lowers, `>1` raises. Groups (Full scope):
+
+| effect the user wants | command |
+|---|---|
+| lower / raise **total blood volume** (hemorrhage / overload) | `{"op":"scale","group":"blood_volume","factor":0.8}` |
+| raise / lower **SVR** (afterload) | `{"op":"scale","group":"systemic_resistances","factor":1.2}` |
+| raise / lower **PVR** (RV afterload) | `{"op":"scale","group":"pulmonary_resistances","factor":1.3}` |
+| lower **cardiac output** / contractility | `{"op":"scale","group":"heart_el_max","factor":0.8}` |
+| lower **preload** (venous tone) | `{"op":"scale","group":"systemic_u_vol","factor":0.85}` |
+
+Other groups: `left_/right_heart_el_max`, `heart_el_min`, `heart_volume`, `systemic_/pulmonary_elastances`, `pulmonary_u_vol`.
+
+**2. A fluid bolus / hemorrhage as a volume** — `call Fluids.add_volume` (mL, time s,
+fluid type): `{"op":"call","model":"Fluids","target":"add_volume","args":[250,10,"normal_saline"]}`.
+
+**3. Exact number — `tune` (closed-loop; iterates until it hits the value).** Use this
+when the user gives a **number** ("set CO to 0.25 L/min", "blood volume to 0.26 L", "MAP
+to 45"). It drives the live model to the target in place (a few seconds; the sim resumes
+at the new operating point). Targets: `map`, `co` (L/min), `hr`, `po2`, `spo2`, `pco2`,
+`be`, `ph`, `blood_volume` (L).
+
+```explain-command
+{"op":"tune","changes":[{"target":"co","value":0.25}],"reason":"set cardiac output to 0.25 L/min"}
+```
+
+You can also just `setProp` a single factor knob (see below) for a precise parameter
+change. To undo everything: `{"op":"revert"}` (reloads the patient as it was loaded).
+After a `tune`, the next turn's context shows `Last tune (…)` with the result — use it to
+confirm or adjust.
 
 ## Picking the model and target
 

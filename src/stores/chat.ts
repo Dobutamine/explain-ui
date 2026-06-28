@@ -90,7 +90,7 @@ export const useChatStore = defineStore("chat", () => {
   // slow-stream sample exactly like NumericReadoutPanel, and return a plain-text
   // block. Returns "" when nothing is loaded yet.
   function buildContext(): string {
-    const { model, modelState, slowValues, watchSlow } = useExplain();
+    const { model, modelState, slowValues, watchSlow, tuneResult } = useExplain();
     const lines: string[] = [];
 
     const state = modelState.value as any;
@@ -169,6 +169,16 @@ export const useChatStore = defineStore("chat", () => {
       }
     } else {
       lines.push("Diagram editor not open — open the Diagram tab to enable op:\"diagram\" edits.");
+    }
+
+    // Outcome of the most recent live tune (op:"tune"), so the bot knows whether
+    // a target was actually hit and can adjust / report.
+    const tr = tuneResult.value as any;
+    if (tr && Array.isArray(tr.residuals) && tr.residuals.length) {
+      const parts = tr.residuals.map(
+        (r: any) => `${r.key}=${typeof r.value === "number" ? r.value.toFixed(3) : r.value} (target ${r.target}${r.within ? ", met" : ", MISSED"})`,
+      );
+      lines.push(`Last tune (${tr.converged ? "converged" : "incomplete"}): ${parts.join(", ")}`);
     }
 
     // Tell the bot which of its proposed actions the user has actually applied
