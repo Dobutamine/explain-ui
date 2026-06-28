@@ -41,6 +41,7 @@ One JSON object per block. Fields by `op`:
 | `start` | — | start the realtime simulation loop |
 | `stop` | — | stop the realtime simulation loop |
 | `diagram` | `action`, + per-action fields | edit the diagram (see below) |
+| `loadDefinition` | `name`, `summary` | load+run a **brand-new calibrated patient** you built (see "Building a new patient") |
 
 `model` is the **instance name** (see the model map below), `target` is the field or
 function name from the catalog. `reason` is optional but always include it — a short
@@ -106,6 +107,80 @@ Sure — I'll add a kidney compartment and wire it to the aorta.
 {"op":"diagram","action":"connect","from":"AA","to":"Kidney","models":["AA_Kidney"],"path":{"type":"arc"},"reason":"renal artery"}
 ```
 ````
+
+## Building a new patient (`op:"loadDefinition"`)
+
+Beyond tweaking the running patient, you can **build a brand-new, calibrated patient
+from target physiological values** the user gives you (typed, or in an attached PDF /
+CSV) and run it immediately. This replaces the whole model, so it's **Full scope only**
+and always confirm-before-apply.
+
+**You can only do this if you are the Agent-SDK bot with a checkout of the Explain
+repo + Node** (the bot host). The build runs the engine headless; a knowledge-only
+fallback bot cannot do it — in that case, tell the user the feature needs the build bot.
+
+### Workflow
+
+1. **Collect the targets.** From the user's message (and any attached file) extract the
+   physiological targets: weight, gestational age, HR, MAP, CVP, mean PAP, SpO2/PO2,
+   pCO2, pH/BE, Hb, temperature, PDA, and any pathophysiology (e.g. RDS severity).
+   Ask for anything critical that's missing (at least a weight or gestational age).
+
+2. **Pick the closest baseline** scenario to start from (it's much easier to calibrate a
+   nearby baseline than to build from scratch): `term_neonate`, `preterm_24wk`…`preterm_36wk`,
+   `adult_female`, `term_fetus`, a CDH/CHD/PDA variant, etc. (see the scenario list in the
+   knowledge pack / `public/model_definitions/index.json`).
+
+3. **Write a SPEC and run the builder** in your checkout (ideally a throwaway git worktree
+   so baselines stay read-only):
+
+   ```bash
+   echo '{"baseline":"term_neonate","name":"custom_preterm","targets":{"weight":1.2,"gestational_age":28,"map":33,"hr":165,"spo2":90,"pco2":52,"be":-5}}' \
+     | node scripts/build_patient.mjs > patients/custom_preterm.json 2> build.log
+   ```
+
+   `stdout` is the full runnable scenario JSON; `stderr` (`build.log`) is the calibration
+   trace + a final residual report (`CONVERGED` / `INCOMPLETE`, with per-target Δ). **Read
+   the report** — tell the user which targets were met and surface any that weren't.
+
+4. **Emit a tiny `loadDefinition`** naming the patient. **Do NOT paste the scenario JSON
+   into your reply** — it's ~300 KB; the bot host reads the file from disk and attaches it
+   to the response as `artifact`, and the app loads it via that. Your block stays small:
+
+   ```explain-command
+   {"op":"loadDefinition","name":"custom_preterm","summary":"1.2 kg / 28 wk preterm — MAP 33, SpO2 90, pCO2 52, BE −5","reason":"build and run the requested preterm"}
+   ```
+
+### SPEC schema
+
+```jsonc
+{
+  "baseline": "term_neonate",          // required — a scenario name to start from
+  "name": "custom_patient",            // output patient name
+  "targets": {                          // all optional; only listed vitals are calibrated
+    "weight": 1.2, "gestational_age": 28, "height": 0.355, "age": 0, // structural
+    "hb": 9.5, "temp": 36.8, "pda": 0.4,                             // structural
+    "hr": 165, "map": 33, "cvp": 4, "pap_m": 28,                     // iterated (mmHg, bpm)
+    "spo2": 90, "po2": 55, "pco2": 52, "ph": 7.28, "be": -5, "co": 0.3 // iterated
+  },
+  "pathophysiology": { "rds": "mild|moderate|severe", "pvr_scale": 1.7 },
+  "tolerance": { "map": 3, "pco2": 4 },  // optional per-target band overrides
+  "max_iters": 12, "warm_seconds": 45, "final_seconds": 200
+}
+```
+
+Units match the monitor/ABG the app shows: pressures mmHg, SpO2 %, temp °C, pH unitless,
+pCO2/PO2 mmHg, BE mmol/L, weight kg, height m, CO L/min.
+
+### What the builder calibrates (and limits)
+
+The builder runs a closed loop: warm to steady state → measure vitals → nudge one lever
+per off-target vital → repeat. Lever map (one dominant lever each): MAP←systemic
+resistance, mean PAP←pulmonary resistance, CVP←venous unstressed volume, HR←heart-rate
+reference, PO2/SpO2←alveolar O₂ diffusion, **pCO2←spontaneous ventilatory drive** (so it
+assumes the patient breathes spontaneously — for a ventilated patient set ventilator
+rate/Vt instead), BE/pH←Stewart unmeasured anions, CO←contractility. Targets it can't
+reach in `max_iters` are reported `INCOMPLETE`; don't claim a value the report didn't hit.
 
 ## Picking the model and target
 

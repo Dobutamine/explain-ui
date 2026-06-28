@@ -24,8 +24,8 @@ Rules of thumb:
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
-Snapshot: **40 model_types**, **376 settable params**, **25 functions**
-(+ 26 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
+Snapshot: **45 model_types**, **410 settable params**, **28 functions**
+(+ 27 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
 ## Guided mode — curated safe set
@@ -59,6 +59,7 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `setProp` `Resuscitation.chest_comp_freq` — chest compression frequency (/min)
 - `start`  — start the realtime simulation loop
 - `stop`  — stop the realtime simulation loop
+- `loadDefinition`  — load+run a bot-built calibrated patient (Full scope; definition rides in response.artifact)
 
 ---
 
@@ -174,6 +175,18 @@ _setProp_:
 - `alpha` — resistance-elastance coupling (0-1) (number, 0-1) _(advanced)_
 - `ans_sens` — ans sensitivity (0-1) (number, 0-1) _(advanced)_
 
+### Brain
+
+_setProp_:
+- `brain_running` — brain controller running (boolean)
+- `autoregulation_enabled` — autoregulation enabled (boolean)
+- `autoregulation_gain` — autoregulation gain (1=intact, 0=pressure-passive) (number, 1=intact, 0=pressure-passive, range 0–1)
+- `icp_enabled` — ICP coupling enabled (boolean)
+- `is_enabled` — enabled (boolean) _(all)_
+
+_call_:
+- `set_edema(volume_ml (number, mL, range 0–40))` — set intracranial oedema (mL)
+
 ### Breathing
 
 _setProp_:
@@ -223,9 +236,9 @@ _setProp_:
 - `is_enabled` — enabled (boolean) _(all)_
 
 _call_:
-- `administer_bolus(drug (list, one of adrenaline/noradrenaline); dose (number, mcg, range 0–1000))` — administer IV bolus
-- `set_infusion(drug (list, one of adrenaline/noradrenaline); rate (number, mcg/kg/min, range 0–100))` — set infusion
-- `set_drug_param(drug (list, one of adrenaline/noradrenaline); param (list, one of ke0/clearance.global/hr_ec50/hr_emax/hr_hill/cont_ec50/cont_emax/cont_hill/svr_ec50/svr_emax/svr_hill); value (number, range 0–1000))` — set PK/PD parameter
+- `administer_bolus(drug (list, one of adrenaline/noradrenaline/pge1); dose (number, mcg, range 0–1000))` — administer IV bolus
+- `set_infusion(drug (list, one of adrenaline/noradrenaline/pge1); rate (number, mcg/kg/min, range 0–100))` — set infusion
+- `set_drug_param(drug (list, one of adrenaline/noradrenaline/pge1); param (list, one of ke0/clearance.global/hr_ec50/hr_emax/hr_hill/cont_ec50/cont_emax/cont_hill/svr_ec50/svr_emax/svr_hill/pda_ec50/pda_emax/pda_hill); value (number, range 0–1000))` — set PK/PD parameter
 
 ### Ecls
 
@@ -305,6 +318,15 @@ _setProp_:
 - `dif_o2_factor_ps` — oxygen diffusion factor (factor)
 - `dif_co2_factor_ps` — carbon dioxide diffusion factor (factor)
 
+### Glucose
+
+_setProp_:
+- `glucose_running` — glucose controller running (boolean)
+- `glucose_setpoint` — glucose set-point (mmol/L) (number, mmol/L)
+- `hgp_rate` — hepatic glucose production (mmol/kg/min) (number, mmol/kg/min)
+- `glu_use_rate` — glucose utilization (mmol/kg/min) (number, mmol/kg/min) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
 ### HeadUpTilt
 
 _setProp_:
@@ -320,12 +342,18 @@ _call_:
 ### Heart
 
 _setProp_:
+- `av_block_mode` — AV block (list, one of none/first_degree/second_degree/complete)
+- `sa_node_enabled` — SA node active (off = sinus arrest) (boolean, off = sinus arrest)
+- `vent_pacemaker_mode` — ventricular pacemaker mode (list, one of escape/vt)
 - `heart_rate_ref` — reference heart rate (bpm) (number, bpm, range 10–300)
 - `pq_time` — pq time (ms) (number, ms, range 50–1000)
 - `qrs_time` — qrs time (ms) (number, ms, range 50–500)
 - `qt_time` — qt time (ms) (number, ms, range 50–1000)
 - `ans_sens` — ans sensitivity (number, range 0–1)
 - `pc_extra_volume` — pericardial fluid volume (mL) (number, mL, range 0–1000)
+- `av_block_ratio` — AV block ratio (2nd degree, e.g. 2 = 2:1) (number, 2nd degree, e.g. 2 = 2:1, range 2–6) _(extra)_
+- `vent_escape_rate` — ventricular escape rate (bpm) (number, bpm, range 20–120) _(extra)_
+- `vt_rate` — ventricular tachycardia rate (bpm) (number, bpm, range 120–300) _(extra)_
 - `av_delay` — av delay time (ms) (number, ms, range 0.5–10) _(extra)_
 - `p_amp` — ECG P amplitude (mV) (number, mV, range -5–5) _(extra)_
 - `q_amp` — ECG Q amplitude (mV) (number, mV, range -5–5) _(extra)_
@@ -339,6 +367,9 @@ _setProp_:
 - `pc_el_factor` — pericardial stiffness factor (factor, range 0–200) _(factors)_
 - `is_enabled` — enabled (boolean) _(all)_
 - `hr_factor` — heartrate factor (number, range 0–1000000)
+
+_call_:
+- `trigger_pvc()` — trigger premature ventricular contraction (PVC)
 
 ### HeartChamber
 
@@ -441,6 +472,16 @@ _setProp_:
 - `afferent_apply_tc` — afferent apply time constant (s) (number, s, range 0–120) _(advanced)_
 - `afferent_factor_min` — afferent factor min (number, range 0.01–1) _(advanced)_
 - `afferent_factor_max` — afferent factor max (number, range 1–20) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
+### Lactate
+
+_setProp_:
+- `lactate_running` — lactate production running (boolean)
+- `lact_baseline` — baseline lactate (mmol/L) (number, mmol/L)
+- `threshold_frac` — anaerobic threshold (fraction of resting to2) (number, fraction of resting to2, range 0–1) _(advanced)_
+- `lact_per_o2_deficit` — lactate per O2 deficit (mmol/mmol) (number, mmol/mmol) _(advanced)_
+- `lact_clearance` — lactate clearance rate (1/s) (number, 1/s) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
 
 ### MaternalPlacenta
@@ -574,6 +615,29 @@ _setProp_:
 - `ventricular_septal_width` — ventricular septum width (mm) (number, mm, range 0–10) _(extra)_
 - `fo_lr_factor` — foramen ovale L-R resistance factor (number, range 0–100) _(extra)_
 - `ips_res` — intrapulmonary shunt resistance (mmHg*s/L) (number, mmHg*s/L, range 0–100000000) _(extra)_
+- `is_enabled` — enabled (boolean) _(all)_
+
+### Surfactant
+
+_setProp_:
+- `surfactant_running` — recruitment running (boolean)
+- `surfactant` — surfactant maturity (0-1) (number, 0-1, range 0–1)
+- `is_enabled` — enabled (boolean) _(all)_
+
+_call_:
+- `administer_surfactant(target (number, 0-1, range 0–1))` — instill surfactant (therapy)
+
+### Thermoregulation
+
+_setProp_:
+- `thermoregulation_running` — thermoregulation running (boolean)
+- `setpoint_temp` — set-point temperature (degC) (number, degC)
+- `env_temp` — environment temperature (degC) (number, degC)
+- `radiant_temp` — radiant-warmer temperature (degC) (number, degC) _(extra)_
+- `rel_humidity` — relative humidity (fraction) (number, fraction, range 0–1) _(extra)_
+- `q10` — Q10 of metabolic rate (number) _(advanced)_
+- `bat_gain` — brown-fat heat gain (W/degC) (number, W/degC) _(advanced)_
+- `hr_temp_gain` — heart-rate temperature gain (number) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
 
 ### TimeVaryingElastance

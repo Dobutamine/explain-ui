@@ -136,18 +136,22 @@ function explainBotApi(env: Record<string, string>): Plugin {
             });
           }
           try {
-            const { prompt, conversation_id, context } = JSON.parse(raw || "{}");
+            const { prompt, conversation_id, context, attachments } = JSON.parse(raw || "{}");
             // Prepend the live patient-state block so the bot can answer about
             // "this patient". The bot treats the whole string as the user turn.
             const fullPrompt = context
               ? `Current simulated patient state:\n${context}\n\n---\n\n${prompt ?? ""}`
               : (prompt ?? "");
+            // Forward any uploaded files (PDF/CSV/image) so the bot can extract
+            // target values. The bot's reply (incl. an optional `artifact` with a
+            // built patient definition) is returned verbatim below.
             const upstream = await fetch(`${baseUrl}/v1/ask`, {
               method: "POST",
               headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
               body: JSON.stringify({
                 prompt: fullPrompt,
                 ...(conversation_id ? { conversation_id } : {}),
+                ...(Array.isArray(attachments) && attachments.length ? { attachments } : {}),
               }),
             });
             const text = await upstream.text();

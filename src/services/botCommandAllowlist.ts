@@ -17,6 +17,7 @@ export type CommandOp =
   | "stop" // stop the realtime loop         -> useExplain().stop
   | "calculate" // run N seconds offline          -> useExplain().calculate
   | "load" // load a scenario by name        -> useExplain().load
+  | "loadDefinition" // load a bot-built patient definition -> useExplain().loadFromObject
   | "event" // build a named scheduled event  -> useEventsStore() (see chat store)
   | "diagram"; // edit the diagram             -> DiagramRenderer (see diagram actions below)
 
@@ -120,6 +121,14 @@ export const COMMAND_ALLOWLIST: AllowEntry[] = [
   // --- Simulation control ---
   { op: "start", note: "start the realtime simulation loop" },
   { op: "stop", note: "stop the realtime simulation loop" },
+
+  // --- Whole-patient replacement (Full scope only) ---
+  // Loads a complete, bot-built calibrated patient definition and runs it
+  // immediately (replaces the current model). The definition is NOT carried in
+  // the command block — it arrives out-of-band in the chat response `artifact`
+  // field (the bot host builds it with scripts/build_patient.mjs). Gated to Full
+  // scope in validateCommand (too powerful for Guided demos) + confirm-before-apply.
+  { op: "loadDefinition", note: "load+run a bot-built calibrated patient (Full scope; definition rides in response.artifact)" },
 ];
 
 // True when (op, model?, target?) matches an allowlist entry. Ops without a

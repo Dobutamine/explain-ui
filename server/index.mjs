@@ -92,16 +92,23 @@ function handleChat(req, res) {
   req.on("data", (c) => (raw += c));
   req.on("end", async () => {
     try {
-      const { prompt, conversation_id, context } = JSON.parse(raw || "{}");
+      const { prompt, conversation_id, context, attachments } = JSON.parse(raw || "{}");
       // Prepend the live patient-state block so the bot can answer about "this
       // patient" (identical to the dev proxy).
       const fullPrompt = context
         ? `Current simulated patient state:\n${context}\n\n---\n\n${prompt ?? ""}`
         : (prompt ?? "");
+      // Forward uploaded files (PDF/CSV/image) so the bot can extract target
+      // values; its reply (incl. an optional built-patient `artifact`) is returned
+      // verbatim below.
       const upstream = await fetch(`${BOT_URL}/v1/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": BOT_KEY },
-        body: JSON.stringify({ prompt: fullPrompt, ...(conversation_id ? { conversation_id } : {}) }),
+        body: JSON.stringify({
+          prompt: fullPrompt,
+          ...(conversation_id ? { conversation_id } : {}),
+          ...(Array.isArray(attachments) && attachments.length ? { attachments } : {}),
+        }),
       });
       const text = await upstream.text();
       res.writeHead(upstream.status, {

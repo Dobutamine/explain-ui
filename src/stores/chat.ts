@@ -33,11 +33,27 @@ export interface PendingCommand {
   normalized?: NormalizedCommand;
 }
 
+// A file the user attaches to a chat turn (a PDF case sheet, a CSV of target
+// values, an image). The bot extracts target physiology from it to build a
+// patient. `data` is base64 for pdf/image, raw text for csv/text.
+export interface ChatAttachment {
+  kind: "pdf" | "csv" | "image" | "text";
+  name: string;
+  data: string;
+  media_type?: string; // for image/pdf (e.g. "application/pdf", "image/png")
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   failed?: boolean;
   commands?: PendingCommand[];
+  attachments?: { name: string; kind: string }[]; // shown on the user bubble
+  // A bot-built patient definition delivered out-of-band with this reply (the
+  // `artifact` field of the /api/chat response). A loadDefinition command in the
+  // same reply loads THIS object via loadFromObject — it is too large (~300 KB)
+  // to ride inside the command block, so it travels here instead.
+  artifact?: any;
 }
 
 interface MonitorParam {
@@ -176,11 +192,16 @@ export const useChatStore = defineStore("chat", () => {
     return `${Math.round(m / 60)}h`;
   }
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, attachments: ChatAttachment[] = []) {
     const trimmed = text.trim();
-    if (!trimmed || isLoading.value) return;
+    // allow an attachment-only turn (e.g. "here's the case sheet" as a PDF)
+    if ((!trimmed && !attachments.length) || isLoading.value) return;
     error.value = null;
-    messages.value.push({ role: "user", text: trimmed });
+    messages.value.push({
+      role: "user",
+      text: trimmed,
+      attachments: attachments.length ? attachments.map((a) => ({ name: a.name, kind: a.kind })) : undefined,
+    });
     isLoading.value = true;
 
     try {
@@ -192,6 +213,7 @@ export const useChatStore = defineStore("chat", () => {
           prompt: trimmed,
           context,
           conversation_id: conversationId.value,
+          ...(attachments.length ? { attachments } : {}),
         }),
       });
       // a missing endpoint (stale dev server) falls through to the SPA → HTML,
@@ -204,7 +226,9 @@ export const useChatStore = defineStore("chat", () => {
         );
       }
       conversationId.value = body.conversation_id ?? conversationId.value;
-      pushAssistantReply(body.answer);
+      // body.artifact (optional): a full bot-built patient definition delivered
+      // out-of-band — a loadDefinition command in this reply runs it.
+      pushAssistantReply(body.answer, body.artifact);
     } catch (e) {
       error.value = (e as Error).message;
       messages.value.push({
@@ -220,7 +244,7 @@ export const useChatStore = defineStore("chat", () => {
   // Turn a raw bot reply into an assistant message: strip out any command
   // blocks, validate each against the live model, and attach them as
   // PendingCommands. The visible text is the prose with the blocks removed.
-  function pushAssistantReply(answer: string) {
+  function pushAssistantReply(answer: string, artifact?: any) {
     const { modelState } = useExplain();
     const { clean, commands, parseErrors } = parseCommands(answer);
 
@@ -255,6 +279,7 @@ export const useChatStore = defineStore("chat", () => {
       role: "assistant",
       text: clean || (commands.length ? "" : answer),
       commands: pending.length ? pending : undefined,
+      artifact,
     });
 
     // Auto-apply mode: run every valid command immediately (invalid ones are
@@ -282,10 +307,17 @@ export const useChatStore = defineStore("chat", () => {
 
   // Apply a single pending command to the live engine/diagram (confirm-before-apply).
   async function applyCommand(messageIndex: number, cmdIndex: number) {
-    const pc = messages.value[messageIndex]?.commands?.[cmdIndex];
+    const message = messages.value[messageIndex];
+    const pc = message?.commands?.[cmdIndex];
     if (!pc || pc.status !== "pending" || !pc.normalized) return;
     try {
-      if (pc.normalized.kind === "diagram") {
+      if (pc.normalized.kind === "loadDefinition") {
+        // load+run a bot-built patient. The definition normally rides in this
+        // reply's out-of-band `artifact`; an inline `definition` is the fallback.
+        const def = message.artifact ?? pc.normalized.definition;
+        if (!def) throw new Error("no patient definition in this reply (missing response artifact)");
+        useExplain().loadFromObject(def);
+      } else if (pc.normalized.kind === "diagram") {
         const h = diagramHandle();
         if (!h) throw new Error("open the Diagram tab to apply this edit");
         await executeDiagramCommand(pc.normalized, h);
