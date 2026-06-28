@@ -1196,6 +1196,149 @@ Where `pres_ext` is a non-persistent external pressure (e.g., intrathoracic pres
 
 ````
 
+### FILE: explain/docs/Brain.md
+
+````markdown
+# Brain (cerebral autoregulation + ICP)
+
+The `Brain` model is the **neonatal cerebral haemodynamics controller** — it couples cerebral
+blood-flow **autoregulation** with **intracranial pressure (ICP)** through the cerebral perfusion
+pressure `CPP = MAP − ICP`. Like [`Kidneys`](./Kidneys.md) and [`Hormones`](./Hormones.md) it is a
+**controller/process model**: it holds no blood, resolves references to other models lazily, runs on
+an update interval, and **owns its effector channels while enabled** (releasing them once on
+disable). Default config is **neutral** — the baseline CPP/CBF setpoint and the baseline cerebral
+blood volume are **auto-seeded** after a warm-up, so a scenario that ships a `Brain` model behaves
+identically at rest and only diverges when blood pressure changes, autoregulation is impaired, or
+intracranial volume rises.
+
+## The cerebral bed (pre-wired in the scenarios)
+
+```
+AA ──AA_BR_ART──► BR_ART ──► BR_CAP ──► BR_VEN ──BR_VEN_VUB──► VUB
+     (arteriole         (autoregulated bed: summed for CBV)      (venous outflow;
+      effector)          BR_CAP = dominant O2 sink (fvo2~0.45)    ICP raises its R)
+```
+
+`CBF = AA_BR_ART.flow`. `BR_CAP` is the dominant neonatal O2 sink ([`Metabolism`](./Metabolism.md)
+`fvo2 ≈ 0.45`), so a fall in CBF shows up as `BR_CAP.to2` collapsing — the HIE / ischaemia signature
+(`brain_to2` read-out).
+
+## Autoregulation = closed-loop control of CBF
+
+Autoregulation is modelled as **closed-loop control on FLOW**, not open-loop pressure→resistance
+scaling — because the cerebral bed is several resistors in series and `AA_BR_ART` is only ~44 % of
+the total path resistance, so a fixed pressure-driven scaling of one resistor would not hold CBF. A
+**leaky integrator** adjusts the arteriole resistor's `AA_BR_ART.r_factor_ps` to hold CBF at its
+seeded setpoint (`u` = update interval, `err` = fractional CBF error):
+
+```
+err  = (cbf_smooth − cbf_setpoint) / cbf_setpoint
+d    = autoreg_control_gain·err − autoreg_leak·(_ar_int − 1)     # leaky integral
+_ar_int = clamp(_ar_int + d·u, autoreg_factor_min, autoreg_factor_max)
+applied = clamp(1 + autoregulation_gain·(_ar_int − 1), …)        # blend toward pressure-passive
+autoreg_factor ← lag(autoreg_factor → applied, autoreg_tc)       # anti-oscillation lag
+AA_BR_ART.r_factor_ps = autoreg_factor
+```
+
+Too much flow (`err > 0`) → constrict. The **leak** (`autoreg_leak`) relaxes the integrator toward
+neutral (`1.0`), so at the baseline (`err ≈ 0`) the factor returns to `1.0` — **no windup**, the
+baseline stays collision-free/neutral. Under a sustained insult the error term dominates and the
+correction is held (`control_gain / leak ≈ 5 / 0.05 = 100` → strong autoregulation with a small
+droop). `autoregulation_gain ∈ [0, 1]` blends between **intact (1)** and **pressure-passive (0)**:
+the immature / sick neonatal brain is pressure-passive (set the gain `< 1` or `0` for HIE / extreme
+preterm — the IVH/HIE substrate, where CBF follows pressure: surge → haemorrhage, drop → ischaemia).
+
+> **Why `AA_BR_ART` is the effector.** It is a free-standing `Resistor` that is **not** in
+> [`Circulation`](./Circulation.md)'s ANS/SVR fan-out, so writing its `r_factor_ps` composes
+> cleanly with systemic tone (the brain's ANS/SVR tone lives on `BR_ART` and is left alone) — same
+> no-collision precedent as the Kidneys afferent and the Hormones efferent.
+
+The sensed MAP (`AA.pres`) and CBF are both **smoothed** first-order (`pres_tc`/`cbf_tc ≈ 3 s`),
+because the instantaneous resistor pressures/flows are pulsatile — so `CPP` tracks the **mean**
+arterial pressure, not the instantaneous value. CBF is converted L/s → L/min (`×60`).
+
+## ICP (Monro–Kellie, exponential compliance)
+
+Cerebral blood volume `CBV = BR_ART + BR_CAP + BR_VEN` volume (L → mL). The volume excess above
+baseline drives an exponential pressure-volume curve:
+
+```
+ΔV         = (CBV − CBV0) + edema_volume                  # mL  (CBV0 auto-seeded)
+icp_excess = clamp(icp_e0·(exp(icp_k·ΔV) − 1), 0, icp_excess_max)   # mmHg (floored at 0)
+ICP        = icp_baseline + icp_excess
+CPP        = sensed_map − ICP
+```
+
+`edema_volume` is the settable oedema / mass / haemorrhage lever (mL), set via `set_edema(volume_ml)`.
+The neonatal cranium is **compliant** (open fontanelle / sutures) → a gentler curve than the adult,
+carried by `icp_k`.
+
+> **ICP is applied as a RESISTANCE on the OUTFLOW, not as `pres_ext`.** External pressure on a series
+> of compartments does not change their steady-state through-flow, so ICP instead raises the cerebral
+> venous **outflow** resistor: `BR_VEN_VUB.r_factor_ps = clamp(1 + icp_outflow_gain·icp_excess, 1,
+> icp_outflow_factor_max)`. This models **venous compression / the vascular waterfall** — rising ICP
+> congests the venous outflow → CBF falls (and the closed-loop autoregulation then defends CBF by
+> dilating the inflow, until the reserve is exhausted). The ICP → outflow-R → venous-congestion →
+> CBV → ICP loop is **positive feedback**, so `icp_outflow_gain` is kept low (loop gain < 1).
+
+## Clinical demonstrations it enables
+
+- **Autoregulation intact vs pressure-passive on hypotension** — with `autoregulation_gain = 1`
+  CBF is protected as MAP falls; with the gain low/0 CBF collapses with pressure → IVH/HIE.
+- **Raised ICP / HIE** — `set_edema(…)` (oedema/mass) + lost autoregulation → CPP falls, CBF falls,
+  `brain_to2` collapses → cerebral ischaemia.
+- **Emergent coupling** — autoregulatory **vasodilation raises ICP** (it increases arterial CBV),
+  and rising ICP feeds back onto CBF through the outflow resistance.
+
+## Read-outs
+| Read-out | Unit | Meaning |
+|---|---|---|
+| `cbf` | L/min | cerebral blood flow (smoothed `AA_BR_ART.flow`) |
+| `cpp` | mmHg | cerebral perfusion pressure (`sensed_map − icp`) |
+| `icp` | mmHg | intracranial pressure (`icp_baseline + icp_excess`) |
+| `icp_excess` | mmHg | ICP above baseline (drives the outflow-R) |
+| `cerebral_blood_volume` | mL | CBV (`BR_ART+BR_CAP+BR_VEN`) |
+| `brain_to2` | mmol/L | `BR_CAP.to2` — ischaemia read-out |
+| `autoreg_factor` | — | applied `AA_BR_ART.r_factor_ps` |
+| `sensed_map` | mmHg | smoothed mean arterial pressure |
+
+## Configuration
+| Param | Default | Meaning |
+|---|---|---|
+| `brain_running` | `true` | master gate (false → owned channels released to neutral) |
+| `autoregulation_enabled` | `true` | cerebral autoregulation on/off |
+| `icp_enabled` | `true` | intracranial-pressure coupling on/off |
+| `autoregulation_gain` | `1.0` | 1 = intact, 0 = pressure-passive (blend) |
+| `autoreg_control_gain` | `5.0` | CBF-error feedback gain (per fractional error per second) |
+| `autoreg_leak` | `0.05` | 1/s — integrator leak toward neutral (no windup) |
+| `autoreg_factor_min` / `max` | `0.15` / `6.0` | max vasodilation / vasoconstriction limits |
+| `autoreg_tc` | `4.0` s | lag on the applied factor (anti-oscillation) |
+| `cbf_tc` / `pres_tc` | `3.0` / `3.0` s | smoothing of pulsatile CBF / arterial pressure |
+| `cbf_setpoint` / `cpp_setpoint` | auto-seeded | baseline CBF (L/min) / CPP (mmHg) targets |
+| `icp_baseline` | `5.0` mmHg | normal neonatal ICP (read-out anchor) |
+| `edema_volume` | `0.0` mL | oedema / mass / haemorrhage lever (`set_edema()`) |
+| `icp_e0` | `4.0` mmHg | scale of the exponential P-V curve |
+| `icp_k` | `0.18` 1/mL | intracranial stiffness (neonatal-compliant) |
+| `icp_excess_max` | `70.0` mmHg | clamp on the ICP excess |
+| `icp_outflow_gain` | `0.03` | fractional outflow-R rise per mmHg of ICP excess |
+| `icp_outflow_factor_max` | `8.0` | clamp on the outflow-resistance factor |
+
+Wiring refs (`map_model` `AA`, `arteriole_resistor`/`cbf_resistor` `AA_BR_ART`,
+`cerebral_compartments` `[BR_ART, BR_CAP, BR_VEN]`, `outflow_resistor` `BR_VEN_VUB`, `oxy_model`
+`BR_CAP`) are resolved lazily on the first step. The controller runs on a 15 ms tick
+(`_update_interval`); the baseline CPP / CBF setpoint and `CBV0` are seeded once after a
+`_warmup_delay` (30 s) so they reflect the settled circuit, not the startup transient. Disabling
+(`brain_running = false`) writes `AA_BR_ART.r_factor_ps` and `BR_VEN_VUB.r_factor_ps` back to `1.0`
+once, restoring neutral cerebral haemodynamics.
+
+## Related models
+[`Kidneys`](./Kidneys.md) (the autoregulation pattern Brain mirrors) ·
+[`Metabolism`](./Metabolism.md) (cerebral O2 consumption at `BR_CAP`) ·
+[`Circulation`](./Circulation.md) (systemic SVR / `AA` perfusion pressure) ·
+[`Monitor`](./Monitor.md) (read-out surfacing) · [`Hormones`](./Hormones.md) (sibling controller).
+
+````
+
 ### FILE: explain/docs/Breathing.md
 
 ````markdown
@@ -1527,6 +1670,142 @@ flow and is not a flow endpoint — it only aggregates volume and broadcasts pre
   `Breathing`'s muscle effort (which raises `THORAX.el_base_factor`) produces inspiratory suction.
 - The order of stepping sets whether a content sees this step's container pressure or last step's
   (at most one step of lag) — inherent to sequential stepping, stable at the default step size.
+
+````
+
+### FILE: explain/docs/Drugs.md
+
+````markdown
+# Drugs (pharmacology PK/PD)
+
+The `Drugs` model is the **pharmacology PK/PD controller** — a process/controller model in the same
+family as [`Hormones`](./Hormones.md) and `Ans`. It holds **no blood of its own**, resolves
+references to other models **lazily** (the blood compartments are built by [`Circulation`](./Circulation.md)
+after this model inits), runs each step, and **owns its effector channels while enabled** (releasing
+them once to neutral on disable, gated by `drugs_running`). Default config is **neutral**: with no
+drug present every concentration is `0`, so every `*_drug_factor` reads `1.0` (no effect) and a
+scenario that ships a `Drugs` model behaves identically until a dose is given.
+
+The novelty versus `Hormones` is that the "signal" being controlled is an actual **drug mass that
+rides the blood circuit** — `Drugs` does not transport anything itself; it seeds a drug key into
+every blood compartment's `drugs{}` dict and lets the engine's existing `volume_in` mixing advect it,
+exactly as Na/K solutes propagate (see [`BloodCapacitance`](./BloodCapacitance.md)).
+
+## Per-drug causal loop
+
+```
+SOURCE (dosing)          TRANSPORT (free)            SINK (clearance)            BIOPHASE         EFFECT (summed)
+injection_site.drugs{}   volume_in mixing carries    diffuse global term on      optional ke0     sigmoid Emax/Hill per drug
+  bolus    C += dose/vol the seeded drug key around  EVERY compartment  +        effect-comp lag  SUMMED onto shared channels:
+  infusion C += rate·wt  the whole circuit, by       organ-localized intrinsic   dCe/dt =         Heart.hr_drug_factor   (β1 chrono)
+           /60·dt/vol     incoming-volume fraction    clearance at named sites    ke0·(C−Ce)       chamber.el_max_drug_factor (β1 ino)
+  (mcg → ng/mL)          (drugs ride blood, free)    (KID_CAP/LS_CAP, perf.-scl.) → hysteresis    Circulation.svr_factor_drug (α1)
+                                                                                                   Pda.diameter_drug_factor (PGE1)
+```
+
+- **SOURCE** — dosing injects drug mass into the `injection_site` compartment's `drugs{}` dict
+  (default `IVCI`, a central vein). A **bolus** adds `dose / vol` (dose in mcg, vol in L → ng/mL); a
+  weight-based **infusion** adds `(rate · weight / 60) · dt / vol` each step (rate in mcg/kg/min).
+- **TRANSPORT** — handled entirely by the engine. `Drugs` only **seeds** the drug key (value `0.0`)
+  into every blood-carrying compartment once (`_seed_drugs`, lazily on first step); the existing
+  `volume_in` mixing then advects it for free, like solutes. Blood model types that participate:
+  `BloodVessel`, `HeartChamber`, `BloodCapacitance`, `BloodTimeVaryingElastance`, `BloodPump`,
+  `MicroVascularUnit`.
+- **SINK** — elimination is a **diffuse first-order** term (`clearance.global`, 1/s, e.g. COMT/MAO/
+  uptake) decaying the drug on **every** compartment, **plus** organ-localized **intrinsic clearance**
+  (`clearance.sites`, 1/s) at named clearing compartments (e.g. `KID_CAP` renal, `LS_CAP` hepatic).
+  Because those organs are continuously perfused, the localized term behaves as a **well-stirred
+  organ model**: whole-body clearance scales with organ blood flow — if perfusion falls the drug
+  lingers, exactly like real renal/hepatic clearance.
+- **BIOPHASE** — an optional effect compartment per drug, `dCe/dt = ke0·(C_site − Ce)`. With
+  `ke0 > 0` the PD map is driven by the lagged biophase concentration `Ce`, giving onset/offset
+  **hysteresis** (effect peak trails plasma peak). `ke0 = 0` (default) → PD uses the effect-site conc
+  directly.
+- **EFFECT** — each drug contributes an independent sigmoid `effect = emax·c^n / (ec50^n + c^n)`
+  (`_emax`), and contributions are **summed across all enabled drugs** onto the shared
+  `*_drug_factor` channels, so drugs **compose additively** rather than overwrite. `_emax` returns
+  `0` for any effect a drug leaves undefined (`emax` undefined), so drugs compose without every drug
+  defining every channel.
+
+The effect-site concentration is read from the `effect_site` compartment (default `AA`, a systemic
+artery). Concentration unit convention throughout: **mcg/L ≡ ng/mL** (dose in mcg, blood volumes in L).
+
+## Effector channels (owned, default-neutral)
+
+| Channel | Target | Pharmacology |
+|---|---|---|
+| `hr_drug_factor` | [`Heart`](./Heart.md)`.hr_drug_factor` | β1 chronotropy (heart rate) |
+| `cont_drug_factor` | each chamber's `el_max_drug_factor` (via the Heart inotropy path, mirroring Mob) | β1 inotropy (contractility) |
+| `svr_drug_factor` | [`Circulation`](./Circulation.md)`.svr_factor_drug` | α1 systemic vasoconstriction |
+| `pda_drug_factor` | [`Pda`](./Pda.md)`.diameter_drug_factor` | ductal patency (PGE1) |
+
+Inotropy is fanned to every heart chamber through the `Heart`'s resolved chamber refs
+(`_lv`/`_rv`/`_la`/`_raivci`/`_rasvc`/`_ra`), exactly as `Mob` writes `el_max_mob_factor`. The SVR
+channel is independent of the ANS and Hormones channels (`svr_factor_art/_ven`), so they compose.
+
+## Drugs currently defined (`drug_defs`)
+
+| Drug | PK (`clearance`) | PD effects |
+|---|---|---|
+| `adrenaline` | global 0.022 + sites KID_CAP 0.6 / LS_CAP 0.9 / INT_CAP 0.4 | HR (ec50 20, emax 0.6), cont (ec50 25, emax 0.8), SVR (ec50 40, emax 0.5) |
+| `noradrenaline` | global 0.018 + sites KID_CAP 0.6 / LS_CAP 1.0 / INT_CAP 0.4 | predominantly α1 SVR (ec50 25, emax 0.9), modest cont (emax 0.35), minimal HR (emax 0.1) |
+| `pge1` | global 0.08, no sites | **ductal patency only** — `pda_ec50 0.02`, `pda_emax 1.5`, `pda_hill 1.0` |
+
+**PGE1 (prostaglandin E1 / alprostadil)** is the duct-dependent-CHD agent: its **only** effect is
+ductal patency through the channel `Pda.diameter_drug_factor`. Its very low `pda_ec50` (0.02 ng/mL)
+reflects a **potent + heavily cleared** drug — extensive pulmonary first-pass metabolism (~80% per
+lung pass, hence the high `global` clearance, short half-life, and need for continuous infusion)
+yields a low effect-site conc (~0.01–0.05 ng/mL at a clinical 0.01–0.05 mcg/kg/min infusion) that
+sits on the sigmoid's rising limb. `pda_emax 1.5` allows up to a ~2.5× patency factor at saturation
+(capped at the anatomic maximum inside [`Pda`](./Pda.md)). It defines no HR/inotropy/SVR params — and
+because `_emax` is undefined-safe, drugs **compose without every drug defining every channel**
+(PGE1 has only `pda_*`; the catecholamines only `hr_*`/`cont_*`/`svr_*`).
+
+### The `init_model` merge
+
+`init_model` captures the constructor's full built-in `drug_defs`, lets `super.init_model(args)`
+overwrite it with whatever a scenario baked, then merges:
+
+```js
+this.drug_defs = { ...default_defs, ...this.drug_defs };
+```
+
+Scenario tuning wins for drugs it defines, but any **newly-added built-in drug** the baked state
+predates (e.g. `pge1`, added after older scenarios were serialized) is still present — so new drugs
+become available in **old scenarios without re-baking the JSON**.
+
+## Dosing API
+
+Callable via `callModelFunction` / the `TaskScheduler` (see the engine docs):
+
+| Method | Effect |
+|---|---|
+| `administer_bolus(drug, dose_mcg)` | instantaneous IV bolus — adds `dose_mcg / vol` to the injection-site `drugs{}` |
+| `set_infusion(drug, rate_mcg_kg_min)` | start/stop a weight-based continuous infusion; `rate 0` stops it |
+| `set_drug_param(drug, param, value)` | set a PK/PD constant via a **dotted path** into the per-drug def (e.g. `"hr_emax"`, `"ke0"`, `"clearance.global"`) — the nested dict is unreachable by the flat `setPropValue` path |
+
+## Read-outs
+
+| Read-out | Meaning |
+|---|---|
+| `concentrations` | `{ drug: effect-site conc (ng/mL) }` |
+| `biophase` | `{ drug: effect-compartment conc Ce (ng/mL) }` (= site conc when `ke0 = 0`) |
+| `conc_inj` / `conc_eff` | adrenaline injection-site / effect-site conc (convenience) |
+| `hr_drug_factor` / `cont_drug_factor` / `svr_drug_factor` / `pda_drug_factor` | applied (summed) effector factors (1.0 = no effect) |
+| `infusions` | active continuous infusions `{ drug: rate_mcg_kg_min }` |
+
+## Notes / scope
+
+- While enabled, `Drugs` **owns** the four `*_drug_factor` channels (`Heart.hr_drug_factor`, each
+  chamber's `el_max_drug_factor`, `Circulation.svr_factor_drug`, `Pda.diameter_drug_factor`) — manual
+  edits are overwritten each step. The clean "off" switch is `drugs_running = false`, which releases
+  all owned channels back to `1.0` exactly once.
+- Adding a drug = a new `drug_defs` entry; it is seeded, transported, cleared and aggregated
+  automatically. Surfacing per-drug params + dosing methods to the UI registry is the next milestone.
+
+## See also
+[`Heart`](./Heart.md) · [`Circulation`](./Circulation.md) · [`Pda`](./Pda.md) ·
+[`Hormones`](./Hormones.md) · [`BloodCapacitance`](./BloodCapacitance.md)
 
 ````
 
@@ -1911,6 +2190,109 @@ Configured with `comp_blood` and `comp_gas` (the two compartment names). Used as
 
 ````
 
+### FILE: explain/docs/Glucose.md
+
+````markdown
+# Glucose (blood-glucose / insulin controller)
+
+The `Glucose` model is a **slow blood-glucose process controller** — same family as
+[`Hormones`](./Hormones.md), [`Kidneys`](./Kidneys.md) and [`Drugs`](./Drugs.md): it holds no
+compartment of its own, resolves references to other models lazily, runs on an `_update_interval`,
+and **owns its source/sink while enabled** (releasing them once on disable). Default config is
+**neutral at rest** — the set-point auto-seeds to the resting arterial glucose, `insulin` and
+`counterreg` sit at `1.0`, and because the default `hgp_rate == glu_use_rate` hepatic production
+exactly balances peripheral utilization, so total body glucose mass is conserved. A scenario that
+ships it behaves identically at rest and only diverges on perturbation.
+
+`glucose` is a **new blood solute (mmol/L)**. It advects through the whole circuit for free via the
+engine's existing `volume_in` solute mixing in `BloodCapacitance`/`HeartChamber`, exactly like Na/K
+— the controller only seeds the key and adjusts its source/sink. (A scenario should also list
+`"glucose"` in [`Blood`](./Blood.md)`.solutes` so every compartment starts seeded; `_seed_keys()`
+below is a lazy safety net that mirrors [`Drugs`](./Drugs.md).)
+
+## Causal loop
+
+```
+SENSE                      CONTROL (1.0 = baseline)        EFFECTORS (owned, default-neutral)
+AA.solutes.glucose ──┬──► insulin     (hyperglycemia ↑) ──► uptake_factor      → peripheral SINK ↑
+   (plasma_model)    │                                  └─► production_factor  → hepatic SOURCE ↓
+                     └──► counterreg   (hypoglycemia  ↑) ──► production_factor  → hepatic SOURCE ↑
+
+SOURCE  hepatic glucose production → IVCI (injection_site):  prod = (hgp_rate/60)·weight·u·production_factor  [mmol]
+SINK    peripheral utilization, split over Metabolism.metabolic_active_models by fvo2:
+                                                            use  = (glu_use_rate/60)·weight·u·uptake_factor   [mmol]
+```
+
+- **SOURCE** — endogenous hepatic glucose output added straight to the central vein `IVCI`
+  (`_inject.solutes.glucose += prod_total / _inject.vol`), modulated by `production_factor`.
+- **SINK** — peripheral utilization distributed over the *same* compartments and fractions
+  [`Metabolism`](./Metabolism.md) uses for O₂ (`metabolic_active_models`, a `site → fvo2` map),
+  scaled by `uptake_factor`. A `MicroVascularUnit` site redirects to its `<site>_CAP` compartment;
+  sites with `vol <= 0` are skipped, and concentration is floored at 0.
+- **CONTROL** — `insulin` rises with hyperglycemia (↑uptake, ↓hepatic output); `counterreg` rises
+  with hypoglycemia (↑hepatic output). At the set-point both `== 1.0`.
+
+## Dynamics
+
+Every `_update_interval` (default `1.0 s`), `_update_glucose(u)` runs (`u` = elapsed):
+
+```
+glu_err            = (glucose − glucose_setpoint) / glucose_setpoint
+insulin_target     = clamp(1 + insulin_gain·glu_err,     hormone_min, hormone_max)
+counterreg_target  = clamp(1 − counterreg_gain·glu_err,  hormone_min, hormone_max)
+insulin            = lag(insulin, insulin_target, u, insulin_tc)          # x += u·(1/tc)·(−x+target)
+counterreg         = lag(counterreg, counterreg_target, u, counterreg_tc)
+uptake_factor      = clamp(1 + uptake_insulin_gain·(insulin−1),  uptake_factor_min, uptake_factor_max)
+production_factor  = clamp(1 − hgp_insulin_gain·(insulin−1) + hgp_counterreg_gain·(counterreg−1),
+                           production_factor_min, production_factor_max)
+```
+
+**Auto-seed.** After a `_warmup_delay` (30 s, to let the arterio-venous gradient settle), the
+set-point is pinned once to the then-current sensed `glucose` (`_seeded = true`) — this is what makes
+a shipped scenario neutral regardless of its resting glucose. The master gate `glucose_running`
+(false) calls `_release()` once, pinning every read-out back to neutral, then idles.
+
+## IV dextrose — no extra code
+
+IV dextrose works through the existing [`Fluids`](./Fluids.md) mechanism with **zero** changes here:
+a `d5`/`d10` fluid type simply carries `glucose` in its `solutes`, so infusing it raises compartment
+glucose the same way any fluid raises Na/K. The controller then senses the rise and responds
+(insulin↑, hepatic output↓). Likewise, `glucose` is deliberately **not** in
+[`Kidneys`](./Kidneys.md)`.filterable_solutes` — there is **no glucosuria** in this version.
+
+## Read-outs
+| Read-out | Meaning |
+|---|---|
+| `glucose` | sensed arterial glucose (mmol/L, from `plasma_model.solutes.glucose`) |
+| `insulin` / `counterreg` | controller activity (1.0 = baseline) |
+| `uptake_factor` / `production_factor` | applied SINK / SOURCE multipliers |
+| `glucose_use_step` / `glucose_prod_step` | last-update total utilization / production (mmol) |
+
+## Key parameters (defaults / units)
+| Param | Default | Meaning |
+|---|---|---|
+| `glu_use_rate` | `0.03` mmol/kg/min | peripheral utilization (~5.4 mg/kg/min) |
+| `hgp_rate` | `0.03` mmol/kg/min | hepatic production (`== glu_use_rate` → neutral at rest) |
+| `glucose_setpoint` | `4.0` mmol/L (~72 mg/dL) | controller target (auto-seeded to resting value) |
+| `insulin_gain` / `counterreg_gain` | `6.0` / `6.0` | drive per fractional glucose excess / deficit |
+| `insulin_tc` / `counterreg_tc` | `120 s` / `120 s` | controller lag time constants |
+| `uptake_insulin_gain` | `1.0` | uptake-factor rise per `(insulin−1)` |
+| `hgp_insulin_gain` / `hgp_counterreg_gain` | `0.8` / `2.0` | hepatic suppression / rise per hormone |
+| `hormone_min/max` | `0.0` / `10.0` | insulin & counterreg clamps |
+| `uptake_factor_min/max` | `0.1` / `5.0` | SINK clamp |
+| `production_factor_min/max` | `0.0` / `8.0` | SOURCE clamp |
+| `glucose_default` | `4.0` mmol/L | value used to seed the solute key where missing |
+| `metabolism_name` / `injection_site` / `plasma_model` | `Metabolism` / `IVCI` / `AA` | lazy wiring refs |
+
+## Wiring & related models
+- [`Metabolism`](./Metabolism.md) — supplies `metabolic_active_models` (the `site → fvo2`
+  consumption map the SINK reuses, so glucose use tracks O₂ use).
+- [`Fluids`](./Fluids.md) — IV dextrose enters via a `glucose`-carrying fluid type (no glucose code).
+- [`Hormones`](./Hormones.md) / [`Drugs`](./Drugs.md) — same controller pattern (lazy refs, update
+  interval, owned effectors, lazy key-seeding for new solutes).
+
+````
+
 ### FILE: explain/docs/Heart.md
 
 ````markdown
@@ -1935,6 +2317,39 @@ SA node fires ─► PQ (atrial) ─► AV delay ─► QRS (ventricular) ─►
   reference.
 - The **sinus interval** `60 / heart_rate` drives the SA node; `pq_time`, `av_delay`, `qrs_time` and
   the rate-corrected `qt_time` (Bazett) set the phase durations.
+
+## Conduction-driven arrhythmias
+
+The atrial and ventricular activations are **decoupled** so the two chambers can beat independently —
+real conduction disorders rather than a fixed SA→QRS sequence. This is gated behind **default-neutral**
+properties (at the defaults the logic is identity, so every scenario's normal rhythm is unchanged), and
+because the ECG and chamber activation already key off `ncc_atrial` (P) and `ncc_ventricular` (QRS)
+*independently*, dissociated rhythms render correctly with no ECG changes.
+
+Two intervention points:
+
+- **AV-node conduction gate** at the av-delay → ventricle step. The atrial impulse activates the
+  ventricles only if `!ventricle_is_refractory && _av_conducts()`. `av_block_mode` selects:
+  `none` (1:1), `first_degree` (1:1 with a prolonged PR — `pq_time · first_degree_pq_factor`),
+  `second_degree` (drop every `av_block_ratio`-th P → 2:1, 3:1, …), `complete` (no impulse conducts).
+  A blocked impulse leaves a P wave with no following QRS.
+- **Independent ventricular pacemaker** (`_vent_activation_timer`): fires a ventricular activation when
+  the ventricle has been quiet for `60 / rate` and is not refractory. `vent_pacemaker_mode = "escape"`
+  (slow, `vent_escape_rate` ≈ 50 bpm — only fires when conducted beats fail, i.e. complete block or
+  sinus arrest) or `"vt"` (fast ventricular focus, `vt_rate` → ventricular tachycardia). All ventricular
+  activations route through `_activate_ventricle()` (starts QRS, resets `ncc_ventricular` and the escape
+  timer).
+
+This yields the canonical conduction rhythms: **complete heart block** (atria at the sinus rate,
+ventricles at the escape rate — AV dissociation), **2nd-degree / 2:1 block** (ventricular rate ≈ ½
+atrial), **sinus arrest** (`sa_node_enabled = false` → SA silent → escape rhythm), **ventricular
+tachycardia**, and a triggered **PVC** (`trigger_pvc()` → one premature beat after `pvc_coupling`).
+
+> **Neutrality.** At the defaults (`av_block_mode = "none"`, `sa_node_enabled = true`, escape mode at
+> 50 bpm) the changes are identity — `_av_conducts()` returns `true`, and the escape pacemaker never
+> fires because every conducted beat (all scenario rates > 50 bpm) resets its timer first. The feature
+> lives entirely on the existing `Heart`, so it is available in every scenario with no model-definition
+> edits. PVCs are deterministic (`trigger_pvc()`), not random — the engine forbids `Math.random()`.
 
 ## Activation → chamber contraction (`calc_varying_elastance`)
 
@@ -1974,7 +2389,9 @@ isoelectric at 0 mV.
 
 `heart_rate_ref`, `pq_time`, `qrs_time`, `qt_time`, `av_delay`; ECG amplitudes `p_amp`…`t_amp`;
 `ans_sens`, `ans_activity`, `ans_activity_hr`; the `*_factor` modulators; `pc_el_factor`,
-`pc_extra_volume`.
+`pc_extra_volume`. Rhythm/conduction: `sa_node_enabled`, `av_block_mode`, `av_block_ratio`,
+`first_degree_pq_factor`, `vent_pacemaker_mode`, `vent_escape_rate`, `vt_rate`, `pvc_coupling`
+(+ the `trigger_pvc()` method).
 
 ## Notes & caveats
 
@@ -2703,6 +3120,100 @@ adult 0.88) — no railing.
 - Reabsorption is per-solute (each solute its own fraction), but **static** — no tubular load /
   transport-maximum / secretion kinetics, and not yet hormonally driven (RAAS/ADH is the next phase).
 - `URINE` never empties on its own (a future `void_bladder()` function can reset it).
+
+````
+
+### FILE: explain/docs/Lactate.md
+
+````markdown
+# Lactate
+
+The `Lactate` model turns the previously-**static** `lact` blood solute into a **hypoxia-driven
+product** — a slow process/controller in the same family as [`Hormones`](./Hormones.md) and
+[`Glucose`](./Glucose.md). It holds no compartment of its own, resolves references to other models
+lazily, runs on an `_update_interval`, and is **NEUTRAL at rest**: with tissues adequately
+oxygenated there is no O2 debt (no production), and lactate already sitting at its baseline produces
+no net clearance flux. A scenario shipping a `Lactate` model therefore keeps its baseline ABG and
+only diverges when tissue oxygenation falls (shock, asphyxia, severe hypoxia).
+
+## Why it changes pH with no solver change
+
+`Lactate` writes **only** `solutes.lact` on the blood compartments. The existing Stewart acid-base
+solver in [`BloodComposition`](./BloodComposition.md) already consumes `lact` as a strong anion when
+it forms the strong-ion difference:
+
+```js
+sid = sol["na"] + sol["k"] + 2 * sol["ca"] + 2 * sol["mg"] - sol["cl"] - sol["lact"];
+```
+
+Raising `lact` lowers the SID → lower pH / HCO3 / BE — i.e. a **lactic metabolic acidosis** — with
+no change whatsoever to the solver. The coupling is one-directional (the O2 sensors in `Mob`/`Ans`
+read `to2`, not pH), so there is no oscillation risk.
+
+**Insertion order matters.** It must run **after** [`Metabolism`](./Metabolism.md) (which sets each
+tissue's `to2` for the step) and **before** `Blood` (which solves composition). This is handled by
+the model's position in the scenario JSON `models` map — insert it just after `Metabolism`.
+
+## Per-tissue-site mechanism
+
+`Lactate` reuses `Metabolism.metabolic_active_models` (the tissue consumption map, per-site VO2
+fraction `fvo2`) plus the whole-body `vo2`. For each active site (a `MicroVascularUnit` is followed
+to its `_CAP` compartment):
+
+```
+threshold = threshold_frac * resting_to2          (resting captured at warm-up, see below)
+anaerobic = clamp((threshold − to2) / threshold, 0, 1)        (the Mob activation idiom)
+
+local_o2_demand = (0.039 * vo2 * vo2_factor * vo2_temp_factor * weight / 60) * dt * fvo2   [mmol O2]
+lactate_produced (mmol) = anaerobic * local_o2_demand * lact_per_o2_deficit * prod_gain
+   → comp.solutes.lact += lactate_produced / comp.vol
+```
+
+`lact_per_o2_deficit ≈ 0.33` reflects ~2 lactate per glucose / 6 O2 per glucose ⇒ ~0.33 mmol
+lactate per mmol of unmet O2 demand.
+
+**Clearance** runs every update on every blood compartment carrying a `lact` solute, relaxing
+first-order toward `lact_baseline` (Cori cycle / hepatic + renal handling):
+
+```
+comp.solutes.lact += (lact_baseline − comp.solutes.lact) * lact_clearance * dt
+```
+
+## The robustness trick: minimum-over-warm-up threshold
+
+The per-site anaerobic `threshold` auto-seeds from the running **MINIMUM** tissue `to2` captured
+across a warm-up window (`_warmup_delay`, 90 s) — **not** a single instant. Using the trough makes
+the threshold sit below the operating low point, so the model stays neutral at rest even in
+**chronically hypoxic** scenarios (cyanotic CHD, fetus) whose steady-state tissue `to2` is low and
+swings cyclically near the threshold. Production is gated off entirely until `_seeded` is set
+(`_warmup_counter >= _warmup_delay`); before that the model only settles compartments toward
+baseline.
+
+## Parameters
+| Parameter | Default | Meaning |
+|---|---|---|
+| `lactate_running` | `true` | master gate — `false` stops production (clearance still settles once toward baseline) |
+| `lact_baseline` | `1.0` mmol/L | resting blood lactate; the clearance target |
+| `threshold_frac` | `0.5` | anaerobic threshold as a fraction of each site's resting-MINIMUM `to2` |
+| `lact_per_o2_deficit` | `0.33` | mmol lactate produced per mmol unmet O2 demand |
+| `lact_clearance` | `0.002` 1/s | first-order clearance rate toward baseline (t½ ≈ 6 min) |
+| `prod_gain` | `1.0` | overall scaler on production (clinical-tuning convenience) |
+| `metabolism_name` | `"Metabolism"` | name of the model supplying the tissue map + VO2 |
+| `_update_interval` | `1.0` s | controller cadence |
+| `_warmup_delay` | `90.0` s | window over which the resting-MINIMUM site `to2` is captured |
+
+## Read-outs
+| Read-out | Meaning |
+|---|---|
+| `arterial_lactate` | `AA.solutes.lact` (mmol/L) |
+| `total_production_step` | total lactate produced in the last update (mmol) |
+| `anaerobic_fraction_max` | worst-site anaerobic fraction this update (0..1) |
+
+## See also
+- [`Metabolism`](./Metabolism.md) — supplies the tissue consumption map and VO2; sets `to2` each step.
+- [`BloodComposition`](./BloodComposition.md) — the Stewart solver that turns `lact` into a pH shift.
+- [`Mob`](./Mob.md) — the myocardial O2 balance model whose `clamp` activation idiom is reused here.
+- [`Glucose`](./Glucose.md) — sibling slow-process solute model.
 
 ````
 
@@ -3782,6 +4293,253 @@ scenarios open them.
   step), `Shunts.viscosity` is whatever the definition sets and does not track hematocrit.
 - **IPS resistance is fixed.** `IPSL`/`IPSR` always receive `ips_res`; there is no diameter or
   flow-gating on them.
+
+````
+
+### FILE: explain/docs/Surfactant.md
+
+````markdown
+# Surfactant
+
+The `Surfactant` model turns the previously **static** preterm RDS lung phenotype — baked-in stiff
+alveoli, low FRC, reduced alveolar diffusion and an intrapulmonary shunt — into a **dynamic,
+treatable** process: pressure-driven alveolar **recruitment / derecruitment with hysteresis**, plus a
+**surfactant-therapy** response. It is a slow **process controller** in the same family as
+[`Hormones`](./Hormones.md) / [`Kidneys`](./Kidneys.md) / `Lactate`: it holds no compartment,
+resolves references to other models lazily, and is **neutral at rest**. A scenario that ships it keeps
+its calibrated RDS operating point unchanged and only diverges when PEEP/CPAP changes or surfactant is
+given.
+
+It is the *pathophysiology/therapy* layer that sits on top of the lung mechanics owned by
+[`Respiration`](./Respiration.md), the alveolar gas exchange of [`GasExchanger`](./GasExchanger.md),
+and the venous admixture of [`Shunts`](./Shunts.md) — driven by the airway pressure that
+[`Breathing`](./Breathing.md) and the [`Ventilator`](./Ventilator.md) impose.
+
+## Recruitment state
+
+```
+SENSOR (lazy refs)                  STATE                         EFFECTORS (owned while running)
+ALL.pres_in ─┐ mean, smoothed                                     ALL/ALR.el_base_factor   1−el_gain·r   (compliance)
+ALR.pres_in ─┴─► P_tp ──► [ hysteresis dead zone ] ──► open_fraction ─► ALL/ALR.u_vol_factor 1+uvol_gain·r (FRC)
+                          TCP ····· TOP                            GASEX_*.dif_o2/co2_factor 1+dif_gain·r  (gas exchange)
+surfactant ───► lowers TOP/TCP                                    IPSL/IPSR.r_factor_ps    1+ips_gain·r   (less shunt)
+```
+
+`open_fraction` ∈ `[0,1]` is the fraction of alveoli that are open. It is driven by the mean
+(breath-averaged) **transpulmonary pressure** `P_tp` = alveolar recoil pressure (`GasCapacitance.pres_in`,
+averaged over both lungs `ALL`/`ALR` and smoothed first-order over `pres_tc` so tidal swings don't
+dominate):
+
+```
+dOpen = [ k_open·max(0, P_tp − TOP)·(1 − open)     recruit above the opening threshold
+        − k_close·max(0, TCP − P_tp)·open ] · dt   derecruit below the closing threshold
+```
+
+Between the closing threshold `TCP` and the opening threshold `TOP` there is a hysteresis **dead zone**
+(`open` holds) — the signature of lung recruitment.
+
+## Auto-centered thresholds (the robustness trick)
+
+At warm-up (after `_warmup_delay` = 30 s, once the circuit has settled) the model captures the baseline
+mean `P_tp` (`P0`), `open_fraction` (`f0`) and `surfactant` level (`surf0`), then centers the dead zone
+on `P0`:
+
+```
+TOP = P0 + open_margin  − surf_open_gain ·(surfactant − surf0)
+TCP = P0 − close_margin − surf_close_gain·(surfactant − surf0)
+```
+
+So at the scenario's own baseline (`surfactant == surf0`, `P_tp == P0`) the operating pressure sits
+inside the dead zone → `open` holds at `f0` → the model is **neutral and stable at ANY scenario's
+operating point with no per-scenario threshold tuning**. Raising PEEP pushes `P_tp` above `TOP` →
+recruit; losing PEEP pushes it below `TCP` → derecruit; **surfactant lowers `TOP`/`TCP`** so the same
+prevailing airway pressure now recruits the lung. Recruitment is **gated off until seeded** (`open_fraction`
+holds at its init value during warm-up), so the `f0` (≈ 0.5) headroom is identical for every scenario
+regardless of the warm-up pressure transient.
+
+## Effectors
+
+All effects are referenced to `f0`, so each factor is exactly `1.0` at baseline. With
+`r = open_fraction − f0` (`+` = recruited above baseline, `−` = derecruited):
+
+| Channel | Target | Factor | Effect of recruitment |
+|---|---|---|---|
+| `el_lung_factor` | `ALL`/`ALR`.`el_base_factor` | `1 − el_gain·r` | lower elastance / more compliant |
+| `uvol_lung_factor` | `ALL`/`ALR`.`u_vol_factor` | `1 + uvol_gain·r` | higher FRC |
+| `dif_factor` | `GASEX_LL`/`GASEX_RL`.`dif_o2_factor` & `dif_co2_factor` | `1 + dif_gain·r` | more gas-exchange surface |
+| `ips_factor` | `IPSL`/`IPSR`.`r_factor_ps` | `1 + ips_gain·r` | higher shunt resistance → less venous admixture |
+
+Each factor is clamped (`el` `[0.2,3.0]`, `uvol` `[0.3,3.0]`, `dif` `[0.1,5.0]`, `ips` `[0.1,30.0]`).
+
+**Which factor layer matters.** The first three use the **non-persistent** factor layer
+(`el_base_factor` / `u_vol_factor` / `dif_*_factor`) — reset to `1.0` each step by the compartment and
+**re-written here every step** — so they compose additively with the [`Respiration`](./Respiration.md)
+controller, which owns the persistent `*_factor_ps` layer (see the
+[factor / effective-value pattern](./Capacitance.md)). The shunt instead modulates the **persistent**
+`r_factor_ps` on `IPSL`/`IPSR` (those resistors carry their `r_for`/`r_back` from `Shunts.ips_res`);
+that channel is **owned by Surfactant** and released back to `1.0` on disable.
+
+## Surfactant therapy
+
+`surfactant` ∈ `[0,1]` is alveolar maturity: `0` = severe deficiency (RDS), `1` = mature / fully
+treated (default baseline `0.3`). The dosing API instills surfactant and ramps maturity up first-order:
+
+```
+administer_surfactant(target = 1.0)   // sets surfactant_target; callable via callModelFunction / TaskScheduler
+surfactant += dt·(1/surfactant_tc)·(surfactant_target − surfactant)   // surfactant_tc = 180 s
+```
+
+The acute compliance/recruitment response therefore develops over a few minutes. Setting
+`surfactant_target = null` holds maturity at its current value.
+
+## Read-outs
+
+| Read-out | Meaning |
+|---|---|
+| `open_fraction` | recruited alveolar fraction `[0,1]` |
+| `transpulmonary_pressure` | smoothed mean `P_tp` (mmHg) |
+| `open_pressure` / `close_pressure` | current `TOP` / `TCP` (mmHg) |
+| `surfactant` | current alveolar maturity `[0,1]` |
+| `el_lung_factor` / `uvol_lung_factor` / `dif_factor` / `ips_factor` | applied effector factors |
+
+## Configuration & calibration
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `surfactant` / `surfactant_tc` | `0.3` / `180.0` s | baseline maturity / therapy ramp time constant |
+| `open_margin` / `close_margin` | `2.0` / `2.0` mmHg | dead-zone half-widths above/below `P0` |
+| `surf_open_gain` / `surf_close_gain` | `14.0` / `12.0` mmHg | drop in `TOP` / `TCP` per unit surfactant rise |
+| `k_open` / `k_close` | `0.5` / `0.5` (1/(mmHg·s)) | recruitment / derecruitment rates |
+| `pres_tc` | `4.0` s | smoothing of `P_tp` |
+| `el_gain` / `uvol_gain` / `dif_gain` / `ips_gain` | `0.7` / `1.5` / `2.0` / `6.0` | effect gains per unit `r` |
+| `_warmup_delay` | `30.0` s | delay before capturing `P0` / `f0` / `surf0` |
+
+> **Calibration note.** A spontaneously-breathing preterm runs at a **low** mean `P_tp` (~1–3 mmHg), so
+> the margins are deliberately small and the surfactant gains large: a therapeutic dose must clearly
+> pull the opening threshold below the prevailing airway pressure for recruitment to occur.
+
+## Gating
+
+`surfactant_running` (default `true`) is the master gate. When set `false`, `_release_channels()` runs
+**once** — resetting `el_base_factor`/`u_vol_factor` on the lungs, `dif_o2_factor`/`dif_co2_factor` on
+the gas exchangers, and the persistent `r_factor_ps` on the shunts all back to `1.0` — then the model
+idles. This is the clean "off" switch that returns the lung to its underlying (static) phenotype.
+
+````
+
+### FILE: explain/docs/Thermoregulation.md
+
+````markdown
+# Thermoregulation
+
+The `Thermoregulation` model is the **body-temperature process controller** for the neonate — a slow
+counterpart to [`Hormones`](./Hormones.md) (RAAS/ADH) and the [`Kidneys`](./Kidneys.md)
+autoregulation loop. It holds no compartment of its own, resolves references to other models lazily,
+runs on an `_update_interval` accumulator, and **owns its effector channels while enabled** (releasing
+them once on disable). It models a **single well-mixed core node** whose temperature is the running
+balance of heat produced against heat lost. Default config is **neutral**: thanks to the `_loss_trim`
+auto-seed the core sits exactly at `setpoint_temp` (37 °C) at rest, every owned factor is `1.0`, and
+baseline vitals/ABG are unchanged. The model only diverges when the thermal environment is perturbed
+(cold incubator, radiant warmer, evaporative loss) or when heat production changes.
+
+## Sensors → core node → effectors
+
+```
+SENSORS (lazy refs)              CORE NODE (single-node heat balance)        EFFECTORS (owned, default-neutral)
+Metabolism.vo2 · vo2_factor ──┐
+env_temp / radiant_temp ──────┼─► Q_prod (metabolic + brown fat)            Metabolism.vo2_temp_factor  (Q10 metabolic coupling)
+rel_humidity ─────────────────┼─► Q_loss (radiative+convective+evap +trim)  Heart.hr_temp_factor        (temperature → heart rate)
+weight (Meeh SA) ─────────────┘    dCore = (Q_prod − Q_loss)/(m·c)·dt        Blood.set_temperature(core) (acid-base / O2 dissoc. dT term)
+```
+
+## Heat balance
+
+Every `_update_interval` (default **1 s** — temperature is slow), `_update_temperature(u)` runs the
+single-node balance with `u` the exact elapsed time since the last update:
+
+```
+Q_prod  = metabolic + brown_fat                                                  [W]
+  metabolic = (vo2_eff · weight / 60) · caloric_equiv_o2
+    vo2_eff = Metabolism.vo2 · Metabolism.vo2_factor · vo2_temp_factor           (mL O2/kg/min)
+  brown_fat = min( bat_gain · max(0, setpoint − core), bat_max_per_kg · weight ) [W]
+Q_loss_eff = SA·[ h_radiative·(core − radiant_eff) + h_convective·(core − env_temp) ]
+             + SA·evap_coeff·(1 − rel_humidity) + _loss_trim                     [W]
+  SA = surface_area_k · weight^(2/3)              (Meeh surface area, m^2)
+  radiant_eff = radiant_temp if set, else env_temp
+dCore = (Q_prod − Q_loss_eff) / (weight · heat_capacity) · u                     [degC]
+```
+
+Neonates **cannot shiver**: below set-point they defend temperature by **non-shivering (brown-fat)
+thermogenesis** (`brown_fat_heat`), a linear deficit term capped at `bat_max_per_kg · weight`. The
+high neonatal surface-to-mass ratio (the Meeh `weight^(2/3)` term) is what makes them lose heat so
+fast. A read-out-only `skin_temp = core_temp − skin_gradient` is also exposed.
+
+## The auto-seed neutrality idiom
+
+A neonate at rest is not in raw radiative/convective balance with a 32 °C incubator — clothing,
+posture, nesting and insulation supply an offset the single-node geometry doesn't capture. Rather
+than tune coefficients per scenario, the model **auto-seeds** it: at the first update after
+`_warmup_delay` (5 s, to let the circuit settle), it sets
+
+```
+_loss_trim = Q_prod − q_loss_raw      (evaluated at core == setpoint)
+```
+
+so `Q_loss_eff == Q_prod` exactly and `dCore = 0`. The body is therefore **neutral at any baseline
+weight, VO2, or env_temp the scenario ships with**, and only the *subsequent* change of
+`env_temp` / `radiant_temp` / `rel_humidity` / VO2 moves the core. This is the same idiom as the
+Hormones setpoint anchoring and the Kidneys TGF seed.
+
+## Effectors (owned channels)
+
+On each update `_apply_effectors()` maps core temperature to three channels, all default-neutral and
+independent of `Ans` / `Drugs`:
+
+| Channel | Mapping | Notes |
+|---|---|---|
+| `Metabolism.vo2_temp_factor` | `q10 ^ ((core − 37)/10)`, clamped `[vo2_temp_factor_min, vo2_temp_factor_max]` | **new** Q10 metabolic coupling; folds into `vo2_eff` |
+| `Heart.hr_temp_factor` | `1 + hr_temp_gain·(core − setpoint)`, clamped `[hr_temp_factor_min, hr_temp_factor_max]` | drives a previously-dormant Heart channel (already summed into HR in `Heart.calc`) |
+| `Blood.set_temperature(core)` | propagates core temp to **every** blood compartment | feeds the temperature (dT) term of the Stewart acid-base / O2-dissociation solver (`BloodComposition`) |
+
+The master gate `thermoregulation_running` (default `true`), when set `false`, calls
+`_release_channels()` **once** — resetting `vo2_temp_factor`/`hr_temp_factor` to `1.0` and
+`Blood.set_temperature(37.0)` — then idles. This is the clean "off" switch; while enabled, manual
+edits to those channels are overwritten each tick.
+
+## Key parameters (defaults / units)
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `env_temp` | `32.0 °C` | ambient air temperature (neutral-thermal incubator) |
+| `radiant_temp` | `null` | radiant-warmer effective temp; `null` → use `env_temp` |
+| `rel_humidity` | `0.5` | ambient relative humidity (fraction) — modulates evaporative loss |
+| `setpoint_temp` | `37.0 °C` | hypothalamic set-point |
+| `heat_capacity` | `3470 J/kg/K` | specific heat of body tissue |
+| `surface_area_k` | `0.05` | Meeh constant in `SA = k·weight^(2/3)` |
+| `h_radiative` / `h_convective` | `5.5` / `4.0 W/m²/K` | radiative / convective transfer coefficients |
+| `evap_coeff` | `6.0 W/m²` per `(1−humidity)` | evaporative/respiratory loss coefficient |
+| `caloric_equiv_o2` | `20.1 J/mL` | heat released per mL O2 consumed |
+| `bat_gain` / `bat_max_per_kg` | `6.0 W/°C` / `4.5 W/kg` | brown-fat gain and ceiling |
+| `q10` | `2.3` | Q10 of metabolic rate (per 10 °C) |
+| `hr_temp_gain` | `0.1` | HR factor rise per °C above set-point (~10%/°C) |
+| `vo2_temp_factor_min/max` | `0.5` / `2.5` | Q10 clamp |
+| `hr_temp_factor_min/max` | `0.6` / `1.6` | HR-factor clamp |
+
+Read-outs: `core_temp`, `skin_temp`, `heat_production`, `heat_loss`, `brown_fat_heat`,
+`vo2_temp_factor`, `hr_temp_factor`.
+
+## Risk note
+
+The path **core → VO2 (Q10) → metabolic heat → core** is **positive feedback**: a warmer core raises
+VO2 which raises heat production which warms the core further. It is bounded by the dominant heat-loss
+limb (which grows ∝ `core − env_temp` and so always overtakes) plus the `vo2_temp_factor` clamp
+`[0.5, 2.5]`. Keep the clamp in place when re-tuning `q10` or `caloric_equiv_o2`.
+
+## See also
+[`Metabolism`](./Metabolism.md) (VO2 source + the Q10 effector target) ·
+[`Heart`](./Heart.md) (`hr_temp_factor` channel) ·
+[`Blood`](./Blood.md) (`set_temperature` → acid-base / O2-dissociation) ·
+[`Hormones`](./Hormones.md) (sibling controller / neutrality idiom).
 
 ````
 
@@ -5790,11 +6548,16 @@ export { HeartChamber } from "./component_models/HeartChamber";
 export { Gas } from "./component_models/Gas";
 export { Breathing } from "./component_models/Breathing";
 export { Respiration } from "./component_models/Respiration";
+export { Surfactant } from "./component_models/Surfactant";
 
 export { Ans } from "./component_models/Ans";
 export { AnsAfferent } from "./component_models/AnsAfferent";
 export { AnsEfferent } from "./component_models/AnsEfferent";
 export { Metabolism } from "./component_models/Metabolism";
+export { Brain } from "./component_models/Brain";
+export { Thermoregulation } from "./component_models/Thermoregulation";
+export { Glucose } from "./component_models/Glucose";
+export { Lactate } from "./component_models/Lactate";
 export { Kidneys } from "./component_models/Kidneys";
 export { Uterus } from "./component_models/Uterus";
 export { Hormones } from "./component_models/Hormones";
@@ -8024,6 +8787,264 @@ export class BloodVessel extends BloodCapacitance {
 
 ```
 
+### FILE: explain/component_models/Brain.js
+
+```javascript
+import { BaseModelClass } from "../base_models/BaseModelClass";
+
+/*
+  The Brain class models neonatal cerebral haemodynamics: cerebral blood-flow AUTOREGULATION plus
+  INTRACRANIAL PRESSURE (ICP), coupled through the cerebral perfusion pressure CPP = MAP − ICP. It is a
+  process controller in the same family as Kidneys (renal autoregulation): it holds no compartment,
+  resolves refs lazily, runs on an update interval, owns its effector channels, and is NEUTRAL at the
+  scenario's baseline (auto-seeded setpoint + baseline cerebral blood volume), so enabling it does not
+  disturb the calibrated circulation. It only diverges when blood pressure changes, autoregulation is
+  impaired, or intracranial volume rises.
+
+  THE CEREBRAL BED (pre-wired in the scenarios): AA → AA_BR_ART(resistor) → BR_ART → BR_CAP → BR_VEN →
+  VUB. CBF = AA_BR_ART.flow. BR_CAP is the dominant neonatal O2 sink (Metabolism fvo2 ~0.45), so a fall
+  in CBF shows up as BR_CAP.to2 collapsing (the HIE / ischaemia signature).
+
+  AUTOREGULATION (myogenic, mirrors Kidneys). Effector = AA_BR_ART.r_factor_ps (the cerebral arteriole
+  feeding resistor — a Resistor NOT in Circulation's ANS/SVR fan-out, so this composes cleanly; the
+  brain's ANS/SVR tone lives on BR_ART and is left alone). To hold CBF constant as CPP varies, the
+  arteriolar resistance must scale WITH CPP (CBF = CPP/R). So:
+      autoreg_target = clamp(CPP / CPP_setpoint, lower_ratio, upper_ratio)
+  Within the autoregulation range R tracks CPP → CBF flat; beyond the range R clamps → the circulation
+  becomes PRESSURE-PASSIVE (CBF follows CPP — the classic surge-→IVH / drop-→ischaemia of the sick or
+  premature neonate). `autoregulation_gain` ∈ [0,1] blends between intact (1) and pressure-passive (0):
+      r_factor = 1 + autoregulation_gain · (autoreg_target − 1)
+  Neonatal autoregulation is narrow and easily lost — set the gain < 1 (or 0) for HIE / extreme preterm.
+
+  ICP (Monro–Kellie, exponential intracranial compliance). Cerebral blood volume CBV = BR_ART+BR_CAP+
+  BR_VEN volume; ΔV = (CBV − CBV0) + edema_volume (edema_volume is the settable mass/oedema/haemorrhage
+  lever, mL). The EXCESS pressure above baseline is
+      icp_excess = icp_e0 · (exp(icp_k · ΔV_ml) − 1)            (mmHg)
+  and ICP = icp_baseline + icp_excess. Only the EXCESS is applied as pres_ext on BR_ART/BR_CAP/BR_VEN
+  (so at baseline ΔV=0 → 0 added → neutral). The neonatal cranium is COMPLIANT (open fontanelle/sutures)
+  → a gentler curve than the adult; `icp_k` carries this. Rising ICP lowers CPP, which the autoregulation
+  loop defends by dilating — until the reserve is exhausted, then CBF falls and the brain goes ischaemic.
+*/
+
+export class Brain extends BaseModelClass {
+  // static properties
+  static model_type = "Brain";
+
+  constructor(model_ref, name = "") {
+    super(model_ref, name);
+
+    // -----------------------------------------------
+    // gating
+    this.brain_running = true; // master gate (false → owned channels released to neutral)
+    this.autoregulation_enabled = true; // cerebral autoregulation on/off
+    this.icp_enabled = true; // intracranial-pressure coupling on/off
+
+    // -----------------------------------------------
+    // wiring (resolved lazily; runtime-built compartments)
+    this.map_model = "AA"; // systemic arterial pressure (MAP) — cerebral perfusion driver
+    this.arteriole_resistor = "AA_BR_ART"; // cerebral arteriole feeding resistor (autoregulation effector)
+    this.cbf_resistor = "AA_BR_ART"; // resistor whose flow == CBF
+    this.cerebral_compartments = ["BR_ART", "BR_CAP", "BR_VEN"]; // summed for cerebral blood volume (ICP)
+    this.outflow_resistor = "BR_VEN_VUB"; // cerebral venous OUTFLOW resistor — ICP compresses the
+                        // bridging veins (vascular waterfall), raising this resistance → CBF falls.
+                        // (Modelling ICP as a resistance, not pres_ext: external pressure on a series of
+                        // compartments does not change their steady-state through-flow.)
+    this.oxy_model = "BR_CAP"; // brain oxygenation read-out
+
+    // -----------------------------------------------
+    // autoregulation parameters — CLOSED-LOOP control of the arteriole resistance to hold cerebral
+    // blood flow (CBF) at its baseline setpoint. Closed-loop on FLOW (not open-loop pressure→resistance
+    // scaling) so it is robust to the cerebral bed being several resistors in series: it just adjusts
+    // AA_BR_ART until CBF matches, saturating at the vasodilation/constriction limits — beyond which the
+    // circulation is PRESSURE-PASSIVE (CBF follows pressure).
+    this.autoregulation_gain = 1.0; // 1 = intact, 0 = pressure-passive (blend)
+    this.autoreg_control_gain = 5.0; // CBF-error feedback gain (per fractional error per second)
+    this.autoreg_leak = 0.05; // 1/s — leak that relaxes the integrator toward neutral, so at the
+                              // baseline (zero CBF error) the factor returns to 1.0 (no windup); under a
+                              // sustained insult the error term dominates and the correction is held
+                              // (control_gain/leak ≈ 100 → strong autoregulation with a small droop)
+    this.cbf_setpoint = 0.0; // L/min — auto-seeded baseline CBF (the autoregulation target)
+    this.cpp_setpoint = 40.0; // mmHg — auto-seeded baseline CPP (read-out)
+    this.autoreg_tc = 4.0; // s — first-order lag on the applied factor (anti-oscillation)
+    this.autoreg_factor_min = 0.15; // max cerebral vasoDILATION (lower autoregulation limit)
+    this.autoreg_factor_max = 6.0; // max cerebral vasoCONSTRICTION (upper autoregulation limit)
+    this.cbf_tc = 3.0; // s — smoothing of the (pulsatile) cerebral blood flow
+    this.pres_tc = 3.0; // s — smoothing of the sensed arterial pressure (averages out the cardiac pulse,
+                        // so CPP tracks MEAN arterial pressure, not the instantaneous value)
+
+    // -----------------------------------------------
+    // ICP parameters (exponential intracranial compliance)
+    this.icp_baseline = 5.0; // mmHg — normal neonatal ICP (read-out anchor; not applied as pressure)
+    this.edema_volume = 0.0; // mL — settable oedema / mass / haemorrhage lever
+    this.icp_e0 = 4.0; // mmHg — scale of the exponential pressure-volume curve
+    this.icp_k = 0.18; // 1/mL — stiffness (neonatal open fontanelle → relatively compliant)
+    this.icp_excess_max = 70.0; // mmHg — clamp on the excess intracranial pressure
+    this.icp_outflow_gain = 0.03; // fractional rise in cerebral outflow resistance per mmHg of ICP excess
+                                  // (kept low so the ICP→venous-congestion→CBV→ICP loop gain stays < 1)
+    this.icp_outflow_factor_max = 8.0; // clamp on the outflow-resistance factor
+
+    // -----------------------------------------------
+    // dependent properties (read-outs)
+    this.cbf = 0.0; // cerebral blood flow (L/min)
+    this.cpp = 0.0; // cerebral perfusion pressure (mmHg)
+    this.icp = 5.0; // intracranial pressure (mmHg)
+    this.icp_excess = 0.0; // ICP above baseline, applied as pres_ext (mmHg)
+    this.cerebral_blood_volume = 0.0; // CBV (mL)
+    this.brain_to2 = 0.0; // BR_CAP oxygen content (mmol/L) — ischaemia read-out
+    this.autoreg_factor = 1.0; // applied → AA_BR_ART.r_factor_ps
+    this.sensed_map = 0.0; // sensed MAP (mmHg)
+
+    // -----------------------------------------------
+    // local parameters
+    this._update_interval = 0.015; // s — fast loop (myogenic responds in seconds; same cadence as Kidneys)
+    this._update_counter = 0.0;
+    this._warmup_delay = 30.0; // s before seeding the baseline CPP / CBV
+    this._warmup_counter = 0.0;
+    this._seeded = false;
+    this._map_smooth = null; // smoothed mean arterial pressure state
+    this._cbf_smooth = null; // smoothed cerebral blood flow state (L/min)
+    this._ar_int = 1.0; // autoregulation integral state (resistance factor before the gain blend)
+    this._cbv0 = 0.0; // captured baseline cerebral blood volume (mL)
+    this._was_active = false;
+    this._map = null;
+    this._arteriole = null;
+    this._cbf_res = null;
+    this._comps = null;
+    this._outflow = null;
+    this._oxy = null;
+  }
+
+  init_model(args) {
+    super.init_model(args);
+    this.icp = this.icp_baseline;
+  }
+
+  calc_model() {
+    // master gate — release owned channels once, then idle
+    if (!this.brain_running) {
+      if (this._was_active) this._release_channels();
+      this._was_active = false;
+      return;
+    }
+    this._resolve_refs();
+
+    // ICP pres_ext must be re-applied EVERY step (compartments reset pres_ext each step); the slow
+    // control math (autoregulation + ICP magnitude) runs on the update interval.
+    this._update_counter += this._t;
+    if (this._update_counter >= this._update_interval) {
+      const u = this._update_counter;
+      this._update_counter = 0.0;
+      this._update_brain(u);
+    }
+    this._was_active = true;
+  }
+
+  _resolve_refs() {
+    if (!this._map) this._map = this._model_engine.models[this.map_model] ?? null;
+    if (!this._arteriole) this._arteriole = this._model_engine.models[this.arteriole_resistor] ?? null;
+    if (!this._cbf_res) this._cbf_res = this._model_engine.models[this.cbf_resistor] ?? null;
+    if (!this._comps) this._comps = this.cerebral_compartments.map((m) => this._model_engine.models[m] ?? null);
+    if (!this._outflow) this._outflow = this._model_engine.models[this.outflow_resistor] ?? null;
+    if (!this._oxy) this._oxy = this._model_engine.models[this.oxy_model] ?? null;
+  }
+
+  _update_brain(u) {
+    // --- read & smooth the mean arterial pressure (averages out the cardiac pulse) ---
+    const map_inst = this._map ? this._map.pres : this.sensed_map;
+    if (this._map_smooth === null) this._map_smooth = map_inst;
+    this._map_smooth += u * ((1.0 / this.pres_tc) * (map_inst - this._map_smooth));
+    this.sensed_map = this._map_smooth;
+    // cerebral blood flow (smoothed — the instantaneous resistor flow is pulsatile)
+    const cbf_inst = this._cbf_res ? this._cbf_res.flow * 60.0 : 0.0; // L/s → L/min
+    if (this._cbf_smooth === null) this._cbf_smooth = cbf_inst;
+    this._cbf_smooth += u * ((1.0 / this.cbf_tc) * (cbf_inst - this._cbf_smooth));
+    this.cbf = this._cbf_smooth;
+    this.brain_to2 = this._oxy ? this._oxy.to2 : 0.0;
+
+    // --- cerebral blood volume (mL) ---
+    let cbv = 0.0;
+    if (this._comps) for (const c of this._comps) { if (c) cbv += c.vol; }
+    cbv *= 1000.0; // L → mL
+    this.cerebral_blood_volume = cbv;
+
+    // --- ICP (Monro-Kellie, exponential), only the EXCESS above baseline is applied ---
+    if (this.icp_enabled) {
+      const dV = (this._seeded ? cbv - this._cbv0 : 0.0) + this.edema_volume; // mL
+      let excess = this.icp_e0 * (Math.exp(this.icp_k * dV) - 1.0);
+      if (excess < 0.0) excess = 0.0; // a smaller-than-baseline cranium does not pull a vacuum
+      if (excess > this.icp_excess_max) excess = this.icp_excess_max;
+      this.icp_excess = excess;
+      this.icp = this.icp_baseline + excess;
+    } else {
+      this.icp_excess = 0.0;
+      this.icp = this.icp_baseline;
+    }
+    // ICP compresses the cerebral bridging veins → raises the venous outflow resistance → CBF falls
+    // (the closed-loop autoregulation below then defends CBF by dilating the inflow, until exhausted)
+    if (this._outflow) {
+      this._outflow.r_factor_ps = this._clamp(1.0 + this.icp_outflow_gain * this.icp_excess, 1.0, this.icp_outflow_factor_max);
+    }
+
+    // --- cerebral perfusion pressure ---
+    this.cpp = this.sensed_map - this.icp;
+
+    // --- seed the neutral baseline once the circuit has settled ---
+    if (!this._seeded) {
+      this._warmup_counter += u;
+      if (this._warmup_counter >= this._warmup_delay) {
+        this.cpp_setpoint = this.cpp;
+        this.cbf_setpoint = this._cbf_smooth;
+        this._cbv0 = cbv;
+        this._seeded = true;
+      }
+    }
+
+    // --- autoregulation: closed-loop control of the arteriole resistance to hold CBF at setpoint ---
+    if (this._seeded && this.cbf_setpoint > 0) {
+      if (this.autoregulation_enabled && this.autoregulation_gain > 0) {
+        // leaky integral control: too much flow (err>0) → constrict; the leak pulls the integrator back
+        // to neutral so the baseline (err≈0) is collision-free/neutral
+        const err = (this._cbf_smooth - this.cbf_setpoint) / this.cbf_setpoint;
+        const d = this.autoreg_control_gain * err - this.autoreg_leak * (this._ar_int - 1.0);
+        this._ar_int = this._clamp(this._ar_int + d * u, this.autoreg_factor_min, this.autoreg_factor_max);
+      } else {
+        this._ar_int = this._lag(this._ar_int, 1.0, u, this.autoreg_tc); // relax to neutral (pressure-passive)
+      }
+      // blend toward pressure-passive (factor → 1) as the gain drops, then lag the applied factor
+      const applied = this._clamp(1.0 + this.autoregulation_gain * (this._ar_int - 1.0), this.autoreg_factor_min, this.autoreg_factor_max);
+      this.autoreg_factor = this._lag(this.autoreg_factor, applied, u, this.autoreg_tc);
+    }
+    if (this._arteriole) this._arteriole.r_factor_ps = this.autoreg_factor;
+  }
+
+  _release_channels() {
+    this._resolve_refs();
+    this.autoreg_factor = 1.0;
+    this.icp_excess = 0.0;
+    this.icp = this.icp_baseline;
+    if (this._arteriole) this._arteriole.r_factor_ps = 1.0;
+    if (this._outflow) this._outflow.r_factor_ps = 1.0;
+  }
+
+  // settable lever for HIE oedema / mass / haemorrhage (mL of added intracranial volume)
+  set_edema(volume_ml) {
+    this.edema_volume = volume_ml;
+  }
+
+  _lag(x, target, u, tc) {
+    if (tc > 0) return x + u * ((1.0 / tc) * (-x + target));
+    return target;
+  }
+
+  _clamp(v, lo, hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+  }
+}
+
+```
+
 ### FILE: explain/component_models/Breathing.js
 
 ```javascript
@@ -8598,6 +9619,20 @@ export class Drugs extends BaseModelClass {
         cont_ec50: 30.0, cont_emax: 0.35, cont_hill: 1.5,
         svr_ec50: 25.0, svr_emax: 0.9, svr_hill: 2.0,
       },
+      pge1: {
+        // Prostaglandin E1 (alprostadil) — keeps the ductus arteriosus patent in duct-dependent CHD.
+        enabled: true,
+        // PK — extensive pulmonary first-pass metabolism (~80% in one lung pass) → brisk whole-body
+        // clearance, hence the short clinical half-life and need for continuous infusion.
+        clearance: { global: 0.08, sites: {} },
+        ke0: 0.0,
+        // PD — ductal patency only (→ Pda.diameter_drug_factor). PGE1 is potent and heavily cleared, so
+        // a clinical infusion (~0.01–0.05 mcg/kg/min) yields a low effect-site conc (~0.01–0.05 ng/mL);
+        // EC50 is set in that range so the clinical dose band sits on the sigmoid's rising limb. emax 1.5
+        // → up to a 2.5× patency factor at saturation (capped at the anatomic max in Pda). No
+        // HR/inotropy/SVR effect in this version; the known systemic vasodilation + apnea are future.
+        pda_ec50: 0.02, pda_emax: 1.5, pda_hill: 1.0,
+      },
     };
 
     // -----------------------------------------------
@@ -8609,6 +9644,7 @@ export class Drugs extends BaseModelClass {
     this.hr_drug_factor = 1.0; // applied (summed) → Heart.hr_drug_factor (1.0 = no effect)
     this.cont_drug_factor = 1.0; // applied (summed) → each chamber's el_max_drug_factor (1.0 = no effect)
     this.svr_drug_factor = 1.0; // applied (summed) → Circulation.svr_factor_drug (1.0 = no effect)
+    this.pda_drug_factor = 1.0; // applied (summed) → Pda.diameter_drug_factor (1.0 = no effect)
 
     // active continuous infusions: { drugName: rate_mcg_kg_min }
     this.infusions = {};
@@ -8624,6 +9660,7 @@ export class Drugs extends BaseModelClass {
     this._effect = null;
     this._heart = null;
     this._circ = null;
+    this._pda = null;
 
     // blood-carrying model types whose drugs{} dict participates in transport (mirrors Blood.js)
     this._blood_modeltypes = [
@@ -8639,7 +9676,12 @@ export class Drugs extends BaseModelClass {
   init_model(args) {
     // base applies args (no components on this model). Refs/seeding are resolved lazily on first step
     // because Circulation builds the blood compartments during ITS init, possibly after this model.
-    super.init_model(args);
+    const default_defs = this.drug_defs; // full built-in set from the constructor
+    super.init_model(args); // a scenario may overwrite drug_defs with an older/partial baked set
+    // Merge the built-in defaults UNDER the scenario-provided defs: scenario tuning wins for drugs it
+    // defines, but any built-in drug the baked state predates (e.g. pge1 added after those scenarios
+    // were serialized) is still present — so we don't have to re-bake every scenario JSON.
+    this.drug_defs = { ...default_defs, ...this.drug_defs };
   }
 
   calc_model() {
@@ -8679,7 +9721,7 @@ export class Drugs extends BaseModelClass {
     });
 
     // 3. EFFECT — biophase lag (optional) then sum each effect across all enabled drugs
-    let hr_sum = 0.0, cont_sum = 0.0, svr_sum = 0.0;
+    let hr_sum = 0.0, cont_sum = 0.0, svr_sum = 0.0, pda_sum = 0.0;
     Object.keys(this.drug_defs).forEach((drug) => {
       const def = this.drug_defs[drug];
       const c_site = this._effect?.drugs?.[drug] ?? 0.0;
@@ -8693,13 +9735,17 @@ export class Drugs extends BaseModelClass {
       }
       this.biophase[drug] = c_drive;
       if (!def.enabled) return;
+      // _emax returns 0 for any effect a drug doesn't define (undefined emax), so drugs compose without
+      // every drug needing every channel (e.g. pge1 has only pda_*, the catecholamines only hr/cont/svr)
       hr_sum   += this._emax(c_drive, def.hr_emax,   def.hr_ec50,   def.hr_hill);
       cont_sum += this._emax(c_drive, def.cont_emax, def.cont_ec50, def.cont_hill);
       svr_sum  += this._emax(c_drive, def.svr_emax,  def.svr_ec50,  def.svr_hill);
+      pda_sum  += this._emax(c_drive, def.pda_emax,  def.pda_ec50,  def.pda_hill);
     });
     this.hr_drug_factor = 1.0 + hr_sum;
     this.cont_drug_factor = 1.0 + cont_sum;
     this.svr_drug_factor = 1.0 + svr_sum;
+    this.pda_drug_factor = 1.0 + pda_sum;
     this.conc_eff = this.concentrations.adrenaline ?? 0.0;
     this.conc_inj = this._injection?.drugs?.adrenaline ?? 0.0;
 
@@ -8707,6 +9753,7 @@ export class Drugs extends BaseModelClass {
     if (this._heart) this._heart.hr_drug_factor = this.hr_drug_factor; // already wired into HR calc
     this._write_chamber_inotropy(this.cont_drug_factor); // mirrors the Mob inotropy path
     if (this._circ) this._circ.svr_factor_drug = this.svr_drug_factor; // independent SVR channel
+    if (this._pda) this._pda.diameter_drug_factor = this.pda_drug_factor; // ductal patency (PGE1)
 
     this._was_active = true;
   }
@@ -8750,6 +9797,7 @@ export class Drugs extends BaseModelClass {
     if (!this._circ) this._circ = this._model_engine.models[this.circulation_name] ?? null;
     if (!this._injection) this._injection = this._model_engine.models[this.injection_site] ?? null;
     if (!this._effect) this._effect = this._model_engine.models[this.effect_site] ?? null;
+    if (!this._pda) this._pda = this._model_engine.models["Pda"] ?? null;
     if (!this._seeded) this._seed_drugs();
   }
 
@@ -8800,9 +9848,11 @@ export class Drugs extends BaseModelClass {
     if (this._heart) this._heart.hr_drug_factor = 1.0;
     this._write_chamber_inotropy(1.0);
     if (this._circ) this._circ.svr_factor_drug = 1.0;
+    if (this._pda) this._pda.diameter_drug_factor = 1.0;
     this.hr_drug_factor = 1.0;
     this.cont_drug_factor = 1.0;
     this.svr_drug_factor = 1.0;
+    this.pda_drug_factor = 1.0;
   }
 
   // sigmoid Emax / Hill: effect = emax · c^n / (ec50^n + c^n)
@@ -9269,6 +10319,213 @@ export function calc_gas_composition(
 }
 ```
 
+### FILE: explain/component_models/Glucose.js
+
+```javascript
+import { BaseModelClass } from "../base_models/BaseModelClass";
+
+/*
+  The Glucose class is the blood-glucose / insulin controller — a slow process model in the same
+  family as `Hormones`, `Kidneys` and `Drugs`: it holds no compartment of its own, resolves
+  references lazily, runs on an `_update_interval`, owns its source/sink while enabled, and
+  auto-seeds itself so a scenario shipping it is NEUTRAL at rest (arterial glucose holds at its
+  set-point, insulin/counter-reg == 1.0, total body glucose mass conserved). It only diverges on
+  perturbation — IV dextrose (via the existing `Fluids` mechanism), a clamped hepatic output, or a
+  changed utilization rate.
+
+  `glucose` is a new blood solute (mmol/L). It advects through the whole circuit for free via the
+  engine's existing `volume_in` solute mixing (BloodCapacitance/HeartChamber), exactly like Na/K —
+  the controller only seeds the key and adjusts its source/sink. (A scenario should also list
+  "glucose" in Blood.solutes so every compartment starts seeded; the lazy seed below is a safety net.)
+
+  CAUSAL LOOP:
+    SOURCE — endogenous hepatic glucose production added to the central vein (`IVCI`):
+               prod_step = (hgp_rate/60) * weight * dt * production_factor      [mmol]
+    SINK   — peripheral utilization distributed over the SAME compartments and fractions Metabolism
+             uses (its `metabolic_active_models`), scaled by insulin-stimulated uptake:
+               use_step  = (glu_use_rate/60) * weight * dt * uptake_factor      [mmol], split by fvo2
+    CONTROL — insulin rises with hyperglycemia (↑uptake, ↓hepatic output); counter-regulation rises
+              with hypoglycemia (↑hepatic output). At the set-point both == 1.0 and (with the default
+              hgp_rate == glu_use_rate) production exactly balances utilization → neutral at rest.
+
+  Deliberately NOT added to Kidneys.filterable_solutes (no glucosuria in this version).
+*/
+
+export class Glucose extends BaseModelClass {
+  // static properties
+  static model_type = "Glucose";
+
+  constructor(model_ref, name = "") {
+    super(model_ref, name);
+
+    // -----------------------------------------------
+    // gating
+    this.glucose_running = true; // master gate (false → source/sink off, insulin/counterreg → 1.0)
+
+    // -----------------------------------------------
+    // wiring (resolved lazily)
+    this.metabolism_name = "Metabolism"; // supplies the consumption-site map (metabolic_active_models)
+    this.injection_site = "IVCI"; // central vein receiving endogenous hepatic glucose output
+    this.plasma_model = "AA"; // representative arterial plasma whose glucose drives the controller
+
+    // -----------------------------------------------
+    // fluxes (neonatal scale) — mmol/kg/min
+    this.glu_use_rate = 0.03; // peripheral glucose utilization (~5.4 mg/kg/min)
+    this.hgp_rate = 0.03; // hepatic glucose production (default == utilization → neutral at rest)
+
+    // set-point + controller dynamics (1.0 = baseline activity)
+    this.glucose_setpoint = 4.0; // mmol/L (~72 mg/dL); auto-seeded to the resting arterial value
+    this.insulin_gain = 6.0; // insulin drive per fractional glucose excess
+    this.counterreg_gain = 6.0; // counter-regulatory drive per fractional glucose deficit
+    this.insulin_tc = 120.0; // s — insulin responds over a couple of minutes
+    this.counterreg_tc = 120.0; // s
+
+    // effector sensitivities + clamps
+    this.uptake_insulin_gain = 1.0; // uptake-factor rise per (insulin - 1)
+    this.hgp_insulin_gain = 0.8; // hepatic-output suppression per (insulin - 1)
+    this.hgp_counterreg_gain = 2.0; // hepatic-output rise per (counterreg - 1)
+    this.hormone_min = 0.0;
+    this.hormone_max = 10.0;
+    this.uptake_factor_min = 0.1;
+    this.uptake_factor_max = 5.0;
+    this.production_factor_min = 0.0;
+    this.production_factor_max = 8.0;
+    this.glucose_default = 4.0; // value used to seed the solute key where it is missing
+
+    // -----------------------------------------------
+    // dependent properties (read-outs)
+    this.glucose = 4.0; // sensed arterial glucose (mmol/L)
+    this.insulin = 1.0; // insulin activity (1.0 = baseline)
+    this.counterreg = 1.0; // counter-regulatory activity (1.0 = baseline)
+    this.uptake_factor = 1.0; // applied insulin-stimulated uptake factor
+    this.production_factor = 1.0; // applied hepatic-output factor
+    this.glucose_use_step = 0.0; // last per-update total utilization (mmol)
+    this.glucose_prod_step = 0.0; // last per-update total production (mmol)
+
+    // -----------------------------------------------
+    // local parameters
+    this._update_interval = 1.0; // controller cadence (s)
+    this._update_counter = 0.0;
+    this._warmup_delay = 30.0; // s before the set-point auto-seed (let the arterio-venous gradient settle)
+    this._warmup_counter = 0.0;
+    this._seeded = false;
+    this._keys_seeded = false;
+    this._was_active = false;
+    this._metabolism = null;
+    this._plasma = null;
+    this._inject = null;
+  }
+
+  init_model(args) {
+    super.init_model(args);
+  }
+
+  calc_model() {
+    // master gate — relax to neutral once, then idle
+    if (!this.glucose_running) {
+      if (this._was_active) this._release();
+      this._was_active = false;
+      return;
+    }
+
+    this._update_counter += this._t;
+    if (this._update_counter >= this._update_interval) {
+      const u = this._update_counter;
+      this._update_counter = 0.0;
+      this._update_glucose(u);
+    }
+    this._was_active = true;
+  }
+
+  _resolve_refs() {
+    if (!this._metabolism) this._metabolism = this._model_engine.models[this.metabolism_name] ?? null;
+    if (!this._plasma) this._plasma = this._model_engine.models[this.plasma_model] ?? null;
+    if (!this._inject) this._inject = this._model_engine.models[this.injection_site] ?? null;
+  }
+
+  // make sure every blood compartment carries the glucose key (safety net; a scenario normally
+  // ships "glucose" in Blood.solutes so this is a no-op after the first call)
+  _seed_keys() {
+    for (const name in this._model_engine.models) {
+      const m = this._model_engine.models[name];
+      if (m && m.solutes && m.solutes.glucose === undefined) {
+        m.solutes.glucose = this.glucose_default;
+      }
+    }
+    this._keys_seeded = true;
+  }
+
+  _update_glucose(u) {
+    this._resolve_refs();
+    if (!this._keys_seeded) this._seed_keys();
+    const weight = this._model_engine.weight;
+
+    // --- sense arterial glucose ---
+    if (this._plasma?.solutes) this.glucose = this._plasma.solutes.glucose ?? this.glucose;
+
+    // auto-seed the set-point to the resting arterial value (neutral at rest)
+    if (!this._seeded) {
+      this._warmup_counter += u;
+      if (this._warmup_counter >= this._warmup_delay) {
+        this.glucose_setpoint = this.glucose;
+        this._seeded = true;
+      }
+    }
+
+    // --- controller (insulin vs counter-regulation) ---
+    const glu_err = this.glucose_setpoint > 0 ? (this.glucose - this.glucose_setpoint) / this.glucose_setpoint : 0.0;
+    const insulin_target = this._clamp(1.0 + this.insulin_gain * glu_err, this.hormone_min, this.hormone_max);
+    const counterreg_target = this._clamp(1.0 - this.counterreg_gain * glu_err, this.hormone_min, this.hormone_max);
+    this.insulin = this._lag(this.insulin, insulin_target, u, this.insulin_tc);
+    this.counterreg = this._lag(this.counterreg, counterreg_target, u, this.counterreg_tc);
+
+    this.uptake_factor = this._clamp(1.0 + this.uptake_insulin_gain * (this.insulin - 1.0), this.uptake_factor_min, this.uptake_factor_max);
+    this.production_factor = this._clamp(1.0 - this.hgp_insulin_gain * (this.insulin - 1.0) + this.hgp_counterreg_gain * (this.counterreg - 1.0), this.production_factor_min, this.production_factor_max);
+
+    // --- SINK: peripheral utilization, distributed exactly like Metabolism's VO2 ---
+    const use_total = (this.glu_use_rate * weight / 60.0) * u * this.uptake_factor; // mmol over this update
+    this.glucose_use_step = use_total;
+    const sites = this._metabolism?.metabolic_active_models ?? {};
+    for (const [site, fvo2] of Object.entries(sites)) {
+      let comp = this._model_engine.models[site];
+      if (comp && comp.model_type === "MicroVascularUnit") comp = this._model_engine.models[site + "_CAP"];
+      if (!comp || !comp.solutes || comp.vol <= 0.0) continue;
+      const dmol = use_total * fvo2; // mmol removed from this site
+      const new_conc = (comp.solutes.glucose * comp.vol - dmol) / comp.vol;
+      comp.solutes.glucose = new_conc > 0 ? new_conc : 0.0;
+    }
+
+    // --- SOURCE: endogenous hepatic glucose output into the central vein ---
+    if (this._inject?.solutes && this._inject.vol > 0.0) {
+      const prod_total = (this.hgp_rate * weight / 60.0) * u * this.production_factor; // mmol
+      this.glucose_prod_step = prod_total;
+      this._inject.solutes.glucose += prod_total / this._inject.vol;
+    }
+  }
+
+  _release() {
+    this.insulin = 1.0;
+    this.counterreg = 1.0;
+    this.uptake_factor = 1.0;
+    this.production_factor = 1.0;
+    this.glucose_use_step = 0.0;
+    this.glucose_prod_step = 0.0;
+  }
+
+  _lag(x, target, u, tc) {
+    if (tc > 0) return x + u * ((1.0 / tc) * (-x + target));
+    return target;
+  }
+
+  _clamp(v, lo, hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+  }
+}
+
+```
+
 ### FILE: explain/component_models/Heart.js
 
 ```javascript
@@ -9290,6 +10547,19 @@ export class Heart extends BaseModelClass {
     this.qt_time = 0.25; // qt time (s)
     this.av_delay = 0.0005; // delay in the AV-node (s)
 
+    // -----------------------------------------------
+    // conduction / rhythm (default = normal sinus rhythm; all of this is identity at the defaults)
+    // -----------------------------------------------
+    this.sa_node_enabled = true; // false = sinus arrest → the ventricular escape pacemaker takes over
+    this.av_block_mode = "none"; // none | first_degree | second_degree | complete
+    this.av_block_ratio = 2; // second_degree: conduct (ratio-1):ratio, i.e. drop every ratio-th P (2 → 2:1)
+    this.first_degree_pq_factor = 2.5; // first_degree: multiplier on pq_time (prolonged PR interval)
+    this.vent_pacemaker_mode = "escape"; // escape | vt  (vt = fast ventricular focus → ventricular tachycardia)
+    this.vent_escape_enabled = true; // ventricular escape pacemaker (the safety / complete-block rhythm)
+    this.vent_escape_rate = 50.0; // bpm — intrinsic ventricular/junctional escape rate
+    this.vt_rate = 200.0; // bpm — ventricular-tachycardia (fast ventricular focus) rate
+    this.pvc_coupling = 0.3; // s — coupling interval of a triggered premature ventricular contraction
+
     // ECG wave amplitudes (mV) — morphology of the synthesized ecg_signal
     this.p_amp = 0.15; // P wave amplitude (mV)
     this.q_amp = -0.1; // Q wave amplitude (mV)
@@ -9303,8 +10573,8 @@ export class Heart extends BaseModelClass {
     this.hr_factor = 1.0; // heart rate factor
     this.hr_override = false; // when set to true the heart rate is fixed on the reference heart rate, ignoring the influence of the factors
     this.hr_mob_factor = 1.0; // heart rate factor of the myocardial oxygen balance model
-    this.hr_temp_factor = 1.0; // heart rate factor of the temperature (not implemented yet)
-    this.hr_drug_factor = 1.0; // heart rate factor of the drug model (not implemented yet)
+    this.hr_temp_factor = 1.0; // heart rate factor of the temperature (driven by the Thermoregulation model)
+    this.hr_drug_factor = 1.0; // heart rate factor of the drug model (driven by the Drugs model)
 
     this.cont_factor = 1.0; // contractility factor
     this.cont_factor_left = 1.0; // left heart contractility factor
@@ -9380,6 +10650,12 @@ export class Heart extends BaseModelClass {
     this._ventricle_is_refractory = false;
     this._qt_timer = 0.0;
     this._qt_running = false;
+    // conduction / rhythm local state
+    this._effective_pq = this.pq_time; // per-beat PQ (prolonged in first-degree block)
+    this._atrial_beat_count = 0; // counts SA-node firings (for the second-degree conduction ratio)
+    this._vent_activation_timer = 0.0; // s since the last ventricular activation (escape/VT pacemaker)
+    this._pvc_timer = 0.0; // countdown to a triggered premature ventricular contraction
+    this._pvc_pending = false; // a PVC has been requested
     this._la = null;
     this._lv = null;
     this._ra = null;
@@ -9611,30 +10887,35 @@ export class Heart extends BaseModelClass {
     // calculate the sinus node interval (in seconds) based on heart rate
     this._sa_node_interval = 60.0 / this.heart_rate;
 
-    // sinus node period check
-    if (this._sa_node_timer > this._sa_node_interval) {
+    // sinus node period check (skipped during sinus arrest → the escape pacemaker takes over)
+    if (this.sa_node_enabled && this._sa_node_timer > this._sa_node_interval) {
       this._sa_node_timer = 0.0; // reset the timer
       this._pq_running = true; // start the pq-time
       this.ncc_atrial = -1; // reset atrial activation counter
       this.cardiac_cycle_running = 1; // cardiac cycle starts
       this._temp_cardiac_cycle_time = 0.0; // reset cardiac cycle time
+      this._atrial_beat_count += 1; // count P waves (for the second-degree AV conduction ratio)
+      // per-beat PQ interval: prolonged in first-degree AV block, otherwise the configured pq_time
+      this._effective_pq = this.av_block_mode === "first_degree" ? this.pq_time * this.first_degree_pq_factor : this.pq_time;
     }
 
     // pq time period check
-    if (this._pq_timer > this.pq_time) {
+    if (this._pq_timer > this._effective_pq) {
       this._pq_timer = 0.0;
       this._pq_running = false;
       this._av_delay_running = true; // start av-delay
     }
 
-    // av delay period check
+    // av delay period check — the AV-node conduction gate. The atrial impulse activates the ventricles
+    // only if it conducts (av_block_mode) AND the ventricles are not refractory. A blocked impulse leaves
+    // the P wave on the ECG with no following QRS; sustained block lets the escape pacemaker (below) drive
+    // the ventricles independently → AV dissociation.
     if (this._av_delay_timer > this.av_delay) {
       this._av_delay_timer = 0.0;
       this._av_delay_running = false;
 
-      if (!this._ventricle_is_refractory) {
-        this._qrs_running = true; // start qrs
-        this.ncc_ventricular = -1; // reset ventricular activation
+      if (!this._ventricle_is_refractory && this._av_conducts()) {
+        this._activate_ventricle(); // conducted ventricular beat
       }
     }
 
@@ -9676,6 +10957,26 @@ export class Heart extends BaseModelClass {
 
     if (this._qt_running) {
       this._qt_timer += this._t;
+    }
+
+    // --- independent ventricular pacemaker (escape rhythm / ventricular tachycardia) + ectopy ---
+    // The ventricle fires on its own if it has been quiet for the pacemaker interval and is not
+    // refractory. In "escape" mode (slow, default) this NEVER fires during normal/conducted rhythm
+    // because conducted beats arrive first and keep resetting the timer — it only emerges when conducted
+    // beats fail (complete AV block, sinus arrest). In "vt" mode it runs fast (a ventricular focus).
+    this._vent_activation_timer += this._t;
+    const _vp_rate = this.vent_pacemaker_mode === "vt" ? this.vt_rate : this.vent_escape_rate;
+    const _vp_active = this.vent_pacemaker_mode === "vt" ? true : this.vent_escape_enabled;
+    if (_vp_active && _vp_rate > 0.0 && this._vent_activation_timer > 60.0 / _vp_rate && !this._ventricle_is_refractory) {
+      this._activate_ventricle(); // escape / ectopic ventricular beat
+    }
+    // triggered premature ventricular contraction (PVC): fire after the coupling interval, if able
+    if (this._pvc_pending) {
+      this._pvc_timer += this._t;
+      if (this._pvc_timer >= this.pvc_coupling && !this._ventricle_is_refractory) {
+        this._activate_ventricle();
+        this._pvc_pending = false;
+      }
     }
 
     // synthesize the ecg signal from the active conduction phase(s)
@@ -9781,6 +11082,36 @@ export class Heart extends BaseModelClass {
     } else {
       return this.qt_time * 2.449;
     }
+  }
+
+  // start a ventricular activation (QRS): conducted beat, escape beat, VT focus or PVC all route here
+  _activate_ventricle() {
+    this._qrs_running = true;
+    this.ncc_ventricular = -1;
+    this._vent_activation_timer = 0.0;
+  }
+
+  // AV-node conduction gate: does the current atrial impulse reach the ventricles?
+  _av_conducts() {
+    switch (this.av_block_mode) {
+      case "complete":
+        return false; // third-degree block — no atrial impulse conducts
+      case "second_degree": {
+        // drop every `av_block_ratio`-th P wave (ratio 2 → 2:1, 3 → 3:1, ...)
+        const r = Math.max(2, Math.round(this.av_block_ratio));
+        return (this._atrial_beat_count % r) !== 0;
+      }
+      case "first_degree": // conducts 1:1 with a prolonged PR (applied via _effective_pq)
+      case "none":
+      default:
+        return true;
+    }
+  }
+
+  // intervention API: schedule a single premature ventricular contraction (fires after pvc_coupling)
+  trigger_pvc() {
+    this._pvc_pending = true;
+    this._pvc_timer = 0.0;
   }
 
   set_pericardium(new_el_factor, new_volume) {
@@ -11056,6 +12387,174 @@ export class Kidneys extends BaseModelClass {
 
 ```
 
+### FILE: explain/component_models/Lactate.js
+
+```javascript
+import { BaseModelClass } from "../base_models/BaseModelClass";
+
+/*
+  The Lactate class turns the previously-static `lact` blood solute into a hypoxia-driven product —
+  a slow process model in the same family as `Hormones` / `Glucose`: it holds no compartment of its
+  own, resolves references lazily, runs on an `_update_interval`, and is NEUTRAL at rest (no O2 debt
+  → no production; lactate sits at its baseline → no net clearance), so a scenario shipping it keeps
+  its baseline ABG. It only diverges when tissue oxygenation falls (shock, asphyxia, severe hypoxia).
+
+  It writes ONLY `solutes.lact`, which the existing Stewart acid-base solver already consumes as a
+  strong anion (BloodComposition: sid = na + k + 2*ca + 2*mg - cl - lact). Raising lact lowers the
+  strong-ion difference → lower pH / HCO3 / BE — i.e. a lactic metabolic acidosis — with NO change
+  to the solver. The model must therefore run AFTER Metabolism (which sets each tissue's to2 this
+  step) and BEFORE Blood (which solves composition), i.e. inserted just after Metabolism in the
+  scenario's model map.
+
+  PER TISSUE SITE (reusing Metabolism's consumption map + whole-body VO2):
+    O2 debt   — at warm-up each site's resting to2 is captured; threshold = threshold_frac * resting.
+                anaerobic fraction = clamp((threshold - to2) / threshold, 0, 1)   (the Mob activation idiom)
+    PRODUCTION— local_o2_demand = (0.039 * vo2 * weight / 60) * dt * fvo2   [mmol O2, as Metabolism uses]
+                lactate produced (mmol) = anaerobic * local_o2_demand * lact_per_o2_deficit
+                  (≈ 2 lactate per glucose / 6 O2 per glucose ⇒ ~0.33 mmol lactate per mmol O2 deficit)
+                added to that compartment's solutes.lact (mmol/L).
+    CLEARANCE — every blood compartment's lact relaxes first-order toward lact_baseline (Cori cycle /
+                hepatic + renal handling): lact += (baseline - lact) * lact_clearance * dt.
+
+  No feedback into the O2 sensors (Mob/ANS read to2, not pH), so there is no oscillation risk; the
+  lact→pH coupling is one-directional.
+*/
+
+export class Lactate extends BaseModelClass {
+  // static properties
+  static model_type = "Lactate";
+
+  constructor(model_ref, name = "") {
+    super(model_ref, name);
+
+    // -----------------------------------------------
+    // gating
+    this.lactate_running = true; // master gate (false → no production, clearance still settles to baseline once)
+
+    // -----------------------------------------------
+    // wiring (resolved lazily)
+    this.metabolism_name = "Metabolism"; // supplies the tissue map (metabolic_active_models) + vo2
+
+    // -----------------------------------------------
+    // production / clearance parameters
+    this.lact_baseline = 1.0; // resting blood lactate (mmol/L) — clearance target
+    this.threshold_frac = 0.5; // anaerobic threshold as a fraction of each site's resting-MINIMUM to2
+    this.lact_per_o2_deficit = 0.33; // mmol lactate produced per mmol unmet O2 demand
+    this.lact_clearance = 0.002; // first-order clearance rate toward baseline (1/s, t1/2 ~6 min)
+    this.prod_gain = 1.0; // overall scaler on production (clinical-tuning convenience)
+
+    // -----------------------------------------------
+    // dependent properties (read-outs)
+    this.arterial_lactate = 1.0; // AA lactate read-out (mmol/L)
+    this.total_production_step = 0.0; // last per-update total lactate produced (mmol)
+    this.anaerobic_fraction_max = 0.0; // worst-site anaerobic fraction this update (0..1)
+
+    // -----------------------------------------------
+    // local parameters
+    this._update_interval = 1.0; // controller cadence (s)
+    this._update_counter = 0.0;
+    this._warmup_delay = 90.0; // s window over which the resting-MINIMUM site to2 is captured (covers the
+                               // slow tissue-to2 oscillations seen in abnormal-circulation/cyanotic scenarios)
+    this._warmup_counter = 0.0;
+    this._seeded = false;
+    this._baseline_to2 = {}; // per-site resting to2 captured at warm-up
+    this._blood_components = null; // cached list of compartments carrying a lact solute
+    this._metabolism = null;
+  }
+
+  init_model(args) {
+    super.init_model(args);
+  }
+
+  calc_model() {
+    this._update_counter += this._t;
+    if (this._update_counter >= this._update_interval) {
+      const u = this._update_counter;
+      this._update_counter = 0.0;
+      this._update_lactate(u);
+    }
+  }
+
+  _resolve_refs() {
+    if (!this._metabolism) this._metabolism = this._model_engine.models[this.metabolism_name] ?? null;
+    if (!this._blood_components) {
+      this._blood_components = [];
+      for (const name in this._model_engine.models) {
+        const m = this._model_engine.models[name];
+        if (m && m.solutes && m.solutes.lact !== undefined) this._blood_components.push(m);
+      }
+    }
+  }
+
+  _update_lactate(u) {
+    this._resolve_refs();
+    const weight = this._model_engine.weight;
+    const sites = this._metabolism?.metabolic_active_models ?? {};
+    const vo2 = this._metabolism?.vo2 ?? 8.1;
+    const vo2_factor = this._metabolism?.vo2_factor ?? 1.0;
+    const vo2_temp_factor = this._metabolism?.vo2_temp_factor ?? 1.0;
+
+    // Capture each site's resting to2 as the running MINIMUM across the warm-up window, then arm. Using
+    // the minimum (not a single instant) makes the threshold sit below the operating trough, so the model
+    // stays neutral at rest even in chronically hypoxic scenarios (cyanotic CHD) whose steady-state tissue
+    // to2 is low and swings cyclically near the threshold. Production stays gated off until _seeded.
+    if (!this._seeded) {
+      this._warmup_counter += u;
+      for (const site of Object.keys(sites)) {
+        let comp = this._model_engine.models[site];
+        if (comp && comp.model_type === "MicroVascularUnit") comp = this._model_engine.models[site + "_CAP"];
+        if (!comp) continue;
+        const prev = this._baseline_to2[site];
+        this._baseline_to2[site] = prev === undefined ? comp.to2 : Math.min(prev, comp.to2);
+      }
+      if (this._warmup_counter >= this._warmup_delay) this._seeded = true;
+    }
+
+    // --- production under O2 debt (skip until seeded; before that it is neutral) ---
+    let total_prod = 0.0;
+    let max_anaerobic = 0.0;
+    if (this._seeded && this.lactate_running) {
+      for (const [site, fvo2] of Object.entries(sites)) {
+        let comp = this._model_engine.models[site];
+        if (comp && comp.model_type === "MicroVascularUnit") comp = this._model_engine.models[site + "_CAP"];
+        if (!comp || !comp.solutes || comp.vol <= 0.0) continue;
+        const resting = this._baseline_to2[site];
+        if (resting === undefined || resting <= 0.0) continue;
+        const threshold = this.threshold_frac * resting;
+        const anaerobic = this._clamp((threshold - comp.to2) / threshold, 0.0, 1.0);
+        if (anaerobic > max_anaerobic) max_anaerobic = anaerobic;
+        if (anaerobic <= 0.0) continue;
+        const local_o2_demand = (0.039 * vo2 * vo2_factor * vo2_temp_factor * weight / 60.0) * u * fvo2; // mmol O2
+        const lact_mmol = anaerobic * local_o2_demand * this.lact_per_o2_deficit * this.prod_gain;
+        comp.solutes.lact += lact_mmol / comp.vol;
+        total_prod += lact_mmol;
+      }
+    }
+    this.total_production_step = total_prod;
+    this.anaerobic_fraction_max = max_anaerobic;
+
+    // --- first-order clearance of every compartment toward baseline (Cori / hepatic + renal) ---
+    const k = this.lact_clearance * u;
+    if (k > 0) {
+      for (const comp of this._blood_components) {
+        comp.solutes.lact += (this.lact_baseline - comp.solutes.lact) * k;
+      }
+    }
+
+    // arterial read-out
+    const aa = this._model_engine.models["AA"];
+    if (aa?.solutes) this.arterial_lactate = aa.solutes.lact;
+  }
+
+  _clamp(v, lo, hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+  }
+}
+
+```
+
 ### FILE: explain/component_models/MaternalPlacenta.js
 
 ```javascript
@@ -11276,6 +12775,7 @@ export class Metabolism extends BaseModelClass {
     this.met_active = true; // flag indicating if metabolism is active
     this.vo2 = 8.1; // oxygen use in ml/kg/min
     this.vo2_factor = 1.0; // factor modulating oxygen use by outside models
+    this.vo2_temp_factor = 1.0; // temperature (Q10) factor on oxygen use, owned by Thermoregulation (1.0 = 37 degC)
     this.resp_q = 0.8; // respiratory quotient for CO2 production
     this.metabolic_active_models = {}; // dictionary of models with fractional oxygen use
   }
@@ -11287,8 +12787,9 @@ export class Metabolism extends BaseModelClass {
       // If metabolism is not active, do nothing
       return;
     }
-    // Translate the VO2 in ml/kg/min to VO2 in mmol for this step size (assuming 37 degrees temperature and atmospheric pressure)
-    const vo2_step =((0.039 * this.vo2 * this.vo2_factor * this._model_engine.weight) / 60.0) * this._t;
+    // Translate the VO2 in ml/kg/min to VO2 in mmol for this step size (assuming 37 degrees temperature and atmospheric pressure).
+    // vo2_temp_factor (Q10) is a persistent channel written by Thermoregulation; it is 1.0 at 37 degC / when that model is absent or disabled.
+    const vo2_step =((0.039 * this.vo2 * this.vo2_factor * this.vo2_temp_factor * this._model_engine.weight) / 60.0) * this._t;
 
     // Iterate over each metabolic active model
     for (const [model, fvo2] of Object.entries(this.metabolic_active_models)) {
@@ -11689,9 +13190,18 @@ export class Pda extends BaseModelClass {
     // velocity). Cd ≈ 0.8 is typical for a smooth converging duct.
     this.discharge_coeff = 0.8;
 
+    // diameter_drug_factor: patency multiplier owned by the Drugs model (1.0 = neutral). Prostaglandin
+    // E1 (alprostadil) drives this above 1.0 to hold the duct open in duct-dependent CHD; it multiplies
+    // diameter_relative (capped at the anatomic max). NOTE: it does NOT reopen a fully-closed duct — the
+    // diameter_relative === 0 fast path below stays keyed on the raw value (clinically the duct is
+    // maintained patent from birth on PGE1, never allowed to reach 0). Reopening from 0 would need an
+    // additive term instead of a multiplicative factor (future).
+    this.diameter_drug_factor = 1.0;
+
     // -----------------------------------------------
     // dependent properties (recomputed each step)
     // -----------------------------------------------
+    this.diameter_relative_eff = 0.0; // effective relative diameter after the drug factor (read-out)
     this.diameter_ao = 0.0;       // current diameter at aortic origin (mm)
     this.diameter_pa = 0.0;       // current diameter at pulmonary end (mm)
     this.viscosity = 6;           // blood viscosity (cP), pulled from the upstream (AAR) compartment
@@ -11734,6 +13244,7 @@ export class Pda extends BaseModelClass {
     // diameter_relative === 0 is the postnatal steady state. The cone math, the Bernoulli sqrt, and
     // the continuity divisions all degenerate; seal the resistor and zero the outputs.
     if (this.diameter_relative === 0) {
+      this.diameter_relative_eff = 0;
       this.diameter_ao = 0;
       this.diameter_pa = 0;
       aar_da.no_flow = true;
@@ -11749,9 +13260,13 @@ export class Pda extends BaseModelClass {
       return;
     }
 
-    // ----- geometry: diameters scale together along diameter_relative -----
-    const d_ao = Math.min(this.diameter_relative * this.diameter_ao_max, this.diameter_ao_max);
-    const d_pa = Math.min(this.diameter_relative * this.diameter_pa_max, this.diameter_pa_max);
+    // ----- geometry: diameters scale together along the effective relative diameter -----
+    // PGE1 (via Drugs → diameter_drug_factor) widens a constricting duct; clamp the factor's effect to
+    // the anatomic max so the duct can never exceed full patency.
+    const eff_rel = this.diameter_relative * this.diameter_drug_factor;
+    this.diameter_relative_eff = eff_rel;
+    const d_ao = Math.min(eff_rel * this.diameter_ao_max, this.diameter_ao_max);
+    const d_pa = Math.min(eff_rel * this.diameter_pa_max, this.diameter_pa_max);
     this.diameter_ao = d_ao;
     this.diameter_pa = d_pa;
 
@@ -12324,6 +13839,468 @@ export class Shunts extends BaseModelClass {
     } else {
       return 100000000; // a very high resistance to represent no flow
     }
+  }
+}
+
+```
+
+### FILE: explain/component_models/Surfactant.js
+
+```javascript
+import { BaseModelClass } from "../base_models/BaseModelClass";
+
+/*
+  The Surfactant class turns the previously-STATIC RDS lung phenotype (baked stiff alveoli + low FRC +
+  reduced diffusion + intrapulmonary shunt) into a DYNAMIC, treatable process: pressure-driven alveolar
+  recruitment / derecruitment with hysteresis, plus a surfactant-therapy response. It is a slow process
+  controller in the same family as Hormones / Glucose / Lactate: it holds no compartment, resolves refs
+  lazily, and is NEUTRAL at rest (a scenario that ships it keeps its calibrated RDS operating point), so
+  it only changes things when PEEP/CPAP changes or surfactant is given.
+
+  RECRUITMENT STATE — `open_fraction` [0..1], the fraction of alveoli that are open. Driven by the mean
+  (breath-averaged) transpulmonary pressure P_tp = alveolar recoil pressure (GasCapacitance.pres_in,
+  averaged over both lungs and smoothed over `pres_tc` s so tidal swings don't dominate):
+
+    dOpen = [ k_open · max(0, P_tp − TOP) · (1 − open)   recruit above the opening threshold
+            − k_close · max(0, TCP − P_tp) · open ] · dt  derecruit below the closing threshold
+
+  Between TCP and TOP there is a hysteresis DEAD ZONE (open holds) — the signature of lung recruitment.
+
+  AUTO-CENTERED THRESHOLDS (the robustness trick, like the Lactate min-to2 seed): at warm-up the baseline
+  mean P_tp (P0) and open_fraction (f0) are captured, and the dead zone is centered on P0:
+
+    TOP = P0 + open_margin  − surf_open_gain ·(surfactant − surf0)
+    TCP = P0 − close_margin − surf_close_gain·(surfactant − surf0)
+
+  so at the scenario's own baseline (surfactant == surf0, P_tp == P0) P0 sits inside the dead zone → open
+  holds at f0 → the model is neutral & stable at ANY scenario's operating point with NO per-scenario
+  threshold tuning. Raising PEEP pushes P_tp above TOP → recruit; losing PEEP pushes it below TCP →
+  derecruit; SURFACTANT lowers TOP/TCP so the same airway pressure now recruits the lung.
+
+  EFFECTS (all referenced to f0 so they are 1.0 at baseline). r = open_fraction − f0:
+    ALL/ALR.el_base_factor   = 1 − el_gain·r     (recruit → more open units → lower elastance / compliant)
+    ALL/ALR.u_vol_factor     = 1 + uvol_gain·r   (recruit → higher FRC)
+    GASEX_*.dif_o2/co2_factor = 1 + dif_gain·r    (recruit → more gas-exchange surface)
+    IPSL/IPSR.r_factor_ps    = 1 + ips_gain·r     (recruit → higher shunt resistance → less venous admixture)
+  The first three use the NON-PERSISTENT factor layer (reset each step by the compartment, re-written
+  here every step) so they compose with the Respiration controller, which owns the *_factor_ps layer.
+  The shunt uses IPSL/IPSR's r_factor_ps (persistent) — owned here, released to 1.0 on disable.
+*/
+
+export class Surfactant extends BaseModelClass {
+  // static properties
+  static model_type = "Surfactant";
+
+  constructor(model_ref, name = "") {
+    super(model_ref, name);
+
+    // -----------------------------------------------
+    // gating
+    this.surfactant_running = true; // master gate (false → owned channels released to neutral)
+
+    // -----------------------------------------------
+    // wiring (resolved lazily; these are runtime-built compartments)
+    this.lung_models = ["ALL", "ALR"]; // alveolar GasCapacitance compartments
+    this.gasex_models = ["GASEX_LL", "GASEX_RL"]; // alveolar-capillary gas exchangers
+    this.shunt_models = ["IPSL", "IPSR"]; // intrapulmonary-shunt resistors (atelectasis venous admixture)
+
+    // -----------------------------------------------
+    // surfactant maturity [0..1]: 0 = severe deficiency (RDS), 1 = mature / fully treated. The baseline
+    // value is captured as surf0; therapy raises it (lowering the recruitment thresholds).
+    this.surfactant = 0.3;
+    this.surfactant_target = null; // therapy target; null → hold at current value
+    this.surfactant_tc = 180.0; // s — acute compliance/recruitment response develops over a few minutes
+
+    // -----------------------------------------------
+    // recruitment hysteresis (mmHg, relative to the captured baseline mean P_tp). The margins are kept
+    // small and the surfactant gains large because the spontaneously-breathing preterm runs at a low
+    // mean transpulmonary pressure (~1–3 mmHg), so a therapeutic dose must clearly pull the opening
+    // threshold below the prevailing airway pressure to recruit.
+    this.open_margin = 2.0; // P_tp must exceed P0 + this to recruit (at baseline surfactant)
+    this.close_margin = 2.0; // P_tp must fall below P0 − this to derecruit
+    this.surf_open_gain = 14.0; // mmHg the opening threshold drops per unit surfactant rise
+    this.surf_close_gain = 12.0; // mmHg the closing threshold drops per unit surfactant rise
+    this.k_open = 0.5; // recruitment rate (1/(mmHg·s))
+    this.k_close = 0.5; // derecruitment rate (1/(mmHg·s))
+    this.pres_tc = 4.0; // s — smoothing of the transpulmonary pressure (averages out tidal swings)
+
+    // -----------------------------------------------
+    // effect gains (per unit deviation of open_fraction from baseline f0) + clamps
+    this.el_gain = 0.7; // elastance DROP per unit recruitment
+    this.uvol_gain = 1.5; // FRC RISE per unit recruitment
+    this.dif_gain = 2.0; // diffusion RISE per unit recruitment
+    this.ips_gain = 6.0; // shunt-resistance RISE per unit recruitment (→ less shunt)
+    this.el_factor_min = 0.2; this.el_factor_max = 3.0;
+    this.uvol_factor_min = 0.3; this.uvol_factor_max = 3.0;
+    this.dif_factor_min = 0.1; this.dif_factor_max = 5.0;
+    this.ips_factor_min = 0.1; this.ips_factor_max = 30.0;
+
+    // -----------------------------------------------
+    // dependent properties (read-outs)
+    this.open_fraction = 0.5; // recruited alveolar fraction
+    this.transpulmonary_pressure = 0.0; // smoothed mean P_tp (mmHg)
+    this.open_pressure = 0.0; // current TOP (mmHg)
+    this.close_pressure = 0.0; // current TCP (mmHg)
+    this.el_lung_factor = 1.0; // → ALL/ALR.el_base_factor
+    this.uvol_lung_factor = 1.0; // → ALL/ALR.u_vol_factor
+    this.dif_factor = 1.0; // → GASEX_*.dif_o2/co2_factor
+    this.ips_factor = 1.0; // → IPSL/IPSR.r_factor_ps
+
+    // -----------------------------------------------
+    // local parameters
+    this._warmup_delay = 30.0; // s before capturing the baseline P0 / f0
+    this._warmup_counter = 0.0;
+    this._seeded = false;
+    this._p0 = 0.0; // captured baseline mean transpulmonary pressure
+    this._f0 = 0.5; // captured baseline open_fraction (neutral reference)
+    this._surf0 = 0.3; // captured baseline surfactant level
+    this._ptp_smooth = null; // smoothed P_tp state
+    this._was_active = false;
+    this._lungs = null;
+    this._gasex = null;
+    this._shunts = null;
+  }
+
+  init_model(args) {
+    super.init_model(args);
+    this._surf0 = this.surfactant; // provisional; re-anchored at warm-up seed
+  }
+
+  calc_model() {
+    // master gate — release owned channels once, then idle
+    if (!this.surfactant_running) {
+      if (this._was_active) this._release_channels();
+      this._was_active = false;
+      return;
+    }
+    this._resolve_refs();
+
+    // --- surfactant therapy: first-order ramp toward the target (if any) ---
+    if (this.surfactant_target != null && this.surfactant_tc > 0) {
+      this.surfactant += this._t * ((1.0 / this.surfactant_tc) * (this.surfactant_target - this.surfactant));
+    }
+
+    // --- read & smooth the mean transpulmonary (alveolar recoil) pressure ---
+    let p_sum = 0.0, n = 0;
+    for (const lm of this._lungs) { if (lm) { p_sum += lm.pres_in; n++; } }
+    const p_tp = n > 0 ? p_sum / n : 0.0;
+    if (this._ptp_smooth === null) this._ptp_smooth = p_tp;
+    this._ptp_smooth += this._t * ((1.0 / this.pres_tc) * (p_tp - this._ptp_smooth));
+    this.transpulmonary_pressure = this._ptp_smooth;
+
+    // --- seed the neutral baseline (P0, f0, surf0) once the circuit has settled ---
+    if (!this._seeded) {
+      this._warmup_counter += this._t;
+      if (this._warmup_counter >= this._warmup_delay) {
+        this._p0 = this._ptp_smooth;
+        this._f0 = this.open_fraction;
+        this._surf0 = this.surfactant;
+        this._seeded = true;
+      }
+    }
+
+    // --- hysteresis thresholds, auto-centered on the baseline pressure, lowered by surfactant ---
+    const d_surf = this.surfactant - this._surf0;
+    this.open_pressure = this._p0 + this.open_margin - this.surf_open_gain * d_surf;
+    this.close_pressure = this._p0 - this.close_margin - this.surf_close_gain * d_surf;
+
+    // --- recruit / derecruit (dead zone between TCP and TOP) — only after the baseline is seeded, so
+    // open_fraction holds at its init value (= f0) during warm-up and the recruitment headroom is the
+    // same for every scenario regardless of the warm-up pressure transient ---
+    if (this._seeded) {
+      const p = this._ptp_smooth;
+      let d_open = 0.0;
+      if (p > this.open_pressure) d_open += this.k_open * (p - this.open_pressure) * (1.0 - this.open_fraction);
+      if (p < this.close_pressure) d_open -= this.k_close * (this.close_pressure - p) * this.open_fraction;
+      this.open_fraction = this._clamp(this.open_fraction + d_open * this._t, 0.0, 1.0);
+    }
+
+    // --- map recruitment (relative to baseline f0) onto the lung-mechanics effector channels ---
+    if (this._seeded) {
+      const r = this.open_fraction - this._f0; // +ve = recruited above baseline, −ve = derecruited
+      this.el_lung_factor = this._clamp(1.0 - this.el_gain * r, this.el_factor_min, this.el_factor_max);
+      this.uvol_lung_factor = this._clamp(1.0 + this.uvol_gain * r, this.uvol_factor_min, this.uvol_factor_max);
+      this.dif_factor = this._clamp(1.0 + this.dif_gain * r, this.dif_factor_min, this.dif_factor_max);
+      this.ips_factor = this._clamp(1.0 + this.ips_gain * r, this.ips_factor_min, this.ips_factor_max);
+    }
+    this._apply_effectors();
+    this._was_active = true;
+  }
+
+  _resolve_refs() {
+    if (!this._lungs) this._lungs = this.lung_models.map((m) => this._model_engine.models[m] ?? null);
+    if (!this._gasex) this._gasex = this.gasex_models.map((m) => this._model_engine.models[m] ?? null);
+    if (!this._shunts) this._shunts = this.shunt_models.map((m) => this._model_engine.models[m] ?? null);
+  }
+
+  _apply_effectors() {
+    // alveolar elastance + FRC via the NON-PERSISTENT layer (reset each step → re-written here every
+    // step; composes additively with the Respiration controller, which owns the *_factor_ps layer)
+    for (const lm of this._lungs) {
+      if (!lm) continue;
+      lm.el_base_factor = this.el_lung_factor;
+      lm.u_vol_factor = this.uvol_lung_factor;
+    }
+    // alveolar-capillary diffusion (non-persistent layer on the gas exchangers)
+    for (const ge of this._gasex) {
+      if (!ge) continue;
+      ge.dif_o2_factor = this.dif_factor;
+      ge.dif_co2_factor = this.dif_factor;
+    }
+    // intrapulmonary shunt — IPSL/IPSR carry r_for/r_back from Shunts.ips_res; modulate the resistor's
+    // PERSISTENT r_factor_ps (owned here, released on disable) so recruitment reduces venous admixture
+    for (const sh of this._shunts) {
+      if (!sh) continue;
+      sh.r_factor_ps = this.ips_factor;
+    }
+  }
+
+  _release_channels() {
+    this._resolve_refs();
+    this.el_lung_factor = 1.0;
+    this.uvol_lung_factor = 1.0;
+    this.dif_factor = 1.0;
+    this.ips_factor = 1.0;
+    for (const lm of this._lungs) { if (lm) { lm.el_base_factor = 1.0; lm.u_vol_factor = 1.0; } }
+    for (const ge of this._gasex) { if (ge) { ge.dif_o2_factor = 1.0; ge.dif_co2_factor = 1.0; } }
+    for (const sh of this._shunts) { if (sh) sh.r_factor_ps = 1.0; }
+  }
+
+  // dosing API (callable via callModelFunction / TaskScheduler): instill surfactant → ramp maturity up
+  administer_surfactant(target = 1.0) {
+    this.surfactant_target = this._clamp(target, 0.0, 1.0);
+  }
+
+  _clamp(v, lo, hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+  }
+}
+
+```
+
+### FILE: explain/component_models/Thermoregulation.js
+
+```javascript
+import { BaseModelClass } from "../base_models/BaseModelClass";
+
+/*
+  The Thermoregulation class is the body-temperature controller — a slow process model in the same
+  family as `Hormones`, `Kidneys` (autoregulation) and `Drugs`: it holds no compartment of its own,
+  resolves references to other models lazily, runs on an `_update_interval` accumulator, owns its
+  effector channels while enabled (releasing them once on disable), and auto-seeds itself so a
+  scenario that ships it is NEUTRAL at rest (core stays at 37 degC, all owned factors == 1.0, so
+  baseline vitals/ABG are unchanged). It only diverges when the thermal environment is perturbed
+  (cold incubator, radiant warmer, evaporative loss) or when heat production changes.
+
+  HEAT BALANCE (single well-mixed core node — robust + neutral-by-construction):
+
+    Q_prod  = metabolic heat + non-shivering (brown-fat) thermogenesis
+                metabolic = (vo2_eff / 60) * weight * caloric_equiv_o2          [W]
+                  vo2_eff = Metabolism.vo2 * Metabolism.vo2_factor * vo2_temp_factor (mL O2/kg/min)
+                brown_fat = bat_gain * max(0, setpoint - core), capped at bat_max * weight   [W]
+                  (neonates cannot shiver — they defend temperature by non-shivering thermogenesis)
+    Q_loss  = SA * [ h_radiative*(core - radiant_eff) + h_convective*(core - env_temp) ]
+                + Q_evaporative                                                  [W]
+                SA = surface_area_k * weight^(2/3)  (Meeh; neonates have a high surface:mass ratio)
+                radiant_eff = radiant_temp (radiant warmer) when set, else env_temp
+    dCore   = (Q_prod - Q_loss_eff) / (mass * heat_capacity) * dt
+                Q_loss_eff = Q_loss + _loss_trim   (the auto-seeded insulation/posture offset)
+
+  AUTO-SEED: at the first update after `_warmup_delay`, `_loss_trim` is set so Q_prod == Q_loss_eff
+  at core == setpoint. dCore is then 0 → the model is neutral at rest and only the SUBSEQUENT change
+  of env_temp / radiant_temp / humidity / VO2 moves the core. (Same idiom as the Hormones setpoint
+  anchoring and the Kidneys TGF seed.)
+
+  EFFECTORS (owned channels, all default-neutral, independent of Ans / Mob / Drugs):
+    Heart.hr_temp_factor          = 1 + hr_temp_gain * (core - setpoint)   (already summed into HR
+                                     in Heart.calc, previously never driven)
+    Metabolism.vo2_temp_factor    = q10 ^ ((core - 37) / 10)   (clamped; Q10 metabolic coupling)
+    Blood.set_temperature(core)   → propagates core temp to every blood compartment, which feeds the
+                                     temperature term (dT) of the Stewart acid-base / O2-dissociation
+                                     solver (BloodComposition).
+
+  RISK NOTE: core→VO2(Q10)→heat→core is positive feedback; it is bounded by the dominant heat-loss
+  limb (∝ core - env) plus the vo2_temp_factor clamp.
+*/
+
+export class Thermoregulation extends BaseModelClass {
+  // static properties
+  static model_type = "Thermoregulation";
+
+  constructor(model_ref, name = "") {
+    super(model_ref, name);
+
+    // -----------------------------------------------
+    // gating
+    this.thermoregulation_running = true; // master gate (false → owned channels released to neutral)
+
+    // -----------------------------------------------
+    // wiring (resolved lazily; targets may build after this model)
+    this.metabolism_name = "Metabolism"; // heat-production source + Q10 effector target
+    this.heart_name = "Heart"; // hr_temp_factor effector target
+    this.blood_name = "Blood"; // temperature propagation to all blood compartments
+
+    // -----------------------------------------------
+    // thermal environment (the user/scenario-settable inputs)
+    this.env_temp = 32.0; // ambient air temperature (degC) — neutral-thermal incubator default
+    this.radiant_temp = null; // radiant-warmer effective temperature (degC); null → use env_temp
+    this.rel_humidity = 0.5; // ambient relative humidity (fraction) — modulates evaporative loss
+
+    // -----------------------------------------------
+    // body thermal geometry / constants
+    this.setpoint_temp = 37.0; // hypothalamic set-point (degC)
+    this.heat_capacity = 3470.0; // specific heat of body tissue (J/kg/K)
+    this.surface_area_k = 0.05; // Meeh constant: SA = k * weight^(2/3)  (m^2)
+    this.h_radiative = 5.5; // radiative heat-transfer coefficient (W/m^2/K)
+    this.h_convective = 4.0; // convective heat-transfer coefficient (W/m^2/K)
+    this.evap_coeff = 6.0; // evaporative/respiratory loss coefficient (W/m^2 per (1-humidity))
+    this.caloric_equiv_o2 = 20.1; // heat released per mL O2 consumed (J/mL)
+
+    // non-shivering (brown-fat) thermogenesis
+    this.bat_gain = 6.0; // extra heat per degC below set-point (W/degC)
+    this.bat_max_per_kg = 4.5; // ceiling on brown-fat output (W/kg)
+
+    // effector sensitivities + clamps
+    this.q10 = 2.3; // Q10 of metabolic rate (per 10 degC)
+    this.vo2_temp_factor_min = 0.5;
+    this.vo2_temp_factor_max = 2.5;
+    this.hr_temp_gain = 0.1; // heart-rate factor rise per degC above set-point (fraction of ref HR; ~10%/degC)
+    this.hr_temp_factor_min = 0.6;
+    this.hr_temp_factor_max = 1.6;
+
+    // -----------------------------------------------
+    // dependent properties (read-outs)
+    this.core_temp = 37.0; // modelled core temperature (degC)
+    this.skin_temp = 36.0; // approximated skin temperature (degC, read-out only)
+    this.skin_gradient = 1.0; // core - skin offset used for the skin read-out (degC)
+    this.heat_production = 0.0; // Q_prod (W)
+    this.heat_loss = 0.0; // Q_loss_eff (W)
+    this.brown_fat_heat = 0.0; // non-shivering thermogenesis component (W)
+    this.vo2_temp_factor = 1.0; // → Metabolism.vo2_temp_factor (Q10), read-out
+    this.hr_temp_factor = 1.0; // → Heart.hr_temp_factor, read-out
+
+    // -----------------------------------------------
+    // local parameters
+    this._update_interval = 1.0; // run the controller every 1 s (temperature is slow)
+    this._update_counter = 0.0;
+    this._warmup_delay = 5.0; // s before the auto-seed of _loss_trim (let the circuit settle)
+    this._warmup_counter = 0.0;
+    this._loss_trim = 0.0; // auto-seeded additive heat-loss offset (W) → neutral at rest
+    this._seeded = false;
+    this._was_active = false; // tracks active→inactive for the one-shot channel release
+    this._metabolism = null;
+    this._heart = null;
+    this._blood = null;
+  }
+
+  init_model(args) {
+    super.init_model(args);
+    this.core_temp = this.setpoint_temp; // start neutral
+  }
+
+  calc_model() {
+    // master gate — release owned channels once, then idle
+    if (!this.thermoregulation_running) {
+      if (this._was_active) this._release_channels();
+      this._was_active = false;
+      return;
+    }
+
+    this._update_counter += this._t;
+    if (this._update_counter >= this._update_interval) {
+      const u = this._update_counter; // exact elapsed time since the last update
+      this._update_counter = 0.0;
+      this._update_temperature(u);
+      this._apply_effectors();
+    }
+    this._was_active = true;
+  }
+
+  _resolve_refs() {
+    if (!this._metabolism) this._metabolism = this._model_engine.models[this.metabolism_name] ?? null;
+    if (!this._heart) this._heart = this._model_engine.models[this.heart_name] ?? null;
+    if (!this._blood) this._blood = this._model_engine.models[this.blood_name] ?? null;
+  }
+
+  // the heat-balance math. u = elapsed time since the last controller update (s).
+  _update_temperature(u) {
+    this._resolve_refs();
+    const weight = this._model_engine.weight;
+
+    // --- heat production ---------------------------------------------------
+    // metabolic heat from the (temperature-modulated) whole-body VO2
+    let vo2 = 8.1; // fallback if Metabolism is absent
+    let vo2_factor = 1.0;
+    if (this._metabolism) {
+      vo2 = this._metabolism.vo2 ?? vo2;
+      vo2_factor = this._metabolism.vo2_factor ?? 1.0;
+    }
+    const vo2_eff = vo2 * vo2_factor * this.vo2_temp_factor; // mL O2/kg/min
+    const metabolic_heat = (vo2_eff * weight / 60.0) * this.caloric_equiv_o2; // W
+
+    // non-shivering (brown-fat) thermogenesis when below set-point
+    const bat_deficit = this.setpoint_temp - this.core_temp;
+    this.brown_fat_heat = bat_deficit > 0 ? Math.min(this.bat_gain * bat_deficit, this.bat_max_per_kg * weight) : 0.0;
+
+    this.heat_production = metabolic_heat + this.brown_fat_heat;
+
+    // --- heat loss --------------------------------------------------------
+    const sa = this.surface_area_k * Math.pow(weight, 2.0 / 3.0); // m^2
+    const radiant_eff = this.radiant_temp != null ? this.radiant_temp : this.env_temp;
+    const q_radiative = sa * this.h_radiative * (this.core_temp - radiant_eff);
+    const q_convective = sa * this.h_convective * (this.core_temp - this.env_temp);
+    const q_evaporative = sa * this.evap_coeff * (1.0 - this.rel_humidity);
+    const q_loss_raw = q_radiative + q_convective + q_evaporative;
+
+    // auto-seed the insulation/posture trim so the body is exactly in balance at rest
+    if (!this._seeded) {
+      this._warmup_counter += u;
+      if (this._warmup_counter >= this._warmup_delay) {
+        this._loss_trim = this.heat_production - q_loss_raw; // makes Q_loss_eff == Q_prod at core==setpoint
+        this._seeded = true;
+      }
+    }
+
+    this.heat_loss = q_loss_raw + this._loss_trim;
+
+    // --- integrate core temperature ---------------------------------------
+    const thermal_mass = weight * this.heat_capacity; // J/K
+    if (thermal_mass > 0) {
+      this.core_temp += ((this.heat_production - this.heat_loss) / thermal_mass) * u;
+    }
+    this.skin_temp = this.core_temp - this.skin_gradient;
+  }
+
+  // map core temperature → effector factors and write the owned channels
+  _apply_effectors() {
+    // Q10 metabolic coupling → Metabolism.vo2_temp_factor
+    this.vo2_temp_factor = this._clamp(Math.pow(this.q10, (this.core_temp - 37.0) / 10.0), this.vo2_temp_factor_min, this.vo2_temp_factor_max);
+    if (this._metabolism) this._metabolism.vo2_temp_factor = this.vo2_temp_factor;
+
+    // temperature → heart rate (drives the previously-dormant Heart.hr_temp_factor channel)
+    this.hr_temp_factor = this._clamp(1.0 + this.hr_temp_gain * (this.core_temp - this.setpoint_temp), this.hr_temp_factor_min, this.hr_temp_factor_max);
+    if (this._heart) this._heart.hr_temp_factor = this.hr_temp_factor;
+
+    // propagate core temperature to every blood compartment (feeds the acid-base / O2-dissociation solver)
+    if (this._blood) this._blood.set_temperature(this.core_temp);
+  }
+
+  // release every owned channel back to neutral exactly once (on disable)
+  _release_channels() {
+    this._resolve_refs();
+    this.vo2_temp_factor = 1.0;
+    this.hr_temp_factor = 1.0;
+    if (this._metabolism) this._metabolism.vo2_temp_factor = 1.0;
+    if (this._heart) this._heart.hr_temp_factor = 1.0;
+    if (this._blood) this._blood.set_temperature(37.0);
+  }
+
+  _clamp(v, lo, hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
   }
 }
 
@@ -15999,7 +17976,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "caption": "drug",
           "type": "list",
           "custom_options": true,
-          "choices": ["adrenaline", "noradrenaline"]
+          "choices": ["adrenaline", "noradrenaline", "pge1"]
         },
         {
           "target": "dose",
@@ -16027,7 +18004,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "caption": "drug",
           "type": "list",
           "custom_options": true,
-          "choices": ["adrenaline", "noradrenaline"]
+          "choices": ["adrenaline", "noradrenaline", "pge1"]
         },
         {
           "target": "rate",
@@ -16095,6 +18072,15 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": true
     },
     {
+      "target": "pda_drug_factor",
+      "type": "number",
+      "caption": "applied ductal patency factor (PGE1)",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
       "target": "set_drug_param",
       "type": "function",
       "caption": "set PK/PD parameter",
@@ -16107,7 +18093,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "caption": "drug",
           "type": "list",
           "custom_options": true,
-          "choices": ["adrenaline", "noradrenaline"]
+          "choices": ["adrenaline", "noradrenaline", "pge1"]
         },
         {
           "target": "param",
@@ -16119,7 +18105,8 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
             "clearance.global",
             "hr_ec50", "hr_emax", "hr_hill",
             "cont_ec50", "cont_emax", "cont_hill",
-            "svr_ec50", "svr_emax", "svr_hill"
+            "svr_ec50", "svr_emax", "svr_hill",
+            "pda_ec50", "pda_emax", "pda_hill"
           ]
         },
         {
@@ -18275,6 +20262,82 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "caption": "enabled"
     },
     {
+      "caption": "AV block",
+      "target": "av_block_mode",
+      "type": "list",
+      "custom_options": false,
+      "options": ["none", "first_degree", "second_degree", "complete"],
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "AV block ratio (2nd degree, e.g. 2 = 2:1)",
+      "target": "av_block_ratio",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 2,
+      "ul": 6,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "SA node active (off = sinus arrest)",
+      "target": "sa_node_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "ventricular pacemaker mode",
+      "target": "vent_pacemaker_mode",
+      "type": "list",
+      "custom_options": false,
+      "options": ["escape", "vt"],
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "ventricular escape rate (bpm)",
+      "target": "vent_escape_rate",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 20,
+      "ul": 120,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "ventricular tachycardia rate (bpm)",
+      "target": "vt_rate",
+      "type": "number",
+      "delta": 10,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 120,
+      "ul": 300,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "trigger premature ventricular contraction (PVC)",
+      "target": "trigger_pvc",
+      "type": "function",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": []
+    },
+    {
       "caption": "reference heart rate (bpm)",
       "target": "heart_rate_ref",
       "type": "number",
@@ -20204,6 +22267,17 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     },
     {
+      "caption": "vo2 temperature (Q10) factor",
+      "target": "vo2_temp_factor",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": true
+    },
+    {
       "caption": "set local fractional vo2",
       "target": "set_metabolic_active_model",
       "build_prop": true,
@@ -20233,6 +22307,534 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "ll": 0
         }
       ]
+    }
+  ],
+  "Thermoregulation": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "thermoregulation running",
+      "target": "thermoregulation_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "core temperature (degC)",
+      "target": "core_temp",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "skin temperature (degC)",
+      "target": "skin_temp",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "set-point temperature (degC)",
+      "target": "setpoint_temp",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "environment temperature (degC)",
+      "target": "env_temp",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "radiant-warmer temperature (degC)",
+      "target": "radiant_temp",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "relative humidity (fraction)",
+      "target": "rel_humidity",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "Q10 of metabolic rate",
+      "target": "q10",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "brown-fat heat gain (W/degC)",
+      "target": "bat_gain",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "heart-rate temperature gain",
+      "target": "hr_temp_gain",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    }
+  ],
+  "Glucose": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "glucose controller running",
+      "target": "glucose_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "arterial glucose (mmol/L)",
+      "target": "glucose",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "glucose set-point (mmol/L)",
+      "target": "glucose_setpoint",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "hepatic glucose production (mmol/kg/min)",
+      "target": "hgp_rate",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 4,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "glucose utilization (mmol/kg/min)",
+      "target": "glu_use_rate",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 4,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "insulin activity",
+      "target": "insulin",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "counter-regulatory activity",
+      "target": "counterreg",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
+  "Lactate": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "lactate production running",
+      "target": "lactate_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "arterial lactate (mmol/L)",
+      "target": "arterial_lactate",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "baseline lactate (mmol/L)",
+      "target": "lact_baseline",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "anaerobic threshold (fraction of resting to2)",
+      "target": "threshold_frac",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "lactate per O2 deficit (mmol/mmol)",
+      "target": "lact_per_o2_deficit",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "lactate clearance rate (1/s)",
+      "target": "lact_clearance",
+      "type": "number",
+      "delta": 0.0005,
+      "factor": 1,
+      "rounding": 4,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    }
+  ],
+  "Surfactant": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "recruitment running",
+      "target": "surfactant_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "surfactant maturity (0-1)",
+      "target": "surfactant",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "instill surfactant (therapy)",
+      "target": "administer_surfactant",
+      "type": "function",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": [
+        {
+          "target": "target",
+          "caption": "target maturity (0-1)",
+          "type": "number",
+          "factor": 1,
+          "default": 0.9,
+          "delta": 0.05,
+          "rounding": 2,
+          "ll": 0,
+          "ul": 1
+        }
+      ]
+    },
+    {
+      "caption": "open alveolar fraction",
+      "target": "open_fraction",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "transpulmonary pressure (mmHg)",
+      "target": "transpulmonary_pressure",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied lung elastance factor",
+      "target": "el_lung_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied diffusion factor",
+      "target": "dif_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied shunt-resistance factor",
+      "target": "ips_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
+  "Brain": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "brain controller running",
+      "target": "brain_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "autoregulation enabled",
+      "target": "autoregulation_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "autoregulation gain (1=intact, 0=pressure-passive)",
+      "target": "autoregulation_gain",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "ICP coupling enabled",
+      "target": "icp_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "set intracranial oedema (mL)",
+      "target": "set_edema",
+      "type": "function",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": [
+        {
+          "target": "volume_ml",
+          "caption": "oedema / mass volume (mL)",
+          "type": "number",
+          "factor": 1,
+          "default": 10,
+          "delta": 1,
+          "rounding": 1,
+          "ll": 0,
+          "ul": 40
+        }
+      ]
+    },
+    {
+      "caption": "cerebral blood flow (L/min)",
+      "target": "cbf",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "cerebral perfusion pressure (mmHg)",
+      "target": "cpp",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "intracranial pressure (mmHg)",
+      "target": "icp",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "brain tissue O2 (mmol/L)",
+      "target": "brain_to2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied arteriole resistance factor",
+      "target": "autoreg_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
     }
   ],
   "Mob": [
