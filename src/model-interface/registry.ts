@@ -2331,6 +2331,82 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "caption": "enabled"
     },
     {
+      "caption": "AV block",
+      "target": "av_block_mode",
+      "type": "list",
+      "custom_options": false,
+      "options": ["none", "first_degree", "second_degree", "complete"],
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "AV block ratio (2nd degree, e.g. 2 = 2:1)",
+      "target": "av_block_ratio",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 2,
+      "ul": 6,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "SA node active (off = sinus arrest)",
+      "target": "sa_node_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "ventricular pacemaker mode",
+      "target": "vent_pacemaker_mode",
+      "type": "list",
+      "custom_options": false,
+      "options": ["escape", "vt"],
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "ventricular escape rate (bpm)",
+      "target": "vent_escape_rate",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 20,
+      "ul": 120,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "ventricular tachycardia rate (bpm)",
+      "target": "vt_rate",
+      "type": "number",
+      "delta": 10,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 120,
+      "ul": 300,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "trigger premature ventricular contraction (PVC)",
+      "target": "trigger_pvc",
+      "type": "function",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": []
+    },
+    {
       "caption": "reference heart rate (bpm)",
       "target": "heart_rate_ref",
       "type": "number",
