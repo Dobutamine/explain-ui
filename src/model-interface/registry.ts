@@ -4604,6 +4604,111 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     }
   ],
+  "Surfactant": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "recruitment running",
+      "target": "surfactant_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "surfactant maturity (0-1)",
+      "target": "surfactant",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "instill surfactant (therapy)",
+      "target": "administer_surfactant",
+      "type": "function",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": [
+        {
+          "target": "target",
+          "caption": "target maturity (0-1)",
+          "type": "number",
+          "factor": 1,
+          "default": 0.9,
+          "delta": 0.05,
+          "rounding": 2,
+          "ll": 0,
+          "ul": 1
+        }
+      ]
+    },
+    {
+      "caption": "open alveolar fraction",
+      "target": "open_fraction",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "transpulmonary pressure (mmHg)",
+      "target": "transpulmonary_pressure",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied lung elastance factor",
+      "target": "el_lung_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied diffusion factor",
+      "target": "dif_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied shunt-resistance factor",
+      "target": "ips_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
   "Mob": [
     {
       "target": "model_type",
