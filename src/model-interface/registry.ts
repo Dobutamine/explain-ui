@@ -4250,6 +4250,17 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     },
     {
+      "caption": "vo2 temperature (Q10) factor",
+      "target": "vo2_temp_factor",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": true
+    },
+    {
       "caption": "set local fractional vo2",
       "target": "set_metabolic_active_model",
       "build_prop": true,
@@ -4279,6 +4290,308 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "ll": 0
         }
       ]
+    }
+  ],
+  "Thermoregulation": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "thermoregulation running",
+      "target": "thermoregulation_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "core temperature (degC)",
+      "target": "core_temp",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "skin temperature (degC)",
+      "target": "skin_temp",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "set-point temperature (degC)",
+      "target": "setpoint_temp",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "environment temperature (degC)",
+      "target": "env_temp",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "radiant-warmer temperature (degC)",
+      "target": "radiant_temp",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "relative humidity (fraction)",
+      "target": "rel_humidity",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "Q10 of metabolic rate",
+      "target": "q10",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "brown-fat heat gain (W/degC)",
+      "target": "bat_gain",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "heart-rate temperature gain",
+      "target": "hr_temp_gain",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    }
+  ],
+  "Glucose": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "glucose controller running",
+      "target": "glucose_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "arterial glucose (mmol/L)",
+      "target": "glucose",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "glucose set-point (mmol/L)",
+      "target": "glucose_setpoint",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "hepatic glucose production (mmol/kg/min)",
+      "target": "hgp_rate",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 4,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "glucose utilization (mmol/kg/min)",
+      "target": "glu_use_rate",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 4,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "insulin activity",
+      "target": "insulin",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "counter-regulatory activity",
+      "target": "counterreg",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
+  "Lactate": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "lactate production running",
+      "target": "lactate_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "arterial lactate (mmol/L)",
+      "target": "arterial_lactate",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "baseline lactate (mmol/L)",
+      "target": "lact_baseline",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "anaerobic threshold (fraction of resting to2)",
+      "target": "threshold_frac",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "lactate per O2 deficit (mmol/mmol)",
+      "target": "lact_per_o2_deficit",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "lactate clearance rate (1/s)",
+      "target": "lact_clearance",
+      "type": "number",
+      "delta": 0.0005,
+      "factor": 1,
+      "rounding": 4,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
     }
   ],
   "Mob": [
