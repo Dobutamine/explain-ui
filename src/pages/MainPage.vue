@@ -3,6 +3,7 @@ import { onMounted, onBeforeUnmount, ref, computed, watch } from "vue";
 import { storeToRefs } from "pinia";
 import Select from "primevue/select";
 import Button from "primevue/button";
+import InputText from "primevue/inputtext";
 import InputGroup from "primevue/inputgroup";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
@@ -13,7 +14,12 @@ import { useRouter } from "vue-router";
 import { useModelStore } from "@/stores/model";
 import { useAuthStore } from "@/stores/auth";
 import { useStatesStore } from "@/stores/states";
+import { useMonitorsStore } from "@/stores/monitors";
+import { useMonitorPrefs } from "@/composables/useMonitorPrefs";
 import { useExplain } from "@/composables/useExplain";
+import { formatParam } from "@/utils/monitorFormat";
+import { copyText, downloadText } from "@/utils/csv";
+import Popover from "primevue/popover";
 import RealtimeChart from "@/components/host/RealtimeChart.vue";
 import Diagram from "@/components/host/Diagram.vue";
 import ModelEditor from "@/components/controls/ModelEditor.vue";
@@ -40,9 +46,10 @@ async function logout() {
   await auth.logout();
   router.push({ name: "login" });
 }
-const { model, status, modelReady, isRunning, error, load, loadFromObject, start, stop, calculate } =
+const { model, status, modelReady, isRunning, error, load, loadFromObject, start, stop, calculate, slowValues, modelState } =
   useExplain();
 const statesStore = useStatesStore();
+const monitorsStore = useMonitorsStore();
 
 // SharedArrayBuffer transport is active only when cross-origin isolated.
 const isolated = globalThis.crossOriginIsolated === true;
@@ -51,21 +58,78 @@ const CALC_OPTIONS = [5, 10, 30, 60, 120, 300]; // seconds to calculate
 const vizTab = ref("diagram"); // active visualization tab: diagram | chart | loop | monitor | ventilator | chat
 const monitorTab = ref("monitoring"); // active right-column tab (more to come)
 const controlTab = ref("editor"); // active left-column tab (more to come)
+const editingMonitors = ref(false); // inline edit mode for the monitoring panel
+const monitorPrefs = useMonitorPrefs(); // compact / unitSystem / sparkWindowSec (persisted)
+const TREND_WINDOWS = [
+  { label: "30s", value: 30 },
+  { label: "1m", value: 60 },
+  { label: "5m", value: 300 },
+];
 
-// Monitor groups defined in the loaded scenario's `configuration.monitors`.
-// Re-derived whenever a scenario finishes loading (depends on modelReady).
-const monitorGroups = computed(() => {
-  if (!modelReady.value) return [];
-  const mons = (model as any).loadedFileData?.configuration?.monitors ?? {};
-  return Object.entries<any>(mons)
-    .filter(([, m]) => m?.enabled !== false)
-    .map(([key, m]) => ({
-      key,
-      title: m.title ?? key,
-      parameters: m.parameters ?? [],
-      collapsed: m.collapsed ?? false,
-    }));
-});
+// ----- snapshot / export of the visible readout -------------------------------
+const exportRef = ref<any>(null);
+function latestSlowRow(): Record<string, any> | null {
+  const arr = slowValues.value as any[];
+  return Array.isArray(arr) && arr.length ? arr[arr.length - 1] : null;
+}
+function snapshotRows() {
+  const l = latestSlowRow();
+  const w = (modelState.value as any)?.weight ?? 1;
+  const rows: { group: string; label: string; value: string; unit: string }[] = [];
+  for (const g of monitorGroups.value) {
+    for (const p of g.parameters ?? []) {
+      rows.push({ group: g.title, label: p.label, value: formatParam(p, l, w), unit: p.unit ?? "" });
+    }
+  }
+  return rows;
+}
+function simTime(): number {
+  return Number(latestSlowRow()?.time ?? 0);
+}
+const q = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
+function snapshotCsv(): string {
+  const t = simTime().toFixed(1);
+  const header = ["group", "label", "value", "unit", "sim_time"].join(",");
+  const lines = snapshotRows().map((r) => [q(r.group), q(r.label), q(r.value), q(r.unit), t].join(","));
+  return [header, ...lines].join("\n");
+}
+function snapshotTsv(): string {
+  return snapshotRows()
+    .map((r) => [r.group, r.label, r.value, r.unit].join("\t"))
+    .join("\n");
+}
+async function copySnapshot() {
+  await copyText(snapshotTsv());
+  exportRef.value?.hide();
+}
+function downloadSnapshot() {
+  const name = (model as any).loadedFileData?.name || current.value || "snapshot";
+  downloadText(`vitals_${name}_${simTime().toFixed(0)}s.csv`, snapshotCsv());
+  exportRef.value?.hide();
+}
+
+// Monitor groups come from the monitors store, which mirrors the loaded
+// scenario's `configuration.monitors` and persists edits back. Synced on every
+// (re)build (modelReady). In edit mode every group is shown (so disabled ones
+// can be re-enabled); read-only mode hides disabled groups.
+const monitorGroups = computed(() =>
+  editingMonitors.value
+    ? monitorsStore.groups
+    : monitorsStore.groups.filter((g) => g.enabled !== false),
+);
+watch(
+  modelReady,
+  (ready) => {
+    if (ready) monitorsStore.syncFromScenario();
+    else editingMonitors.value = false;
+  },
+  { immediate: true },
+);
+
+// dashboard switcher options
+const dashboardOptions = computed(() =>
+  monitorsStore.dashboards.map((d) => ({ label: d.name, value: d.id })),
+);
 
 // Name of the scenario / saved state currently loaded into the engine. Keyed on
 // modelReady (toggles false→true on every (re)build) so it re-derives per load;
@@ -325,13 +389,154 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           <TabPanels>
             <TabPanel value="monitoring">
               <div class="flex flex-col gap-3">
+                <div class="flex items-center justify-end gap-1.5">
+                  <Button
+                    v-if="!editingMonitors"
+                    v-tooltip.top="'Export readout'"
+                    icon="pi pi-download"
+                    severity="secondary"
+                    size="small"
+                    text
+                    :disabled="!modelReady"
+                    @click="exportRef?.toggle($event)"
+                  />
+                  <Popover ref="exportRef">
+                    <div class="flex flex-col gap-1">
+                      <Button
+                        label="Copy to clipboard"
+                        icon="pi pi-copy"
+                        severity="secondary"
+                        size="small"
+                        text
+                        @click="copySnapshot"
+                      />
+                      <Button
+                        label="Download CSV"
+                        icon="pi pi-file"
+                        severity="secondary"
+                        size="small"
+                        text
+                        @click="downloadSnapshot"
+                      />
+                    </div>
+                  </Popover>
+                  <Button
+                    v-if="editingMonitors"
+                    v-tooltip.top="'Add group'"
+                    icon="pi pi-plus"
+                    label="Group"
+                    severity="secondary"
+                    size="small"
+                    :disabled="!modelReady"
+                    @click="monitorsStore.addGroup()"
+                  />
+                  <Select
+                    v-if="!editingMonitors && !monitorPrefs.compact"
+                    v-model="monitorPrefs.sparkWindowSec"
+                    v-tooltip.top="'Trend window'"
+                    :options="TREND_WINDOWS"
+                    option-label="label"
+                    option-value="value"
+                    size="small"
+                    :disabled="!modelReady"
+                  />
+                  <Button
+                    v-if="!editingMonitors"
+                    v-tooltip.top="monitorPrefs.compact ? 'Show sparklines' : 'Compact view'"
+                    :icon="monitorPrefs.compact ? 'pi pi-chart-line' : 'pi pi-bars'"
+                    :severity="monitorPrefs.compact ? 'primary' : 'secondary'"
+                    size="small"
+                    text
+                    :disabled="!modelReady"
+                    @click="monitorPrefs.compact = !monitorPrefs.compact"
+                  />
+                  <Button
+                    v-tooltip.top="editingMonitors ? 'Done managing' : 'Manage monitors'"
+                    :icon="editingMonitors ? 'pi pi-check' : 'pi pi-pencil'"
+                    :severity="editingMonitors ? 'primary' : 'secondary'"
+                    size="small"
+                    text
+                    :disabled="!modelReady"
+                    @click="editingMonitors = !editingMonitors"
+                  />
+                </div>
+
+                <!-- dashboard switcher -->
+                <Select
+                  v-if="monitorsStore.dashboards.length > 1 || editingMonitors"
+                  :model-value="monitorsStore.activeId"
+                  :options="dashboardOptions"
+                  option-label="label"
+                  option-value="value"
+                  size="small"
+                  class="w-full"
+                  :disabled="!modelReady"
+                  @update:model-value="monitorsStore.setActive"
+                />
+
+                <!-- dashboard management (manage mode) -->
+                <div
+                  v-if="editingMonitors"
+                  class="flex flex-col gap-1.5 rounded border border-surface-700 p-2"
+                >
+                  <div class="flex items-center gap-1.5">
+                    <InputText
+                      :model-value="monitorsStore.activeDashboard?.name"
+                      placeholder="Dashboard name"
+                      size="small"
+                      class="flex-1 min-w-0"
+                      @update:model-value="(v: string | undefined) => monitorsStore.renameDashboard(monitorsStore.activeId, v ?? '')"
+                    />
+                    <Button
+                      v-tooltip.top="'Move dashboard up'"
+                      icon="pi pi-chevron-up"
+                      severity="secondary"
+                      size="small"
+                      text
+                      @click="monitorsStore.moveDashboard(monitorsStore.activeId, -1)"
+                    />
+                    <Button
+                      v-tooltip.top="'Move dashboard down'"
+                      icon="pi pi-chevron-down"
+                      severity="secondary"
+                      size="small"
+                      text
+                      @click="monitorsStore.moveDashboard(monitorsStore.activeId, 1)"
+                    />
+                    <Button
+                      v-tooltip.top="'Delete dashboard'"
+                      icon="pi pi-trash"
+                      severity="danger"
+                      size="small"
+                      text
+                      :disabled="monitorsStore.dashboards.length <= 1"
+                      @click="monitorsStore.removeDashboard(monitorsStore.activeId)"
+                    />
+                  </div>
+                  <Button
+                    label="Add dashboard"
+                    icon="pi pi-plus"
+                    severity="secondary"
+                    size="small"
+                    text
+                    class="self-start"
+                    @click="monitorsStore.addDashboard()"
+                  />
+                </div>
+
                 <NumericReadoutPanel
                   v-for="g in monitorGroups"
                   :key="g.key"
-                  :title="g.title"
-                  :parameters="g.parameters"
-                  :collapsed="g.collapsed"
+                  :group="g"
+                  :editable="editingMonitors"
+                  :compact="monitorPrefs.compact"
                 />
+                <p
+                  v-if="editingMonitors && !monitorGroups.length"
+                  class="text-sm opacity-50 text-center py-2"
+                >
+                  No monitor groups. Add one to start.
+                </p>
               </div>
             </TabPanel>
           </TabPanels>
