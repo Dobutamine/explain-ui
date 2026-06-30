@@ -25,7 +25,7 @@ Rules of thumb:
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
 Snapshot: **45 model_types**, **410 settable params**, **28 functions**
-(+ 29 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
+(+ 32 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
 ## Guided mode — curated safe set
@@ -62,6 +62,9 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `revert`  — undo all live changes — reload the patient as it was loaded
 - `tune`  — tune the live model to target value(s): map/co/hr/po2/spo2/pco2/be/ph/blood_volume (Full scope)
 - `loadDefinition`  — load+run a bot-built calibrated patient (Full scope; definition rides in response.artifact)
+- `setProp` `Pda.diameter_relative` — Ductus arteriosus (PDA) size — directional nudge lever
+- `setProp` `Shunts.diameter_fo` — Foramen ovale size — directional nudge lever
+- `setProp` `Shunts.diameter_vsd` — Ventricular septal defect (VSD) size — directional nudge lever
 
 ---
 
@@ -706,6 +709,84 @@ _call_:
 - `set_fio2(fio2 (number, range 0.21–1))` — fio2
 - `set_humidity(humidity (number, range 0–1))` — humidity
 - `set_temp(temp (number, C, range 0–1))` — temperature (C)
+
+---
+
+## Common tasks — directional nudges
+
+Curated relative adjustments ("raise PVR 30%", "halve contractility"). Each maps onto an EXISTING
+`setProp` or `scale` op — there is no special nudge op. Two resolution rules:
+
+- **setProp levers** (a `*_factor_ps` factor or a plain number): if the field's value is shown in the
+  live monitor context, multiply by (1+step) to raise / 1/(1+step) to lower; otherwise set an ABSOLUTE
+  target in DISPLAY units within the field's range. Values are display units (divided by the field
+  factor on apply), like any setProp.
+- **scale levers** (a ModelScaler group): `factor` is ABSOLUTE from baseline 1.0 (the current factor
+  is NOT visible in state) — reason about prior nudges this conversation. Apply the SAME factor to
+  every listed group; >1 raises, <1 lowers.
+- **absolute setProp levers** (shunt sizes — PDA/foramen ovale/VSD): set an ABSOLUTE value in DISPLAY
+  units within the stated range; 0 = closed/none. The engine treats diameter 0 as a hard-closed fast
+  path, so open a closed shunt by setting a positive diameter (e.g. PDA 50 = ~half-open).
+
+For inverse quantities (lung compliance ↔ elastance; preload ↔ unstressed volume) raising the
+physiological quantity LOWERS the lever — noted per task.
+
+### Vascular tone
+
+- **Systemic vascular resistance (afterload)** — scale `systemic_resistances`, default ±30%. LV afterload. Up = vasoconstriction/pressor; down = vasodilation. (MAP is partly defended by the baroreflex — CO/HR shift too.)
+  - e.g. `{"op":"scale","group":"systemic_resistances","factor":<absolute, 1.0=baseline>,"reason":"SVR nudge"}`
+- **Pulmonary vascular resistance (RV afterload)** — scale `pulmonary_resistances`, default ±30%. Pulmonary hypertension (up) vs vasodilator / iNO (down).
+  - e.g. `{"op":"scale","group":"pulmonary_resistances","factor":<absolute, 1.0=baseline>,"reason":"PVR nudge"}`
+- **Venous tone / preload** — scale `systemic_u_vol`, default ±20%. _(inverse: raising the quantity lowers the lever)_ Up = more venous return/preload (lowers unstressed volume).
+  - e.g. `{"op":"scale","group":"systemic_u_vol","factor":<absolute, 1.0=baseline>,"reason":"Preload nudge"}`
+
+### Cardiac performance
+
+- **Contractility (both ventricles)** — scale `heart_el_max`, default ±30%. Inotropy. Down 0.5 = halve contractility.
+  - e.g. `{"op":"scale","group":"heart_el_max","factor":<absolute, 1.0=baseline>,"reason":"Contractility nudge"}`
+- **Diastolic stiffness** — scale `heart_el_min`, default ±30%. Up = stiffer ventricle / diastolic dysfunction.
+  - e.g. `{"op":"scale","group":"heart_el_min","factor":<absolute, 1.0=baseline>,"reason":"Diastolic stiffness nudge"}`
+
+### Rate & rhythm
+
+- **Heart rate (reference)** — setProp `Heart.heart_rate_ref`, default ±20%. Tachycardia (up) / bradycardia (down).
+  - e.g. `{"op":"setProp","model":"Heart","target":"heart_rate_ref","value":<target in display units, or current×(1±20%) if shown>,"reason":"adjust Heart rate"}`
+
+### Lung mechanics
+
+- **Lung compliance** — scale `left_lung_elastances` + `right_lung_elastances`, default ±20%. _(inverse: raising the quantity lowers the lever)_ Down = stiffer lungs (RDS / hypoplasia); up = more compliant.
+  - e.g. `{"op":"scale","group":"left_lung_elastances","factor":<absolute, 1.0=baseline>,"reason":"Lung compliance nudge"}`
+- **Airway resistance** — scale `airway_lower_resistances`, default ±30%. Up = bronchospasm / obstruction.
+  - e.g. `{"op":"scale","group":"airway_lower_resistances","factor":<absolute, 1.0=baseline>,"reason":"Airway resistance nudge"}`
+
+### Gas exchange
+
+- **O2 diffusion capacity** — setProp `dif_o2_factor_ps` on each `GasExchanger` instance, default ±30%. Down = impaired alveolar O2 transfer.
+  - e.g. `{"op":"setProp","model":"<instance>","target":"dif_o2_factor_ps","value":<target in display units, or current×(1±30%) if shown>,"reason":"adjust O2 diffusion"}`
+
+### Shunts & fetal channels
+
+- **Ductus arteriosus (PDA) size** — setProp `Pda.diameter_relative`, step ±10 %, range 0–100. Relative patency 0 (closed) → 1 (fully open).
+  - e.g. `{"op":"setProp","model":"Pda","target":"diameter_relative","value":<0–100 %; 0=closed/none>,"reason":"set PDA"}`
+- **Foramen ovale size** — setProp `Shunts.diameter_fo`, step ±1 mm, range 0–10. Atrial-level shunt. 0 = closed.
+  - e.g. `{"op":"setProp","model":"Shunts","target":"diameter_fo","value":<0–10 mm; 0=closed/none>,"reason":"set Foramen ovale"}`
+- **Ventricular septal defect (VSD) size** — setProp `Shunts.diameter_vsd`, step ±1 mm, range 0–10. Ventricular-level shunt. 0 = none.
+  - e.g. `{"op":"setProp","model":"Shunts","target":"diameter_vsd","value":<0–10 mm; 0=closed/none>,"reason":"set VSD"}`
+
+### Ventilation drive
+
+- **Ventilation drive (reference minute volume)** — setProp `Breathing.minute_volume_ref`, default ±20%. Up = hyperventilation (↓pCO2); down = hypoventilation (↑pCO2).
+  - e.g. `{"op":"setProp","model":"Breathing","target":"minute_volume_ref","value":<target in display units, or current×(1±20%) if shown>,"reason":"adjust Ventilation drive"}`
+
+### Metabolic & thermal
+
+- **Metabolic demand (VO2)** — setProp `Metabolism.vo2`, default ±20%. Up = sepsis/hypermetabolism; down = hypothermia/sedation.
+  - e.g. `{"op":"setProp","model":"Metabolism","target":"vo2","value":<target in display units, or current×(1±20%) if shown>,"reason":"adjust VO2"}`
+
+### Blood & acid-base
+
+- **Blood volume** — scale `blood_volume`, default ±10%. Down = hemorrhage; up = fluid overload.
+  - e.g. `{"op":"scale","group":"blood_volume","factor":<absolute, 1.0=baseline>,"reason":"Blood volume nudge"}`
 
 ---
 

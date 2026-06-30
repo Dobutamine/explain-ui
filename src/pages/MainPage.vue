@@ -24,6 +24,7 @@ import RealtimeChart from "@/components/host/RealtimeChart.vue";
 import Diagram from "@/components/host/Diagram.vue";
 import ModelEditor from "@/components/controls/ModelEditor.vue";
 import ScalerPanel from "@/components/controls/ScalerPanel.vue";
+import CommonTasksPanel from "@/components/controls/CommonTasksPanel.vue";
 import VentilatorPanel from "@/components/controls/VentilatorPanel.vue";
 import EclsPanel from "@/components/controls/EclsPanel.vue";
 import ResuscitationPanel from "@/components/controls/ResuscitationPanel.vue";
@@ -278,6 +279,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             <Tab value="editor" v-tooltip.top="'Model editor'" aria-label="Model editor">
               <i class="pi pi-sliders-h"></i>
             </Tab>
+            <Tab value="tasks" v-tooltip.top="'Common tasks'" aria-label="Common tasks">
+              <i class="pi pi-bolt"></i>
+            </Tab>
             <Tab value="ventilator" v-tooltip.top="'Ventilator'" aria-label="Ventilator">
               <i class="pi pi-cloud"></i>
             </Tab>
@@ -301,6 +305,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             <TabPanel value="editor">
               <div class="flex flex-col gap-3">
                 <ModelEditor />
+              </div>
+            </TabPanel>
+            <TabPanel value="tasks">
+              <div class="flex flex-col gap-3">
+                <CommonTasksPanel />
               </div>
             </TabPanel>
             <TabPanel value="ventilator">

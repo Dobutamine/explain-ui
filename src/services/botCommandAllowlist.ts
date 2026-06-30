@@ -9,6 +9,8 @@
 // v1 is a deliberate vertical slice: ventilator on/off + a few vent params +
 // start/stop the sim. Broaden one model-type at a time.
 
+import { commonTaskAllowEntries } from "./commonTasks";
+
 export type CommandOp =
   | "call" // invoke a model method        -> useExplain().call
   | "setProp" // write a model property        -> useExplain().setProp
@@ -140,6 +142,14 @@ export const COMMAND_ALLOWLIST: AllowEntry[] = [
   { op: "loadDefinition", note: "load+run a bot-built calibrated patient (Full scope; definition rides in response.artifact)" },
 ];
 
+// Common physiological tasks (directional nudges) contribute their singleton
+// setProp levers — e.g. Circulation.svr_factor_art / pvr_factor_art — so the bot
+// can nudge them in Guided scope too. Appended here (deduped) to keep the catalog
+// single-sourced. model_type-resolved levers are skipped (see commonTasks.ts).
+for (const e of commonTaskAllowEntries()) {
+  if (!isAllowed(e.op, e.model, e.target)) COMMAND_ALLOWLIST.push(e);
+}
+
 // True when (op, model?, target?) matches an allowlist entry. Ops without a
 // model/target (start/stop/...) match on op alone.
 export function isAllowed(op: string, model?: string, target?: string): boolean {
@@ -176,6 +186,9 @@ export const SCALE_GROUPS: readonly string[] = [
   "heart_volume", // heart chamber volumes
   "systemic_elastances", // systemic vessel stiffness
   "pulmonary_elastances", // pulmonary vessel stiffness
+  "left_lung_elastances", // left-lung compliance (1/elastance)
+  "right_lung_elastances", // right-lung compliance
+  "airway_lower_resistances", // lower-airway resistance (bronchospasm)
 ];
 
 export function isScaleGroup(g: string | undefined): boolean {
