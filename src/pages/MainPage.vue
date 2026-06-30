@@ -36,6 +36,7 @@ import ChatPanel from "@/components/controls/ChatPanel.vue";
 import LoopChart from "@/components/host/LoopChart.vue";
 import Monitor from "@/components/host/Monitor.vue";
 import VentilatorScope from "@/components/host/VentilatorScope.vue";
+import DocViewer from "@/components/host/DocViewer.vue";
 
 const store = useModelStore();
 const auth = useAuthStore();
@@ -55,7 +56,7 @@ const monitorsStore = useMonitorsStore();
 const isolated = globalThis.crossOriginIsolated === true;
 const calcSecs = ref(10);
 const CALC_OPTIONS = [5, 10, 30, 60, 120, 300]; // seconds to calculate
-const vizTab = ref("diagram"); // active visualization tab: diagram | chart | loop | monitor | ventilator | chat
+const vizTab = ref("diagram"); // active visualization tab: diagram | chart | loop | monitor | ventilator | chat | docs
 const monitorTab = ref("monitoring"); // active right-column tab (more to come)
 const controlTab = ref("editor"); // active left-column tab (more to come)
 const editingMonitors = ref(false); // inline edit mode for the monitoring panel
@@ -356,6 +357,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             <Tab value="chat" v-tooltip.top="'Explain AI Bot'" aria-label="Explain AI Bot">
               <i class="pi pi-comments"></i>
             </Tab>
+            <Tab value="docs" v-tooltip.top="'Documentation'" aria-label="Documentation">
+              <i class="pi pi-book"></i>
+            </Tab>
           </TabList>
           <TabPanels>
             <TabPanel value="diagram">
@@ -375,6 +379,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             </TabPanel>
             <TabPanel value="chat">
               <ChatPanel />
+            </TabPanel>
+            <TabPanel value="docs">
+              <DocViewer />
             </TabPanel>
           </TabPanels>
         </Tabs>
