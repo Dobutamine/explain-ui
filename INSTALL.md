@@ -214,7 +214,9 @@ picked up.
 
 ## Next steps
 
+- **Documentation index:** [`docs/README.md`](./docs/README.md) — the UI⇄engine map.
 - **Engine architecture & model reference:** [`explain/README.md`](./explain/README.md) and the
-  per-model docs in [`explain/docs/`](./explain/docs/) (start with
-  [`explain/docs/ARCHITECTURE.md`](./explain/docs/ARCHITECTURE.md)).
+  per-model docs in [`docs/engine/`](./docs/engine/) (start with
+  [`docs/engine/ARCHITECTURE.md`](./docs/engine/ARCHITECTURE.md)).
+- **UI architecture:** [`docs/ui/UI_ARCHITECTURE.md`](./docs/ui/UI_ARCHITECTURE.md).
 - **Production server details:** [`server/README.md`](./server/README.md).

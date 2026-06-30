@@ -1,6 +1,6 @@
 # Host Components
 
-`src/components/host/` holds the Vue 3 **host** components that bridge the two planes. Each one owns a DOM surface (a `<div>` mount), constructs a plain-TS [renderer adapter](./RenderLayer.md), and registers it with the singleton [RealtimeBus](../explain/docs/RealtimeBus.md) so the bus drives it at ~60 Hz on the **data plane**. The Vue layer itself only touches the **control plane**: it picks which signals to watch (`watchProps`/`watchSlow` via `useExplain`), reads slow ~1 Hz numerics, and pushes view settings into the adapter imperatively. Per-frame samples flow worker → bus → adapter and **never** through Vue reactivity.
+`src/components/host/` holds the Vue 3 **host** components that bridge the two planes. Each one owns a DOM surface (a `<div>` mount), constructs a plain-TS [renderer adapter](./RenderLayer.md), and registers it with the singleton [RealtimeBus](../engine/RealtimeBus.md) so the bus drives it at ~60 Hz on the **data plane**. The Vue layer itself only touches the **control plane**: it picks which signals to watch (`watchProps`/`watchSlow` via `useExplain`), reads slow ~1 Hz numerics, and pushes view settings into the adapter imperatively. Per-frame samples flow worker → bus → adapter and **never** through Vue reactivity.
 
 ## What lives here
 
@@ -105,8 +105,8 @@ A tiny Pinia store bridging `Diagram.vue` (which owns the renderer locally) and 
 
 ## Wiring
 
-- Data-plane bus + buffer contract: [RealtimeBus](../explain/docs/RealtimeBus.md), [ChannelReader](../explain/docs/ChannelReader.md), [RealtimeChannels](../explain/docs/RealtimeChannels.md).
-- Anim registry/frame layout for the diagram: [AnimationPacker](../explain/docs/AnimationPacker.md).
+- Data-plane bus + buffer contract: [RealtimeBus](../engine/RealtimeBus.md), [ChannelReader](../engine/ChannelReader.md), [RealtimeChannels](../engine/RealtimeChannels.md).
+- Anim registry/frame layout for the diagram: [AnimationPacker](../engine/AnimationPacker.md).
 - The adapters these hosts construct: [RenderLayer](./RenderLayer.md).
 - Control-plane composable (`watchProps`/`watchSlow`/`slowValues`/`modelReady`/`model`): `src/composables/useExplain.ts`; bus singleton: `src/composables/useRealtimeBus.ts`.
 

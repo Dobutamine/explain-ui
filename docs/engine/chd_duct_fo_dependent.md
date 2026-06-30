@@ -36,9 +36,9 @@ The unifying teaching concept is the **balanced parallel circulation**. In a duc
 
 For each lesion: the **dependency**, the **mechanism**, and the **engine levers** that reproduce it. All cited engine identifiers were verified against the current tree:
 
-- Ductus → `Pda` model, resistor `AAR_DA` wired `AAR → PA`, levers `diameter_relative` / `length` / `discharge_coeff` (bidirectional; see [`Pda.js`](../component_models/Pda.js) and [`docs/Pda.md`](./Pda.md) if present).
+- Ductus → `Pda` model, resistor `AAR_DA` wired `AAR → PA`, levers `diameter_relative` / `length` / `discharge_coeff` (bidirectional; see [`Pda.js`](../../explain/component_models/Pda.js) and [`docs/Pda.md`](./Pda.md) if present).
 - Foramen ovale → `Shunts.diameter_fo` (LA↔RA via the split resistors `LA_RAIVCI` / `LA_RASVC`, with flap-valve asymmetry `fo_lr_factor`); restrictive/intact = `diameter_fo → 0`.
-- VSD → `Shunts.diameter_vsd` (LV↔RV). Intrapulmonary shunt → `Shunts.ips_res`. See [`Shunts.js`](../component_models/Shunts.js).
+- VSD → `Shunts.diameter_vsd` (LV↔RV). Intrapulmonary shunt → `Shunts.ips_res`. See [`Shunts.js`](../../explain/component_models/Shunts.js).
 - Valves are `HeartValve`s (a `Resistor` subclass) in `Heart.components`: `LA_LV` (mitral), `RV_PA` (pulmonary), `LV_AA` (aortic). The **tricuspid is split** into two resistors `RAIVCI_RV` + `RASVC_RV` (there is no single `RA_RV` valve model — `RA_RV` is only a diagram connector grouping the two). **Atresia** = `no_flow: true`; **stenosis** = raise `r_for` (set on both halves of the tricuspid).
 - **TGA outflow tracts are pre-wired but disabled** in `term_neonate.json`: `RV_AA` (RV→AA, `is_enabled: false`) and `LV_PA` (LV→PA, `is_enabled: false`), alongside the normal `RV_PA` and `LV_AA`.
 

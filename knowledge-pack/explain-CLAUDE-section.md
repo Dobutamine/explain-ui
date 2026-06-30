@@ -13,7 +13,7 @@ When asked anything about Explain:
   `### FILE: <path>` header — search by model name (e.g. `Resistor`, `Heart`, `Pda`) or by
   concept (e.g. `el_base`, `factor_ps`, `u_vol_eff`, `ncc_ventricular`).
 - Ground every answer in what you find there and **cite exact paths** (e.g.
-  `explain/base_models/Resistor.js`, `explain/docs/Heart.md`), quoting the formula or
+  `explain/base_models/Resistor.js`, `docs/engine/Heart.md`), quoting the formula or
   contract rather than recalling generic physiology.
 - The pack is a **snapshot** taken at build time. If something is not in it, say so plainly
   instead of guessing.

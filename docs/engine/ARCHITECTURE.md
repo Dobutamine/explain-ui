@@ -14,8 +14,8 @@ Two files, two threads, one wire protocol:
 
 | File | Thread | Owns |
 |---|---|---|
-| [`Model.js`](../Model.js) | main thread | Public API surface, message send/receive, event re-emit. Extends `ModelEmitter` (pub/sub). |
-| [`ModelEngine.js`](../ModelEngine.js) | Web Worker | The live `model` object, the build flow, the step loop, the message router. |
+| [`Model.js`](../../explain/Model.js) | main thread | Public API surface, message send/receive, event re-emit. Extends `ModelEmitter` (pub/sub). |
+| [`ModelEngine.js`](../../explain/ModelEngine.js) | Web Worker | The live `model` object, the build flow, the step loop, the message router. |
 
 `Model.js`'s constructor spawns the worker with
 
@@ -96,7 +96,7 @@ The worker's outbound `type` strings are translated to `ModelEmitter` events you
 
 ### Event emitter (`ModelEmitter`)
 
-`Model` extends [`ModelEmitter`](../ModelEmitter.js) — a deliberately minimal pub/sub base class (no dependencies, **no `once`, no wildcards, no per-callback error guarding**):
+`Model` extends [`ModelEmitter`](../../explain/ModelEmitter.js) — a deliberately minimal pub/sub base class (no dependencies, **no `once`, no wildcards, no per-callback error guarding**):
 
 | Method | Behaviour |
 |---|---|
@@ -207,8 +207,8 @@ When adding a tunable param, follow this convention so it composes with interven
 
 **⚠️ The scaling-layer suffix is NOT uniform across the engine.** Verify before you copy:
 
-- The **capacitance / resistor / time-varying-elastance** family uses **`*_factor_scaling_ps`** (e.g. `el_base_factor_scaling_ps`, `u_vol_factor_scaling_ps`, `r_factor_scaling_ps` in [`Capacitance.js`](../base_models/Capacitance.js) / [`Resistor.js`](../base_models/Resistor.js)).
-- The **diffusor / exchanger** family uses **`*_factor_scaling`** with **no `_ps`** (e.g. `dif_o2_factor_scaling`, `dif_co2_factor_scaling` in [`GasDiffusor.js`](../base_models/GasDiffusor.js); likewise `GasExchanger`, `BloodDiffusor`).
+- The **capacitance / resistor / time-varying-elastance** family uses **`*_factor_scaling_ps`** (e.g. `el_base_factor_scaling_ps`, `u_vol_factor_scaling_ps`, `r_factor_scaling_ps` in [`Capacitance.js`](../../explain/base_models/Capacitance.js) / [`Resistor.js`](../../explain/base_models/Resistor.js)).
+- The **diffusor / exchanger** family uses **`*_factor_scaling`** with **no `_ps`** (e.g. `dif_o2_factor_scaling`, `dif_co2_factor_scaling` in [`GasDiffusor.js`](../../explain/base_models/GasDiffusor.js); likewise `GasExchanger`, `BloodDiffusor`).
 
 If you scale a diffusor through the `*_scaling_ps` name it will silently do nothing.
 
@@ -238,16 +238,16 @@ applied to `to2`, `tco2`, every entry in `solutes` and `drugs`, plus `temp` and 
 2. **Give it a `static model_type`** string — the key used at build and in definition JSON.
 3. **Implement `init_model(args)`** (resolve cross-model refs, set `_is_initialized`) and **`calc_model()`** (the physics).
 4. **Follow the factor convention** (§7a) for any tunable param so it composes with interventions and scaling — and use the **correct scaling suffix** for the family you're modelling.
-5. **Export it from [`ModelIndex.js`](../ModelIndex.js).** The engine builds `available_model_map` from everything `ModelIndex` exports. **Forgetting this export is the usual cause of "model type not found" at build.**
+5. **Export it from [`ModelIndex.js`](../../explain/ModelIndex.js).** The engine builds `available_model_map` from everything `ModelIndex` exports. **Forgetting this export is the usual cause of "model type not found" at build.**
 6. **Reference the `model_type`** in your `model_definitions/*.json` `models` map.
 7. **Add a `model_type` entry to `src/model-interface/registry.ts`** so the parameters become editable in the app (the engine ships no UI metadata).
-8. **Write a doc** in `explain/docs/` following the template in §10.
+8. **Write a doc** in `docs/engine/` following the template in §10.
 
 ---
 
 ## 9. The house doc template
 
-Every per-class doc in `explain/docs/` should follow this structure (the canonical exemplar is [`BloodCapacitance.md`](./BloodCapacitance.md)):
+Every per-class doc in `docs/engine/` should follow this structure (the canonical exemplar is [`BloodCapacitance.md`](./BloodCapacitance.md)):
 
 1. **Title + one-paragraph summary** — what the model is, in plain terms.
 2. **Inheritance** — an ASCII tree showing the chain up to `BaseModelClass`, and which classes extend this one.

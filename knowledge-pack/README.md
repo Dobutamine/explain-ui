@@ -8,7 +8,7 @@ and letting it read them on demand.
 
 | File | What it is | How produced |
 |------|------------|--------------|
-| `explain-knowledge-pack.md` | The corpus: architecture + all `explain/docs/*.md` + engine source + UI/integration source + scenario format. ~200K tokens (full tier). | `node scripts/build_knowledge_pack.mjs` |
+| `explain-knowledge-pack.md` | The corpus: architecture + all `docs/engine/*.md` + engine source + UI/integration source + scenario format. ~200K tokens (full tier). | `node scripts/build_knowledge_pack.mjs` |
 | `explain-CLAUDE-section.md` | The `CLAUDE.md` pointer that orients an Agent-SDK bot to the pack (grep it, cite paths, handle the live patient-state block) and to the command files below. | hand-written |
 | `command-protocol.md` | **Bot-facing**: how to emit an action (the fenced `explain-command` JSON format + rules). The webapp parses these out of the reply and offers the user an Apply button. | hand-written |
 | `command-catalog.md` | **Bot-facing**: the exhaustive list of currently-allowed commands with value ranges. Generated from the webapp's allowlist + parameter schema so the bot can't propose something the app rejects. | `node scripts/build_command_catalog.mjs` |
@@ -56,7 +56,7 @@ the bot's working directory and point its `CLAUDE.md` at it:
    is required.
 
 The bot then greps `explain-knowledge-pack.md` for the relevant model/topic and answers
-grounded, citing exact paths (`explain/base_models/Resistor.js`, `explain/docs/Heart.md`).
+grounded, citing exact paths (`explain/base_models/Resistor.js`, `docs/engine/Heart.md`).
 
 **Refresh** after an engine change: re-run the build script and re-copy
 `explain-knowledge-pack.md` to the bot directory. No `CLAUDE.md` change needed on refresh.

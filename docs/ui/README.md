@@ -1,9 +1,10 @@
-# Explain — UI Layer Documentation Index
+# Explain — UI Layer Documentation
 
 This directory documents the **Vue 3 + Vite + TypeScript app** under `src/` — the UI that drives the
-[Explain physiological simulation engine](../explain/docs/README.md). The engine (the
+[Explain physiological simulation engine](../engine/README.md). The engine (the
 framework-agnostic ES modules under `explain/`) has its own per-class reference set in
-[`explain/docs/`](../explain/docs/README.md); **this** set covers the app layer that wraps it.
+[`docs/engine/`](../engine/README.md); **this** set covers the app layer that wraps it.
+See the [top-level documentation index](../README.md) for the UI⇄engine map.
 
 **New here?** Start with **[UI_ARCHITECTURE](./UI_ARCHITECTURE.md)** — the whole-UI overview: the
 two-plane split (reactive control plane vs. non-reactive ~60 Hz data plane), bootstrap, the
@@ -12,7 +13,7 @@ per-area docs below.
 
 Each doc follows the same house template (summary → "what lives here" table → per-unit API tables →
 wiring → gotchas), adapted for Vue units. Cross-links into the engine docs use relative paths
-(`../explain/docs/X.md`).
+(`../engine/X.md`).
 
 ---
 
@@ -55,7 +56,7 @@ wiring → gotchas), adapted for Vue units. Cross-links into the engine docs use
 
 ## See also
 
-- [`../CLAUDE.md`](../CLAUDE.md) — the repo quick reference (alias, npm scripts, schema field list).
-- [`../explain/docs/README.md`](../explain/docs/README.md) — the engine (physics) documentation index.
-- [`../explain/docs/ARCHITECTURE.md`](../explain/docs/ARCHITECTURE.md) — the engine's two-thread design,
+- [`../../CLAUDE.md`](../../CLAUDE.md) — the repo quick reference (alias, npm scripts, schema field list).
+- [`../engine/README.md`](../engine/README.md) — the engine (physics) documentation index.
+- [`../engine/ARCHITECTURE.md`](../engine/ARCHITECTURE.md) — the engine's two-thread design,
   wire protocol, and the realtime write side the UI's data plane reads from.

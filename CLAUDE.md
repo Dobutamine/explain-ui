@@ -76,8 +76,10 @@ Some component models build sub-models inside `init_model` via the `this.compone
 
 ## Docs
 
-`explain/docs/*.md` and `explain/papers/` contain the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
+All prose documentation now lives under the top-level [`docs/`](docs/README.md), split into two clearly separated sets: [`docs/engine/`](docs/engine/README.md) (the physics engine) and [`docs/ui/`](docs/ui/README.md) (the Vue app). The engine *code* still lives under `explain/`.
+
+[`docs/engine/*.md`](docs/engine/README.md) and `explain/papers/` contain the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
 
 ## UI documentation
 
-The **Vue UI layer** (everything under `src/`) is documented separately in `docs/` — start at [`docs/README.md`](docs/README.md), or [`docs/UI_ARCHITECTURE.md`](docs/UI_ARCHITECTURE.md) for the whole-UI overview. That set is the long form of the two `model_interface` sections above and covers the parts `CLAUDE.md` doesn't: the two-plane (reactive control / non-reactive ~60 Hz data) architecture, the Pinia stores, the `src/render/` adapters (uPlot/Pixi), the host + control + numeric components, the chat/bot command pipeline (`src/services/`), and routing/auth. This file stays the quick reference; `docs/` is canonical for the UI.
+The **Vue UI layer** (everything under `src/`) is documented in [`docs/ui/`](docs/ui/README.md) — start at [`docs/ui/README.md`](docs/ui/README.md), or [`docs/ui/UI_ARCHITECTURE.md`](docs/ui/UI_ARCHITECTURE.md) for the whole-UI overview. That set is the long form of the two `model_interface` sections above and covers the parts `CLAUDE.md` doesn't: the two-plane (reactive control / non-reactive ~60 Hz data) architecture, the Pinia stores, the `src/render/` adapters (uPlot/Pixi), the host + control + numeric components, the chat/bot command pipeline (`src/services/`), and routing/auth. This file stays the quick reference; `docs/ui/` is canonical for the UI.
