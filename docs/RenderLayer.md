@@ -1,0 +1,136 @@
+# Render Layer
+
+`src/render/` is the **data-plane render layer**: the plain-TypeScript renderer adapters that the [RealtimeBus](../explain/docs/RealtimeBus.md) drives at ~60 Hz. Each adapter owns a canvas / WebGL surface (uPlot, raw 2D canvas, or PixiJS) and implements the `RendererAdapter` contract so the bus can hand it `onFrame(chart, anim)` every `requestAnimationFrame` tick. Nothing here is Vue-reactive: adapters read typed buffers directly and redraw, so per-frame telemetry never triggers a component re-render. The [host components](./HostComponents.md) construct these adapters, register them with the bus, and feed them control-plane settings imperatively.
+
+## What lives here
+
+| File | Responsibility |
+|---|---|
+| `types.ts` | Shell-side TypeScript mirrors of the bus shapes: `ChartFrame`, `AnimFrame`, `AnimComponent`, `AnimLayout`, `ChannelsPayload`, and the `RendererAdapter` contract |
+| `ChartRenderer.ts` | uPlot adapter for the fast chart channel — rolling-window strip chart, 1–2 series, shared/split axes, lock/auto Y, area fill, CSV snapshot |
+| `LoopRenderer.ts` | Raw-canvas X-Y "loop" plotter (e.g. PV loop): one chart signal against another parametrically; polyline, not uPlot |
+| `MonitorRenderer.ts` | Bedside-monitor sweep renderer — stacked waveform lanes with a shared sweep head + big slow-stream numerics gutter. Reused by `Monitor.vue` and `VentilatorScope.vue` |
+| `DiagramRenderer.ts` | PixiJS v8 adapter for the sprite circulation diagram (viewer + editor): compartments scaled by volume, tinted by `to2`; connectors with streaming flow dots |
+| `diagramConstants.ts` | Shared editor constants: `PICTOS`, `PATH_TYPES`, `LAYOUT_PATCH_WHITELIST` |
+
+## The `RendererAdapter` contract
+
+Defined in `types.ts`. Every renderer in this folder `implements RendererAdapter`:
+
+```ts
+interface RendererAdapter {
+  onRegistry?(payload: ChannelsPayload): void;   // channels (re)configured
+  onFrame(chart: ChartFrame | null, anim: AnimFrame | null): void;  // per rAF tick
+  dispose?(): void;
+}
+```
+
+- **`onRegistry(payload)`** — optional. Called when the worker's `RT_MSG.CHANNELS` handshake arrives, and **replayed immediately** by `RealtimeBus.addRenderer` if a registry already landed (late-registered adapters still get the layout). Adapters use it to resolve their signal names → column/slot indices against `payload.chart.slots` (and, for the diagram, `payload.anim.components`).
+- **`onFrame(chart, anim)`** — required. Called once per tick that produced new data; **either argument may be `null`** (chart-only renderers ignore `anim`, the diagram ignores `chart`). Each call is wrapped in `try/catch` by the bus so one throwing adapter cannot starve the others.
+- **`dispose()`** — optional. Tears down observers, destroys the plot/app, removes the canvas. Hosts call it from `onBeforeUnmount` after `removeRenderer`.
+
+### Typed-buffer shapes (`types.ts`)
+
+```ts
+interface ChartFrame {
+  version: number;
+  stride: number;        // floats per row (col 0 = time, then one per slot)
+  slots: string[];       // ["time", "<Model.prop>", …]
+  count: number;         // number of rows in this drain
+  rows: Float64Array;    // count * stride values, row-major
+}
+
+interface AnimFrame {
+  version: number;
+  stride: number;
+  components: AnimComponent[];
+  layout: AnimLayout;    // { count, stride, max_to2 }
+  frame: Float32Array;   // one frame: [time, (mag, tint) * componentCount]
+}
+
+interface AnimComponent { name: string; index: number; kind: "vol"|"flow"; models: string[]; tinting: boolean; }
+interface AnimLayout    { count: number; stride: number; max_to2: number; }
+```
+
+`ChartFrame.rows` is **count×stride** `Float64Array`: row `r`'s time is `rows[r*stride]`, and signal `s` is `rows[r*stride + 1 + slotIndex]`. `AnimFrame.frame` is a single `Float32Array`; a component's two values are read with the `animMagOffset(idx)` / `animTintOffset(idx)` helpers from `@explain/helpers/RealtimeChannels` (`1 + idx*2` and `1 + idx*2 + 1`). In shared transport `frame` is the reader's reusable scratch buffer — copy if you need to retain it.
+
+## Channels handshake & transport
+
+`ChannelsPayload` (the `RT_MSG.CHANNELS` payload) is:
+
+```ts
+interface ChannelsPayload {
+  descriptor: any;       // transport + SAB/ctrl handles (read by ChannelReader)
+  chart: { version: number; slots: string[] };
+  anim: { version: number; components: AnimComponent[]; layout: AnimLayout } | null;
+}
+```
+
+The worker posts this **once per (re)build**, then streams `RT_MSG.CHART` / `RT_MSG.ANIM` (transferable) or writes SABs directly (shared). The bus's `_handleMessage` routes `CHANNELS` → `reader.configure` + every adapter's `onRegistry`, and `CHART`/`ANIM` → `reader.onMessage`. Adapters never see raw messages — only the drained `ChartFrame` / `AnimFrame`. Transport selection (`RT_TRANSPORT.SHARED` when `crossOriginIsolated`, else `TRANSFERABLE`) is invisible to renderers: the same `onFrame` shapes arrive either way.
+
+## ChartRenderer (uPlot)
+
+Strip chart over the fast chart channel. Appends **every** drained row (no dropped samples), keeps a rolling `windowS`-second window, redraws once per frame via `plot.setData`. Holds plain `xs`/`ys[]` arrays. `onRegistry` caches `allLabels = slots.slice(1)` (slot 0 is `time`); `rebuildDisplay` resolves the host-supplied `visible` labels → drawn series + their `displayIdx` data columns, preserving `visible` order regardless of watchlist insertion order.
+
+| Method | Purpose |
+|---|---|
+| `setVisible(labels)` | Choose which watched channels to plot, in order (colours follow order) |
+| `setWindow(seconds)` | Rolling x-window length |
+| `setSharedAxis(on)` | All series on one left `y` scale vs. one independent `y<i>` scale + axis each (series 0 left, series 1 right) |
+| `setColorOffset(n)` | Shift into the `COLORS` palette (split chart's lone B series → blue) |
+| `setAutoScaleY(on)` | Toggle uPlot autoscale; switching OFF snapshots the live ranges and pins them |
+| `applyFixedYRange(min,max)` | Pin every active y scale to an explicit range (preset-supplied) |
+| `setYRange(key,min,max)` | Edit one locked scale's range; re-feeds data so it applies even when paused |
+| `getYAxes()` | Describe editable axes (key/label/color/min/max) for the host controls |
+| `setFill(on)` | Translucent area fill under each trace (Doppler-like) |
+| `getSeries()` | Snapshot `{ time, labels, cols }` of the rolling buffer for CSV export |
+
+x-scale `range` fn pins exactly `[dataMax - windowS, dataMax]` (no uPlot padding). uPlot's own legend + cursor are disabled; the host draws its own legend. A `ResizeObserver` calls `setSize`.
+
+## LoopRenderer (canvas)
+
+Parametric X-Y plot for closed, non-monotonic loops (PV loop), so it draws a polyline directly on a 2D canvas rather than uPlot. `onRegistry` caches `slots`; `setSignals(x,y)` / `applySignals` resolve `xi`/`yi` via `slots.indexOf`. `onFrame` pushes `(time, x, y)` per row, trims to `windowS` (and a hard `MAX_POINTS = 20000` cap), then `draw()` autoscales to the current point cloud and strokes the trail in blue with rotated axis labels. `getSeries()` returns `{ time, labels:[xSig,ySig], cols:[xs,ys] }`. DPR-aware via `ResizeObserver`.
+
+## MonitorRenderer (canvas sweep)
+
+Bedside-monitor renderer: one canvas, `lanes: MonitorLane[]` stacked vertically with a single shared **sweep head** (refresh bar travels left→right, overwriting the previous pass, with a small blanked erase gap just ahead). Waveforms come off the fast chart stream (`onFrame`); the big numerics come off the **slow 1 Hz stream**, pushed in via `setNumerics`.
+
+```ts
+interface MonitorLane {
+  signal: string;        // chart slot path, e.g. "Monitor.signals.ecg"
+  label: string; color: string; unit: string;
+  fill?: boolean;
+  fixedRange?: [number, number];               // omit → autoscale over the window
+  readNumeric: (n: Record<string, number>) => string;   // big value, slow-keyed
+  readSub?:    (n: Record<string, number>) => string;    // small secondary
+}
+```
+
+`onRegistry` resolves each lane's `signal` → slot index. Per row, time maps to a column `c = floor((time mod windowS)/windowS * plotW)`; the lane's value is written into `cols[li][c]` and `filled[li][c]=1`. `draw()` renders each lane (autoscale or `fixedRange`), the numerics gutter (`GUTTER = 132` px right column), and the shared sweep marker. `setWindow` re-allocs the width-keyed column store; the store is also reset on resize.
+
+## DiagramRenderer (PixiJS v8)
+
+Viewer **and** editor for the circulation diagram. Lazily imported by `Diagram.vue` so PixiJS lands in its own async chunk. `init()` is async: creates the `Application`, preloads sprite pictos via `Assets.load`, builds procedural glow/vignette textures, then builds compartments and connectors from `diagram.components`.
+
+**Per-frame (`onFrame(_chart, anim)`):** for each compartment, `radiusFromVolume(frame[animMagOffset(idx)])` scales the disc/glow/rim, and `frame[animTintOffset(idx)]` (`to2`) maps through `rgbFromTo2` across the `[to2Lo, to2Hi]` window onto a deox-blue → ox-red ramp, smoothed by `TINT_LERP`. For each connector, the magnitude is `|flow|` (advances + sizes the streaming dot train) and the tint is the upstream component's `to2`. `onRegistry` builds `animIndex[name] = component.index` from `payload.anim.components`.
+
+**Live control knobs (no rebuild):** `setScaling`, `setTo2Range(lo,hi)`, `setGrid`/`setGridSize`, `setLabel`, `setPicto`, `setModels`, `setTinting`. Several re-apply immediately so a paused sim updates and persist into `diagram.settings` for export.
+
+**Editor:** `setEditMode`, `setConnectMode`, sprite drag (`onSpriteDown`/`onDragMove`/`onDragEnd` — snaps to the layout ring or commits a relative position, grid-snap when on), `select`/`clearSelection`/`deleteSelected`/`removeByName`, `addCompartment`, `connect`/`createConnection`, `applyLayoutPatch(name, patch)` (deep-merges into `component.layout` and re-renders live). `setSelectCallback(fn)` notifies the host of selection; `setChangeCallback(fn)` fires after **structural** edits (add/connect/delete/models/tinting) so the host can push the diagram to the engine for a live anim re-bind. `getDiagram()` returns the mutated definition for export. Connector hit-testing uses a `PolylineHitArea` so thin strokes are clickable.
+
+## Wiring
+
+- Engine producer + buffer contract: [RealtimeBus](../explain/docs/RealtimeBus.md), [ChannelReader](../explain/docs/ChannelReader.md), [RealtimeChannels](../explain/docs/RealtimeChannels.md).
+- The anim frame layout (`[time, (mag, tint)*N]`) and the `AnimComponent` registry are produced by [AnimationPacker](../explain/docs/AnimationPacker.md).
+- The bus singleton + start/stop gating: `src/composables/useRealtimeBus.ts`.
+- Hosts that construct and drive these adapters: [HostComponents](./HostComponents.md).
+
+## Gotchas
+
+- **Shared, additive fast watchlist.** The fast watchlist is global (PV loop's LV props, the always-on ECG counters, other charts' picks all live there). `ChartRenderer` therefore defaults `visible = []` and draws **nothing** until the host calls `setVisible`; signal resolution is by name against `slots`, so a series simply doesn't appear until its watch is applied.
+- **`anim.frame` is reused in shared mode.** The diagram smooths tint across frames using its own `cr/cg/cb` fields, but any adapter that retains raw frame values must copy them — the buffer is the reader's scratch.
+- **MonitorRenderer is shared.** Both `Monitor.vue` and `VentilatorScope.vue` instantiate the same class with different `lanes`; it has no monitor-specific assumptions beyond the `MonitorLane` shape.
+- **Loops use canvas, not uPlot.** A PV loop isn't monotonic in x, so uPlot can't draw it; `LoopRenderer` strokes a raw polyline and autoscales each frame.
+- **Width-keyed buffers reset on resize.** `MonitorRenderer`'s column store and the diagram's geometry are recomputed on `ResizeObserver` ticks; the monitor clears its sweep history on a window change.
+- **Pixi is lazy.** `DiagramRenderer` is `await import(...)`-ed in `Diagram.vue`; never static-import it into the main bundle. `init()` is async and must complete before `onFrame` does anything (guarded by `ready`).
+- **to2 window matters per scenario.** `to2` is O₂ *content*, which scales with Hb; a fixed `[lo, hi]` pegs a low-Hb (adult) circuit blue. The default window is `[3.0, 8.8]`; diagrams override via `settings.to2_lo`/`to2_hi`.
