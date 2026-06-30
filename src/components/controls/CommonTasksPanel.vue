@@ -2,7 +2,7 @@
 import { computed, reactive } from "vue";
 import Panel from "primevue/panel";
 import Button from "primevue/button";
-import Select from "primevue/select";
+import InputNumber from "primevue/inputnumber";
 import { useExplain } from "@/composables/useExplain";
 import {
   COMMON_TASKS,
@@ -24,10 +24,17 @@ const { scale, setProp, modelState, refreshState } = useExplain();
 // snapshot, so we remember them here; baseline 1.0). Re-zeroes automatically on
 // reload/revert because the panel unmounts with the modelReady v-if in MainPage.
 const factors = reactive<Record<string, number>>({});
-// Per-task selected step (defaults to the task's default step).
+// Per-task step, in the field the user types into: a PERCENT for factor tasks
+// (30 = ±30%), or the raw increment for absolute tasks (e.g. 0.1 / 1 mm).
 const stepSel = reactive<Record<string, number>>(
-  Object.fromEntries(COMMON_TASKS.map((t) => [t.id, t.step])),
+  Object.fromEntries(COMMON_TASKS.map((t) => [t.id, t.mode === "absolute" ? t.step : t.step * 100])),
 );
+const stepSuffix = (t: CommonTask) => (t.mode === "absolute" ? (t.unit ? ` ${t.unit}` : "") : "%");
+// the displayed step converted back to the raw fraction/increment the helpers expect
+function rawStep(t: CommonTask): number {
+  const sel = stepSel[t.id] ?? (t.mode === "absolute" ? t.step : t.step * 100);
+  return t.mode === "absolute" ? sel : sel / 100;
+}
 
 // Per-category collapse state — sections start COLLAPSED.
 const collapsed = reactive<Record<string, boolean>>({});
@@ -74,16 +81,6 @@ const categories = computed<{ category: TaskCategory; label: string; tasks: Comm
   return out;
 });
 
-function stepOptions(task: CommonTask) {
-  return (task.steps ?? [task.step]).map((s) => ({
-    label:
-      task.mode === "absolute"
-        ? `${s}${task.unit ? ` ${task.unit}` : ""}`
-        : `${Math.round(s * 100)}%`,
-    value: s,
-  }));
-}
-
 // Live readout: tracked factor for scale tasks, current prop value for setProp.
 function readout(task: CommonTask): string {
   if (task.lever.kind === "scale") return `×${(factors[task.id] ?? 1).toFixed(2)}`;
@@ -96,7 +93,7 @@ function readout(task: CommonTask): string {
 }
 
 function nudge(task: CommonTask, dir: NudgeDirection) {
-  const eff: CommonTask = { ...task, step: stepSel[task.id] ?? task.step };
+  const eff: CommonTask = { ...task, step: rawStep(task) };
   if (task.lever.kind === "scale") {
     const next = nextScaleFactor(factors[task.id] ?? 1, eff, dir);
     const groups = Array.isArray(task.lever.group) ? task.lever.group : [task.lever.group];
@@ -133,7 +130,7 @@ function resetScale(task: CommonTask) {
 
     <div class="flex flex-col gap-4">
       <p class="text-xs opacity-60 -mt-1">
-        Directional nudges — click − / + to adjust by the selected step. Up then down by the same step
+        Directional nudges — click − / + to adjust by the step you enter. Up then down by the same step
         returns to baseline.
       </p>
 
@@ -183,12 +180,15 @@ function resetScale(task: CommonTask) {
             aria-label="Increase"
             @click="nudge(task, 'up')"
           />
-          <Select
+          <InputNumber
             v-model="stepSel[task.id]"
-            :options="stepOptions(task)"
-            option-label="label"
-            option-value="value"
+            v-tooltip.top="'Step size'"
+            :suffix="stepSuffix(task)"
+            :min="0"
+            :min-fraction-digits="0"
+            :max-fraction-digits="2"
             size="small"
+            input-class="w-16"
             class="w-20"
           />
           <Button
