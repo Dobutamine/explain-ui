@@ -101,6 +101,22 @@ quantitative result is reproduced from the engine rather than asserted.
 
 ### 2.1 Conceptual model — the process-controller pattern
 
+The seven regulatory models of this paper share a common architecture, summarised in Figure 1:
+each senses a small number of variables from the shared cardiovascular/respiratory/metabolic
+state, runs a control law, and writes its output back onto that state through the engine's
+composable effector layers, closing a control loop around the plant of Papers 1–2.
+
+![Figure 1](Fig1_regulatory_systems.png)
+
+**Figure 1.** The regulatory-controller layer. Six process controllers (Brain, Kidneys, Hormones,
+Thermoregulation, Glucose, Drugs) form closed loops with the shared physiological state — sensing
+a state variable and driving an effector channel — while the intravenous-fluid scheduler (Fluids)
+is a one-way source term. Every controller owns no compartment of its own, is neutral at the
+calibrated baseline, and writes only the persistent factor layer (Eq. S1), so its action composes
+additively with autonomic control (Paper 1) and allometric scaling (Paper 4) rather than
+overwriting them. Accent colours group related systems (neuro; renal/endocrine; thermal/metabolic;
+pharmacological).
+
 The six controllers (Brain, Kidneys, Hormones, Thermoregulation, Glucose, Drugs) and the fluid
 scheduler share the following structure, which we state once and do not repeat per model:
 
