@@ -24,8 +24,8 @@ Rules of thumb:
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
-Snapshot: **38 model_types**, **345 settable params**, **24 functions**
-(+ 26 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
+Snapshot: **45 model_types**, **410 settable params**, **28 functions**
+(+ 32 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
 ## Guided mode — curated safe set
@@ -37,7 +37,7 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `call` `Ventilator.set_fio2` — set inspired O2 fraction (0.21–1.0)
 - `call` `Ventilator.set_ettube_diameter` — set endotracheal tube diameter (mm)
 - `call` `Ventilator.set_ettube_length` — set endotracheal tube length (mm)
-- `setProp` `Ventilator.vent_mode` — ventilation mode (PC/PRVC/PS)
+- `setProp` `Ventilator.vent_mode` — ventilation mode (PC/PRVC/PS/CPAP)
 - `setProp` `Ventilator.vent_rate` — ventilator rate (/min)
 - `setProp` `Ventilator.insp_time` — inspiration time (s)
 - `setProp` `Ventilator.tidal_volume` — target tidal volume (mL)
@@ -59,6 +59,12 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `setProp` `Resuscitation.chest_comp_freq` — chest compression frequency (/min)
 - `start`  — start the realtime simulation loop
 - `stop`  — stop the realtime simulation loop
+- `revert`  — undo all live changes — reload the patient as it was loaded
+- `tune`  — tune the live model to target value(s): map/co/hr/po2/spo2/pco2/be/ph/blood_volume (Full scope)
+- `loadDefinition`  — load+run a bot-built calibrated patient (Full scope; definition rides in response.artifact)
+- `setProp` `Pda.diameter_relative` — Ductus arteriosus (PDA) size — directional nudge lever
+- `setProp` `Shunts.diameter_fo` — Foramen ovale size — directional nudge lever
+- `setProp` `Shunts.diameter_vsd` — Ventricular septal defect (VSD) size — directional nudge lever
 
 ---
 
@@ -97,6 +103,7 @@ _call_:
 - `set_temperature(temp (number, range 25–45); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set temperature (C)
 - `set_viscosity(viscosity (number, range 0.1–12))` — set viscosity (cP)
 - `set_haldane_coeff(new_coeff (number, 0 = off, range 0–5))` — set Haldane coefficient
+- `set_P50(new_p50 (number, fetal HbF 18.8, neonatal 20.0, adult 26.7, range 15–30))` — set P50 (Hb-O2 affinity)
 - `set_to2(to2 (number, range 0–20); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set total oxygen concentration (mmol/l)
 - `set_tco2(tco2 (number, range 0–20); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set total carbon dioxide concentration (mmol/l)
 - `set_solute(solute_name (list, one of na/k/ca/cl/lact/mg/albumin/phosphates/uma/hemoglobin); solute_value (number, range 0–1000); site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber/MicroVascularUnit/BloodPump))` — set solute concentration
@@ -173,6 +180,18 @@ _setProp_:
 - `alpha` — resistance-elastance coupling (0-1) (number, 0-1) _(advanced)_
 - `ans_sens` — ans sensitivity (0-1) (number, 0-1) _(advanced)_
 
+### Brain
+
+_setProp_:
+- `brain_running` — brain controller running (boolean)
+- `autoregulation_enabled` — autoregulation enabled (boolean)
+- `autoregulation_gain` — autoregulation gain (1=intact, 0=pressure-passive) (number, 1=intact, 0=pressure-passive, range 0–1)
+- `icp_enabled` — ICP coupling enabled (boolean)
+- `is_enabled` — enabled (boolean) _(all)_
+
+_call_:
+- `set_edema(volume_ml (number, mL, range 0–40))` — set intracranial oedema (mL)
+
 ### Breathing
 
 _setProp_:
@@ -222,9 +241,9 @@ _setProp_:
 - `is_enabled` — enabled (boolean) _(all)_
 
 _call_:
-- `administer_bolus(drug (list, one of adrenaline/noradrenaline); dose (number, mcg, range 0–1000))` — administer IV bolus
-- `set_infusion(drug (list, one of adrenaline/noradrenaline); rate (number, mcg/kg/min, range 0–100))` — set infusion
-- `set_drug_param(drug (list, one of adrenaline/noradrenaline); param (list, one of ke0/clearance.global/hr_ec50/hr_emax/hr_hill/cont_ec50/cont_emax/cont_hill/svr_ec50/svr_emax/svr_hill); value (number, range 0–1000))` — set PK/PD parameter
+- `administer_bolus(drug (list, one of adrenaline/noradrenaline/pge1); dose (number, mcg, range 0–1000))` — administer IV bolus
+- `set_infusion(drug (list, one of adrenaline/noradrenaline/pge1); rate (number, mcg/kg/min, range 0–100))` — set infusion
+- `set_drug_param(drug (list, one of adrenaline/noradrenaline/pge1); param (list, one of ke0/clearance.global/hr_ec50/hr_emax/hr_hill/cont_ec50/cont_emax/cont_hill/svr_ec50/svr_emax/svr_hill/pda_ec50/pda_emax/pda_hill); value (number, range 0–1000))` — set PK/PD parameter
 
 ### Ecls
 
@@ -304,6 +323,15 @@ _setProp_:
 - `dif_o2_factor_ps` — oxygen diffusion factor (factor)
 - `dif_co2_factor_ps` — carbon dioxide diffusion factor (factor)
 
+### Glucose
+
+_setProp_:
+- `glucose_running` — glucose controller running (boolean)
+- `glucose_setpoint` — glucose set-point (mmol/L) (number, mmol/L)
+- `hgp_rate` — hepatic glucose production (mmol/kg/min) (number, mmol/kg/min)
+- `glu_use_rate` — glucose utilization (mmol/kg/min) (number, mmol/kg/min) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
 ### HeadUpTilt
 
 _setProp_:
@@ -319,12 +347,18 @@ _call_:
 ### Heart
 
 _setProp_:
+- `av_block_mode` — AV block (list, one of none/first_degree/second_degree/complete)
+- `sa_node_enabled` — SA node active (off = sinus arrest) (boolean, off = sinus arrest)
+- `vent_pacemaker_mode` — ventricular pacemaker mode (list, one of escape/vt)
 - `heart_rate_ref` — reference heart rate (bpm) (number, bpm, range 10–300)
 - `pq_time` — pq time (ms) (number, ms, range 50–1000)
 - `qrs_time` — qrs time (ms) (number, ms, range 50–500)
 - `qt_time` — qt time (ms) (number, ms, range 50–1000)
 - `ans_sens` — ans sensitivity (number, range 0–1)
 - `pc_extra_volume` — pericardial fluid volume (mL) (number, mL, range 0–1000)
+- `av_block_ratio` — AV block ratio (2nd degree, e.g. 2 = 2:1) (number, 2nd degree, e.g. 2 = 2:1, range 2–6) _(extra)_
+- `vent_escape_rate` — ventricular escape rate (bpm) (number, bpm, range 20–120) _(extra)_
+- `vt_rate` — ventricular tachycardia rate (bpm) (number, bpm, range 120–300) _(extra)_
 - `av_delay` — av delay time (ms) (number, ms, range 0.5–10) _(extra)_
 - `p_amp` — ECG P amplitude (mV) (number, mV, range -5–5) _(extra)_
 - `q_amp` — ECG Q amplitude (mV) (number, mV, range -5–5) _(extra)_
@@ -338,6 +372,9 @@ _setProp_:
 - `pc_el_factor` — pericardial stiffness factor (factor, range 0–200) _(factors)_
 - `is_enabled` — enabled (boolean) _(all)_
 - `hr_factor` — heartrate factor (number, range 0–1000000)
+
+_call_:
+- `trigger_pvc()` — trigger premature ventricular contraction (PVC)
 
 ### HeartChamber
 
@@ -442,6 +479,29 @@ _setProp_:
 - `afferent_factor_max` — afferent factor max (number, range 1–20) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
 
+### Lactate
+
+_setProp_:
+- `lactate_running` — lactate production running (boolean)
+- `lact_baseline` — baseline lactate (mmol/L) (number, mmol/L)
+- `threshold_frac` — anaerobic threshold (fraction of resting to2) (number, fraction of resting to2, range 0–1) _(advanced)_
+- `lact_per_o2_deficit` — lactate per O2 deficit (mmol/mmol) (number, mmol/mmol) _(advanced)_
+- `lact_clearance` — lactate clearance rate (1/s) (number, 1/s) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
+### MaternalPlacenta
+
+_setProp_:
+- `mp_running` — placenta running (boolean)
+- `met_active` — metabolism active (boolean)
+- `mp_vo2` — placental VO2 (mL O2/kg/min) (number, mL O2/kg/min, range 0–5)
+- `vo2_factor_ps` — placental VO2 factor (factor) _(factors)_
+- `spiral_res_term_factor` — term spiral-artery resistance factor (number, range 0.001–1) _(advanced)_
+- `contraction_pres_gain` — contraction pressure gain (0-1) (number, 0-1, range 0–1) _(advanced)_
+- `preg_ga_threshold` — GA threshold (weeks) (number, weeks, range 0–20) _(advanced)_
+- `preg_ga_term` — GA term anchor (weeks) (number, weeks, range 30–42) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
 ### Metabolism
 
 _setProp_:
@@ -487,9 +547,7 @@ _setProp_:
 - `diameter_ao_max` — max diameter aortic ampulla (mm) (number, mm) _(extra)_
 - `diameter_pa_max` — max diameter pulmonary end (mm) (number, mm) _(extra)_
 - `length` — ductus arteriosus length (mm) (number, mm) _(extra)_
-- `el_base` — baseline elastance (open duct, mmHg/L) (number, open duct, mmHg/L) _(extra)_
-- `alpha` — elastance-resistance coupling alpha (number, range 0–1.5) _(extra)_
-- `jet_exponent` — jet velocity exponent (number, range 0–3) _(extra)_
+- `discharge_coeff` — orifice discharge coefficient (number, range 0.3–1) _(extra)_
 - `is_enabled` — enabled (boolean) _(all)_
 
 ### Placenta
@@ -502,6 +560,7 @@ _setProp_:
 - `dif_co2` — co2 dioxide diffusion constant (number, range 0–0.1)
 - `mat_to2` — mat plac o2 content (mmol/L) (number, mmol/L, range 0–10)
 - `mat_tco2` — mat plac co2 content (mmol/L) (number, mmol/L, range 20–30)
+- `skip_mat_gas_write` — maternal pool driven externally (uterine coupling) (boolean, uterine coupling) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
 - `placenta_running` — placenta model running (boolean) _(caption)_
 - `umb_clamped` — umbilical vessels clamped (boolean) _(caption)_
@@ -563,6 +622,29 @@ _setProp_:
 - `ips_res` — intrapulmonary shunt resistance (mmHg*s/L) (number, mmHg*s/L, range 0–100000000) _(extra)_
 - `is_enabled` — enabled (boolean) _(all)_
 
+### Surfactant
+
+_setProp_:
+- `surfactant_running` — recruitment running (boolean)
+- `surfactant` — surfactant maturity (0-1) (number, 0-1, range 0–1)
+- `is_enabled` — enabled (boolean) _(all)_
+
+_call_:
+- `administer_surfactant(target (number, 0-1, range 0–1))` — instill surfactant (therapy)
+
+### Thermoregulation
+
+_setProp_:
+- `thermoregulation_running` — thermoregulation running (boolean)
+- `setpoint_temp` — set-point temperature (degC) (number, degC)
+- `env_temp` — environment temperature (degC) (number, degC)
+- `radiant_temp` — radiant-warmer temperature (degC) (number, degC) _(extra)_
+- `rel_humidity` — relative humidity (fraction) (number, fraction, range 0–1) _(extra)_
+- `q10` — Q10 of metabolic rate (number) _(advanced)_
+- `bat_gain` — brown-fat heat gain (W/degC) (number, W/degC) _(advanced)_
+- `hr_temp_gain` — heart-rate temperature gain (number) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
 ### TimeVaryingElastance
 
 _setProp_:
@@ -577,10 +659,37 @@ _setProp_:
 - `el_max_factor_ps` — elastance maximum baseline factor (factor)
 - `el_k_factor_ps` — elastance non linear factor (factor)
 
+### Uterus
+
+_setProp_:
+- `uterus_running` — uterus running (boolean)
+- `met_active` — metabolism active (boolean)
+- `ut_vo2` — uterine VO2 (mL O2/kg/min) (number, mL O2/kg/min, range 0–5)
+- `perfusion_factor` — perfusion factor (number, range 0–10)
+- `pregnant` — pregnant (boolean)
+- `preg_ga` — pregnancy GA (weeks) (number, weeks, range 0–42)
+- `contractions_running` — contractions running (labor) (boolean, labor)
+- `couple_placenta` — couple placenta to uterine blood (boolean) _(extra)_
+- `contraction_period` — contraction period (s) (number, s, range 30–600) _(extra)_
+- `contraction_duration` — contraction duration (s) (number, s, range 20–180) _(extra)_
+- `contraction_amplitude` — contraction amplitude (mmHg) (number, mmHg, range 0–120) _(extra)_
+- `vo2_factor_ps` — uterine VO2 factor (factor) _(factors)_
+- `resting_tone` — resting tone (mmHg) (number, mmHg, range 0–30) _(advanced)_
+- `contraction_pres_gain` — contraction pressure gain (0-1) (number, 0-1, range 0–1) _(advanced)_
+- `contraction_r_peak` — contraction resistance peak (x) (number, x, range 1–20) _(advanced)_
+- `resp_q` — respiratory quotient (number, range 0–1.5) _(advanced)_
+- `preg_ga_threshold` — pregnancy GA threshold (weeks) (number, weeks, range 0–20) _(advanced)_
+- `preg_ga_term` — pregnancy GA term anchor (weeks) (number, weeks, range 30–42) _(advanced)_
+- `preg_res_term_factor` — term bed-resistance factor (conduits) (number, conduits, range 0.05–1) _(advanced)_
+- `preg_cap_res_term_factor` — term capillary-resistance factor (myometrium) (number, myometrium, range 0.05–1) _(advanced)_
+- `preg_vol_term_factor` — term bed-volume factor (number, range 1–6) _(advanced)_
+- `preg_vo2_term_factor` — term VO2 factor (number, range 1–15) _(advanced)_
+- `is_enabled` — enabled (boolean) _(all)_
+
 ### Ventilator
 
 _setProp_:
-- `vent_mode` — ventilator mode (list, one of PC/PRVC/PS)
+- `vent_mode` — ventilator mode (list, one of PC/PRVC/PS/CPAP)
 - `vent_rate` — ventilator rate (/min) (number, /min, range 0–100)
 - `insp_time` — inspiration time (s) (number, s, range 0.1–5)
 - `insp_flow` — inspiratory flow (l/min) (number, l/min, range 0–20)
@@ -600,6 +709,84 @@ _call_:
 - `set_fio2(fio2 (number, range 0.21–1))` — fio2
 - `set_humidity(humidity (number, range 0–1))` — humidity
 - `set_temp(temp (number, C, range 0–1))` — temperature (C)
+
+---
+
+## Common tasks — directional nudges
+
+Curated relative adjustments ("raise PVR 30%", "halve contractility"). Each maps onto an EXISTING
+`setProp` or `scale` op — there is no special nudge op. Two resolution rules:
+
+- **setProp levers** (a `*_factor_ps` factor or a plain number): if the field's value is shown in the
+  live monitor context, multiply by (1+step) to raise / 1/(1+step) to lower; otherwise set an ABSOLUTE
+  target in DISPLAY units within the field's range. Values are display units (divided by the field
+  factor on apply), like any setProp.
+- **scale levers** (a ModelScaler group): `factor` is ABSOLUTE from baseline 1.0 (the current factor
+  is NOT visible in state) — reason about prior nudges this conversation. Apply the SAME factor to
+  every listed group; >1 raises, <1 lowers.
+- **absolute setProp levers** (shunt sizes — PDA/foramen ovale/VSD): set an ABSOLUTE value in DISPLAY
+  units within the stated range; 0 = closed/none. The engine treats diameter 0 as a hard-closed fast
+  path, so open a closed shunt by setting a positive diameter (e.g. PDA 50 = ~half-open).
+
+For inverse quantities (lung compliance ↔ elastance; preload ↔ unstressed volume) raising the
+physiological quantity LOWERS the lever — noted per task.
+
+### Vascular tone
+
+- **Systemic vascular resistance (afterload)** — scale `systemic_resistances`, default ±30%. LV afterload. Up = vasoconstriction/pressor; down = vasodilation. (MAP is partly defended by the baroreflex — CO/HR shift too.)
+  - e.g. `{"op":"scale","group":"systemic_resistances","factor":<absolute, 1.0=baseline>,"reason":"SVR nudge"}`
+- **Pulmonary vascular resistance (RV afterload)** — scale `pulmonary_resistances`, default ±30%. Pulmonary hypertension (up) vs vasodilator / iNO (down).
+  - e.g. `{"op":"scale","group":"pulmonary_resistances","factor":<absolute, 1.0=baseline>,"reason":"PVR nudge"}`
+- **Venous tone / preload** — scale `systemic_u_vol`, default ±20%. _(inverse: raising the quantity lowers the lever)_ Up = more venous return/preload (lowers unstressed volume).
+  - e.g. `{"op":"scale","group":"systemic_u_vol","factor":<absolute, 1.0=baseline>,"reason":"Preload nudge"}`
+
+### Cardiac performance
+
+- **Contractility (both ventricles)** — scale `heart_el_max`, default ±30%. Inotropy. Down 0.5 = halve contractility.
+  - e.g. `{"op":"scale","group":"heart_el_max","factor":<absolute, 1.0=baseline>,"reason":"Contractility nudge"}`
+- **Diastolic stiffness** — scale `heart_el_min`, default ±30%. Up = stiffer ventricle / diastolic dysfunction.
+  - e.g. `{"op":"scale","group":"heart_el_min","factor":<absolute, 1.0=baseline>,"reason":"Diastolic stiffness nudge"}`
+
+### Rate & rhythm
+
+- **Heart rate (reference)** — setProp `Heart.heart_rate_ref`, default ±20%. Tachycardia (up) / bradycardia (down).
+  - e.g. `{"op":"setProp","model":"Heart","target":"heart_rate_ref","value":<target in display units, or current×(1±20%) if shown>,"reason":"adjust Heart rate"}`
+
+### Lung mechanics
+
+- **Lung compliance** — scale `left_lung_elastances` + `right_lung_elastances`, default ±20%. _(inverse: raising the quantity lowers the lever)_ Down = stiffer lungs (RDS / hypoplasia); up = more compliant.
+  - e.g. `{"op":"scale","group":"left_lung_elastances","factor":<absolute, 1.0=baseline>,"reason":"Lung compliance nudge"}`
+- **Airway resistance** — scale `airway_lower_resistances`, default ±30%. Up = bronchospasm / obstruction.
+  - e.g. `{"op":"scale","group":"airway_lower_resistances","factor":<absolute, 1.0=baseline>,"reason":"Airway resistance nudge"}`
+
+### Gas exchange
+
+- **O2 diffusion capacity** — setProp `dif_o2_factor_ps` on each `GasExchanger` instance, default ±30%. Down = impaired alveolar O2 transfer.
+  - e.g. `{"op":"setProp","model":"<instance>","target":"dif_o2_factor_ps","value":<target in display units, or current×(1±30%) if shown>,"reason":"adjust O2 diffusion"}`
+
+### Shunts & fetal channels
+
+- **Ductus arteriosus (PDA) size** — setProp `Pda.diameter_relative`, step ±10 %, range 0–100. Relative patency 0 (closed) → 1 (fully open).
+  - e.g. `{"op":"setProp","model":"Pda","target":"diameter_relative","value":<0–100 %; 0=closed/none>,"reason":"set PDA"}`
+- **Foramen ovale size** — setProp `Shunts.diameter_fo`, step ±1 mm, range 0–10. Atrial-level shunt. 0 = closed.
+  - e.g. `{"op":"setProp","model":"Shunts","target":"diameter_fo","value":<0–10 mm; 0=closed/none>,"reason":"set Foramen ovale"}`
+- **Ventricular septal defect (VSD) size** — setProp `Shunts.diameter_vsd`, step ±1 mm, range 0–10. Ventricular-level shunt. 0 = none.
+  - e.g. `{"op":"setProp","model":"Shunts","target":"diameter_vsd","value":<0–10 mm; 0=closed/none>,"reason":"set VSD"}`
+
+### Ventilation drive
+
+- **Ventilation drive (reference minute volume)** — setProp `Breathing.minute_volume_ref`, default ±20%. Up = hyperventilation (↓pCO2); down = hypoventilation (↑pCO2).
+  - e.g. `{"op":"setProp","model":"Breathing","target":"minute_volume_ref","value":<target in display units, or current×(1±20%) if shown>,"reason":"adjust Ventilation drive"}`
+
+### Metabolic & thermal
+
+- **Metabolic demand (VO2)** — setProp `Metabolism.vo2`, default ±20%. Up = sepsis/hypermetabolism; down = hypothermia/sedation.
+  - e.g. `{"op":"setProp","model":"Metabolism","target":"vo2","value":<target in display units, or current×(1±20%) if shown>,"reason":"adjust VO2"}`
+
+### Blood & acid-base
+
+- **Blood volume** — scale `blood_volume`, default ±10%. Down = hemorrhage; up = fluid overload.
+  - e.g. `{"op":"scale","group":"blood_volume","factor":<absolute, 1.0=baseline>,"reason":"Blood volume nudge"}`
 
 ---
 

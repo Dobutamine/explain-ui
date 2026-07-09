@@ -31,11 +31,16 @@ export { HeartChamber } from "./component_models/HeartChamber";
 export { Gas } from "./component_models/Gas";
 export { Breathing } from "./component_models/Breathing";
 export { Respiration } from "./component_models/Respiration";
+export { Surfactant } from "./component_models/Surfactant";
 
 export { Ans } from "./component_models/Ans";
 export { AnsAfferent } from "./component_models/AnsAfferent";
 export { AnsEfferent } from "./component_models/AnsEfferent";
 export { Metabolism } from "./component_models/Metabolism";
+export { Brain } from "./component_models/Brain";
+export { Thermoregulation } from "./component_models/Thermoregulation";
+export { Glucose } from "./component_models/Glucose";
+export { Lactate } from "./component_models/Lactate";
 export { Kidneys } from "./component_models/Kidneys";
 export { Uterus } from "./component_models/Uterus";
 export { Hormones } from "./component_models/Hormones";

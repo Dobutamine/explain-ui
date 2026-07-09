@@ -45,7 +45,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "caption": "drug",
           "type": "list",
           "custom_options": true,
-          "choices": ["adrenaline", "noradrenaline"]
+          "choices": ["adrenaline", "noradrenaline", "pge1"]
         },
         {
           "target": "dose",
@@ -73,7 +73,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "caption": "drug",
           "type": "list",
           "custom_options": true,
-          "choices": ["adrenaline", "noradrenaline"]
+          "choices": ["adrenaline", "noradrenaline", "pge1"]
         },
         {
           "target": "rate",
@@ -141,6 +141,15 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": true
     },
     {
+      "target": "pda_drug_factor",
+      "type": "number",
+      "caption": "applied ductal patency factor (PGE1)",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
       "target": "set_drug_param",
       "type": "function",
       "caption": "set PK/PD parameter",
@@ -153,7 +162,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "caption": "drug",
           "type": "list",
           "custom_options": true,
-          "choices": ["adrenaline", "noradrenaline"]
+          "choices": ["adrenaline", "noradrenaline", "pge1"]
         },
         {
           "target": "param",
@@ -165,7 +174,8 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
             "clearance.global",
             "hr_ec50", "hr_emax", "hr_hill",
             "cont_ec50", "cont_emax", "cont_hill",
-            "svr_ec50", "svr_emax", "svr_hill"
+            "svr_ec50", "svr_emax", "svr_hill",
+            "pda_ec50", "pda_emax", "pda_hill"
           ]
         },
         {
@@ -2321,6 +2331,82 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "caption": "enabled"
     },
     {
+      "caption": "AV block",
+      "target": "av_block_mode",
+      "type": "list",
+      "custom_options": false,
+      "options": ["none", "first_degree", "second_degree", "complete"],
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "AV block ratio (2nd degree, e.g. 2 = 2:1)",
+      "target": "av_block_ratio",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 2,
+      "ul": 6,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "SA node active (off = sinus arrest)",
+      "target": "sa_node_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "ventricular pacemaker mode",
+      "target": "vent_pacemaker_mode",
+      "type": "list",
+      "custom_options": false,
+      "options": ["escape", "vt"],
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "ventricular escape rate (bpm)",
+      "target": "vent_escape_rate",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 20,
+      "ul": 120,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "ventricular tachycardia rate (bpm)",
+      "target": "vt_rate",
+      "type": "number",
+      "delta": 10,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 120,
+      "ul": 300,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "trigger premature ventricular contraction (PVC)",
+      "target": "trigger_pvc",
+      "type": "function",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": []
+    },
+    {
       "caption": "reference heart rate (bpm)",
       "target": "heart_rate_ref",
       "type": "number",
@@ -4364,6 +4450,17 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     },
     {
+      "caption": "vo2 temperature (Q10) factor",
+      "target": "vo2_temp_factor",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": true
+    },
+    {
       "caption": "set local fractional vo2",
       "target": "set_metabolic_active_model",
       "build_prop": true,
@@ -4393,6 +4490,534 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "ll": 0
         }
       ]
+    }
+  ],
+  "Thermoregulation": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "thermoregulation running",
+      "target": "thermoregulation_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "core temperature (degC)",
+      "target": "core_temp",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "skin temperature (degC)",
+      "target": "skin_temp",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "set-point temperature (degC)",
+      "target": "setpoint_temp",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "environment temperature (degC)",
+      "target": "env_temp",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "radiant-warmer temperature (degC)",
+      "target": "radiant_temp",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "relative humidity (fraction)",
+      "target": "rel_humidity",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "Q10 of metabolic rate",
+      "target": "q10",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "brown-fat heat gain (W/degC)",
+      "target": "bat_gain",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "heart-rate temperature gain",
+      "target": "hr_temp_gain",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    }
+  ],
+  "Glucose": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "glucose controller running",
+      "target": "glucose_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "arterial glucose (mmol/L)",
+      "target": "glucose",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "glucose set-point (mmol/L)",
+      "target": "glucose_setpoint",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "hepatic glucose production (mmol/kg/min)",
+      "target": "hgp_rate",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 4,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "glucose utilization (mmol/kg/min)",
+      "target": "glu_use_rate",
+      "type": "number",
+      "delta": 0.005,
+      "factor": 1,
+      "rounding": 4,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "insulin activity",
+      "target": "insulin",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "counter-regulatory activity",
+      "target": "counterreg",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
+  "Lactate": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "lactate production running",
+      "target": "lactate_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "arterial lactate (mmol/L)",
+      "target": "arterial_lactate",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "baseline lactate (mmol/L)",
+      "target": "lact_baseline",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "anaerobic threshold (fraction of resting to2)",
+      "target": "threshold_frac",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "lactate per O2 deficit (mmol/mmol)",
+      "target": "lact_per_o2_deficit",
+      "type": "number",
+      "delta": 0.01,
+      "factor": 1,
+      "rounding": 3,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "lactate clearance rate (1/s)",
+      "target": "lact_clearance",
+      "type": "number",
+      "delta": 0.0005,
+      "factor": 1,
+      "rounding": 4,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    }
+  ],
+  "Surfactant": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "recruitment running",
+      "target": "surfactant_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "surfactant maturity (0-1)",
+      "target": "surfactant",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "instill surfactant (therapy)",
+      "target": "administer_surfactant",
+      "type": "function",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": [
+        {
+          "target": "target",
+          "caption": "target maturity (0-1)",
+          "type": "number",
+          "factor": 1,
+          "default": 0.9,
+          "delta": 0.05,
+          "rounding": 2,
+          "ll": 0,
+          "ul": 1
+        }
+      ]
+    },
+    {
+      "caption": "open alveolar fraction",
+      "target": "open_fraction",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "transpulmonary pressure (mmHg)",
+      "target": "transpulmonary_pressure",
+      "type": "number",
+      "factor": 1,
+      "rounding": 2,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied lung elastance factor",
+      "target": "el_lung_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied diffusion factor",
+      "target": "dif_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied shunt-resistance factor",
+      "target": "ips_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
+  "Brain": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "brain controller running",
+      "target": "brain_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "autoregulation enabled",
+      "target": "autoregulation_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "autoregulation gain (1=intact, 0=pressure-passive)",
+      "target": "autoregulation_gain",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "ICP coupling enabled",
+      "target": "icp_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "set intracranial oedema (mL)",
+      "target": "set_edema",
+      "type": "function",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": [
+        {
+          "target": "volume_ml",
+          "caption": "oedema / mass volume (mL)",
+          "type": "number",
+          "factor": 1,
+          "default": 10,
+          "delta": 1,
+          "rounding": 1,
+          "ll": 0,
+          "ul": 40
+        }
+      ]
+    },
+    {
+      "caption": "cerebral blood flow (L/min)",
+      "target": "cbf",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "cerebral perfusion pressure (mmHg)",
+      "target": "cpp",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "intracranial pressure (mmHg)",
+      "target": "icp",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "brain tissue O2 (mmol/L)",
+      "target": "brain_to2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied arteriole resistance factor",
+      "target": "autoreg_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
     }
   ],
   "Mob": [
@@ -5734,7 +6359,8 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "choices": [
         "PC",
         "PRVC",
-        "PS"
+        "PS",
+        "CPAP"
       ]
     },
     {

@@ -7,7 +7,11 @@ import Textarea from "primevue/textarea";
 import ToggleSwitch from "primevue/toggleswitch";
 import SelectButton from "primevue/selectbutton";
 import type { CommandScope } from "@/services/botCommands";
-import { useChatStore } from "@/stores/chat";
+import { useChatStore, type ChatAttachment } from "@/stores/chat";
+import { useExplain } from "@/composables/useExplain";
+
+// live-tune status + "undo my changes" (revert to the patient as loaded)
+const { tuning, revert } = useExplain();
 
 // Chat with the "explain-labs_claude" bot (built specifically for this project).
 // State + the /api/chat call live in the chat store; this is just the
@@ -35,6 +39,52 @@ import type { ChatMessage } from "@/stores/chat";
 const chat = useChatStore();
 const input = ref("");
 
+// Files the user attaches for the bot to read (PDF case sheets, CSV value tables,
+// images). The bot extracts target physiology from them to build a patient.
+const attachments = ref<ChatAttachment[]>([]);
+const fileInput = ref<HTMLInputElement | null>(null);
+const ACCEPT = ".pdf,.csv,.tsv,.txt,image/*,application/pdf,text/csv";
+
+// read one File into a ChatAttachment: base64 for pdf/image, raw text for csv/txt.
+function readFile(file: File): Promise<ChatAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const isText = /\.(csv|tsv|txt)$/i.test(file.name) || file.type === "text/csv" || file.type.startsWith("text/");
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    reader.onerror = () => reject(reader.error ?? new Error(`could not read ${file.name}`));
+    reader.onload = () => {
+      if (isText) {
+        resolve({ kind: "csv", name: file.name, data: String(reader.result ?? "") });
+        return;
+      }
+      // data URL -> strip the "data:<mt>;base64," prefix, keep the media type
+      const result = String(reader.result ?? "");
+      const m = /^data:([^;]+);base64,(.*)$/s.exec(result);
+      const media_type = m?.[1] ?? (isPdf ? "application/pdf" : file.type || "application/octet-stream");
+      const data = m?.[2] ?? "";
+      resolve({ kind: isPdf ? "pdf" : "image", name: file.name, data, media_type });
+    };
+    if (isText) reader.readAsText(file);
+    else reader.readAsDataURL(file);
+  });
+}
+
+async function onFiles(e: Event) {
+  const files = Array.from((e.target as HTMLInputElement).files ?? []);
+  for (const f of files) {
+    try {
+      attachments.value.push(await readFile(f));
+    } catch (err) {
+      chat.error = (err as Error).message;
+    }
+  }
+  if (fileInput.value) fileInput.value.value = ""; // allow re-selecting the same file
+}
+
+function removeAttachment(i: number) {
+  attachments.value.splice(i, 1);
+}
+
 // command surface: Guided = curated allowlist, Full = any settable model field
 const SCOPES = [
   { label: "Guided", value: "guided" },
@@ -52,9 +102,11 @@ const scrollEnd = ref<HTMLDivElement | null>(null);
 
 async function send() {
   const text = input.value;
-  if (!text.trim() || chat.isLoading) return;
+  if ((!text.trim() && !attachments.value.length) || chat.isLoading) return;
+  const files = attachments.value;
   input.value = "";
-  await chat.sendMessage(text);
+  attachments.value = [];
+  await chat.sendMessage(text, files);
 }
 
 // Enter sends, Shift+Enter inserts a newline.
@@ -99,6 +151,15 @@ watch(
             <span :class="chat.autoApply ? 'text-amber-400' : ''">Auto-apply</span>
           </label>
           <Button
+            v-tooltip.top="'Revert all live changes — reload the patient as it was loaded'"
+            icon="pi pi-undo"
+            text
+            rounded
+            size="small"
+            aria-label="Revert changes"
+            @click="revert()"
+          />
+          <Button
             v-tooltip.top="'New conversation'"
             icon="pi pi-plus"
             text
@@ -138,6 +199,17 @@ watch(
           <span v-else-if="m.role !== 'assistant' || m.failed" class="whitespace-pre-wrap">{{
             m.text
           }}</span>
+
+          <!-- attachments the user sent with this turn -->
+          <div v-if="m.attachments?.length" class="mt-1 flex flex-wrap gap-1">
+            <span
+              v-for="(a, ai) in m.attachments"
+              :key="ai"
+              class="inline-flex items-center gap-1 rounded bg-black/25 px-1.5 py-0.5 text-[10px]"
+            >
+              <i class="pi pi-paperclip text-[9px]"></i>{{ a.name }}
+            </span>
+          </div>
 
           <!-- bot-proposed actions: confirm-before-apply -->
           <div v-if="m.commands?.length" class="mt-2 flex flex-col gap-1.5">
@@ -197,14 +269,48 @@ watch(
         <div v-if="chat.isLoading" class="self-start text-xs opacity-60 px-2 py-1">
           <i class="pi pi-spin pi-spinner mr-1"></i> thinking…
         </div>
+        <div v-if="tuning" class="self-start text-xs text-amber-400 px-2 py-1">
+          <i class="pi pi-spin pi-spinner mr-1"></i> tuning the model to target…
+        </div>
         <div ref="scrollEnd"></div>
+      </div>
+
+      <!-- pending attachments (cleared on send) -->
+      <div v-if="attachments.length" class="flex flex-wrap gap-1">
+        <span
+          v-for="(a, ai) in attachments"
+          :key="ai"
+          class="inline-flex items-center gap-1 rounded border border-surface-600 bg-surface-800 px-1.5 py-0.5 text-[11px]"
+        >
+          <i class="pi pi-file text-[10px] opacity-70"></i>{{ a.name }}
+          <i
+            class="pi pi-times text-[10px] cursor-pointer opacity-60 hover:opacity-100"
+            @click="removeAttachment(ai)"
+          ></i>
+        </span>
       </div>
 
       <!-- composer -->
       <div class="flex items-end gap-2">
+        <input
+          ref="fileInput"
+          type="file"
+          :accept="ACCEPT"
+          multiple
+          class="hidden"
+          @change="onFiles"
+        />
+        <Button
+          v-tooltip.top="'Attach a PDF / CSV / image of target values for the bot to build a patient from'"
+          icon="pi pi-paperclip"
+          aria-label="Attach file"
+          severity="secondary"
+          :disabled="chat.isLoading"
+          @click="fileInput?.click()"
+        />
         <Textarea
           v-model="input"
-          placeholder="Ask about the patient…  (Enter to send, Shift+Enter for newline)"
+          placeholder="Ask about the patient, or describe a patient to build…  (Enter to send, Shift+Enter for newline)"
           rows="2"
           auto-resize
           class="flex-1 text-sm"
@@ -214,7 +320,7 @@ watch(
         <Button
           icon="pi pi-send"
           aria-label="Send"
-          :disabled="!input.trim() || chat.isLoading"
+          :disabled="(!input.trim() && !attachments.length) || chat.isLoading"
           @click="send"
         />
       </div>

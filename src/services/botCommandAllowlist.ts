@@ -9,6 +9,8 @@
 // v1 is a deliberate vertical slice: ventilator on/off + a few vent params +
 // start/stop the sim. Broaden one model-type at a time.
 
+import { commonTaskAllowEntries } from "./commonTasks";
+
 export type CommandOp =
   | "call" // invoke a model method        -> useExplain().call
   | "setProp" // write a model property        -> useExplain().setProp
@@ -17,6 +19,9 @@ export type CommandOp =
   | "stop" // stop the realtime loop         -> useExplain().stop
   | "calculate" // run N seconds offline          -> useExplain().calculate
   | "load" // load a scenario by name        -> useExplain().load
+  | "loadDefinition" // load a bot-built patient definition -> useExplain().loadFromObject
+  | "tune" // closed-loop tune the live model to target values -> useExplain().tune
+  | "revert" // undo live changes: reload the patient as loaded -> useExplain().revert
   | "event" // build a named scheduled event  -> useEventsStore() (see chat store)
   | "diagram"; // edit the diagram             -> DiagramRenderer (see diagram actions below)
 
@@ -48,7 +53,7 @@ export const COMMAND_ALLOWLIST: AllowEntry[] = [
     target: "set_ettube_length",
     note: "set endotracheal tube length (mm)",
   },
-  { op: "setProp", model: "Ventilator", target: "vent_mode", note: "ventilation mode (PC/PRVC/PS)" },
+  { op: "setProp", model: "Ventilator", target: "vent_mode", note: "ventilation mode (PC/PRVC/PS/CPAP)" },
   { op: "setProp", model: "Ventilator", target: "vent_rate", note: "ventilator rate (/min)" },
   { op: "setProp", model: "Ventilator", target: "insp_time", note: "inspiration time (s)" },
   { op: "setProp", model: "Ventilator", target: "tidal_volume", note: "target tidal volume (mL)" },
@@ -120,7 +125,30 @@ export const COMMAND_ALLOWLIST: AllowEntry[] = [
   // --- Simulation control ---
   { op: "start", note: "start the realtime simulation loop" },
   { op: "stop", note: "stop the realtime simulation loop" },
+  { op: "revert", note: "undo all live changes — reload the patient as it was loaded" },
+
+  // --- Live closed-loop tuning (Full scope only) ---
+  // Drive a measured quantity of the RUNNING model to an exact value by iterating
+  // (apply lever → run → measure → nudge). targets: map, co, hr, po2, spo2, pco2,
+  // be, ph, blood_volume. Done in place (no reload). See validateTuneCommand.
+  { op: "tune", note: "tune the live model to target value(s): map/co/hr/po2/spo2/pco2/be/ph/blood_volume (Full scope)" },
+
+  // --- Whole-patient replacement (Full scope only) ---
+  // Loads a complete, bot-built calibrated patient definition and runs it
+  // immediately (replaces the current model). The definition is NOT carried in
+  // the command block — it arrives out-of-band in the chat response `artifact`
+  // field (the bot host builds it with scripts/build_patient.mjs). Gated to Full
+  // scope in validateCommand (too powerful for Guided demos) + confirm-before-apply.
+  { op: "loadDefinition", note: "load+run a bot-built calibrated patient (Full scope; definition rides in response.artifact)" },
 ];
+
+// Common physiological tasks (directional nudges) contribute their singleton
+// setProp levers — e.g. Circulation.svr_factor_art / pvr_factor_art — so the bot
+// can nudge them in Guided scope too. Appended here (deduped) to keep the catalog
+// single-sourced. model_type-resolved levers are skipped (see commonTasks.ts).
+for (const e of commonTaskAllowEntries()) {
+  if (!isAllowed(e.op, e.model, e.target)) COMMAND_ALLOWLIST.push(e);
+}
 
 // True when (op, model?, target?) matches an allowlist entry. Ops without a
 // model/target (start/stop/...) match on op alone.
@@ -131,6 +159,40 @@ export function isAllowed(op: string, model?: string, target?: string): boolean 
       (e.model === undefined || e.model === model) &&
       (e.target === undefined || e.target === target),
   );
+}
+
+// --- Whole-model scaling (op: "scale") -------------------------------------
+//
+// `scale` multiplies a whole GROUP of related parameters in one command (e.g.
+// total blood volume, all systemic resistances) — what you'd otherwise need many
+// setProps for. It routes to ModelScaler (explain/helpers/ModelScaler.js) via
+// useExplain().scale(group, factor); factor 1.0 = baseline, <1 lowers, >1 raises.
+// Reversible and stackable. Curated to the physiologically-useful, safe groups
+// (weight_scale / incorporate / reset / add_volume are excluded — special
+// semantics; add_volume is a Fluids function, reset/undo is the `revert` op).
+// Full scope only (see validateCommand).
+export const SCALE_GROUPS: readonly string[] = [
+  "blood_volume", // total circulating volume (hemorrhage / fluid overload)
+  "systemic_resistances", // SVR (afterload)
+  "pulmonary_resistances", // PVR (RV afterload)
+  "systemic_u_vol", // systemic venous unstressed volume (preload / venous tone)
+  "pulmonary_u_vol", // pulmonary unstressed volume
+  "heart_el_max", // contractility, both ventricles
+  "left_heart_el_max", // LV contractility
+  "right_heart_el_max", // RV contractility
+  "heart_el_min", // diastolic stiffness, both ventricles
+  "left_heart_el_min",
+  "right_heart_el_min",
+  "heart_volume", // heart chamber volumes
+  "systemic_elastances", // systemic vessel stiffness
+  "pulmonary_elastances", // pulmonary vessel stiffness
+  "left_lung_elastances", // left-lung compliance (1/elastance)
+  "right_lung_elastances", // right-lung compliance
+  "airway_lower_resistances", // lower-airway resistance (bronchospasm)
+];
+
+export function isScaleGroup(g: string | undefined): boolean {
+  return typeof g === "string" && SCALE_GROUPS.includes(g);
 }
 
 // --- Diagram editing (op: "diagram") ---------------------------------------

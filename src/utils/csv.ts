@@ -16,6 +16,16 @@ export function seriesToCsv(
   return lines.join("\n");
 }
 
+// Copy text to the clipboard (best-effort; resolves false if unavailable).
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Trigger a browser download of a text blob.
 export function downloadText(
   filename: string,

@@ -21,6 +21,7 @@ import * as models from "./ModelIndex";
 import DataCollector from "./helpers/DataCollector";
 import TaskScheduler from "./helpers/TaskScheduler";
 import ModelScaler from "./helpers/ModelScaler";
+import { buildLiveControllers, runCalibration, measureWindow } from "./helpers/Calibrator";
 import ChannelWriter from "./helpers/ChannelWriter";
 import AnimationPacker from "./helpers/AnimationPacker";
 import { RT_MSG } from "./helpers/RealtimeChannels";
@@ -154,6 +155,9 @@ self.onmessage = (e) => {
           case "scale":
             scale_model(e.data.payload);
             break;
+          case "calibrate":
+            tune_model(_normalize_payload(e.data.payload));
+            break;
           case "watch":
             watch_props(e.data.payload);
             break;
@@ -237,9 +241,6 @@ const build = function (model_definition) {
 
   // set model initializer to false
   model_initialized = false;
-
-  // store the model definition
-  model_definition = model_definition;
 
   // erase all data
   model_data = {};
@@ -530,6 +531,66 @@ const calculate = function (time_to_calculate) {
   _get_data_collector()?.clean_up_slow();
 };
 
+// Live closed-loop tune of the running model: drive measured quantities (CO, MAP,
+// blood volume, …) to target values IN PLACE using the shared Calibrator. Pauses
+// the realtime loop, runs the secant calibration synchronously against the live
+// `model` (stepFn advances it), resumes, then emits the new state + a report.
+// Levers compose with the patient's baked scaling (no reload, no ModelScaler reset).
+const tune_model = function (payload) {
+  if (!model_initialized) {
+    _send({ type: "status", message: `ERROR: model not initialized.`, payload: [] });
+    return;
+  }
+  const targets = (payload && payload.targets) || {};
+  const opts = (payload && payload.opts) || {};
+
+  // advance the model by `seconds` without emitting per-step state
+  const stepFn = (seconds) => {
+    const n = Math.round(seconds / model.modeling_stepsize);
+    for (let i = 0; i < n; i++) _model_step();
+  };
+
+  // pause the realtime loop during the (synchronous) calibration
+  const wasRunning = rtClock != null;
+  if (wasRunning) {
+    if (model.DataCollector) model.DataCollector.rt_active = false;
+    clearInterval(rtClock);
+    rtClock = null;
+  }
+
+  _send({ type: "status", message: `tuning ${Object.keys(targets).join(", ")}…`, payload: [] });
+
+  let result = { converged: false, residuals: [], iters: 0 };
+  try {
+    const { controllers, keys } = buildLiveControllers(model, targets, opts.tol || {});
+    if (!controllers.length) {
+      _send({ type: "tuned", message: "no tunable targets", payload: { converged: false, residuals: [], iters: 0 } });
+    } else {
+      result = runCalibration(controllers, {
+        measureAll: () => measureWindow(model, stepFn, keys, opts.window ?? 10),
+        step: stepFn,
+        settle: opts.settle ?? 20,
+        warm: opts.warm ?? 15,
+        maxIters: opts.maxIters ?? 12,
+        final: 0,
+        log: () => {},
+      });
+      get_model_data();
+      get_model_data_slow();
+      get_model_state();
+      _send({
+        type: "tuned",
+        message: result.converged ? "converged" : "incomplete",
+        payload: result,
+      });
+    }
+  } catch (err) {
+    _send_error(`tune failed: ${err.message}`, err);
+  } finally {
+    if (wasRunning) start(); // resume realtime from the new operating point
+  }
+};
+
 const set_property = function (new_prop_value) {
   _get_task_scheduler()?.add_task(new_prop_value);
 };
@@ -553,22 +614,28 @@ const get_property = function (prop) {
 };
 
 const get_model_props = function (model_name) {
-  let modelStateCopy = { ...models };
-  delete modelStateCopy["DataCollector"];
-  delete modelStateCopy["TaskScheduler"];
-  Object.values(modelStateCopy).forEach((m) => {
-    for (const key in m) {
-      if (key.startsWith("_")) {
-        delete m[key];
-      }
+  // return the public (non-underscore) properties of one live model instance
+  const m = model.models[model_name];
+  if (!m) {
+    _send({
+      type: "status",
+      message: `ERROR: model not found (${model_name})`,
+      payload: [],
+    });
+    return;
+  }
+  // copy onto a fresh object so the live instance is never mutated
+  const props = {};
+  for (const key in m) {
+    if (!key.startsWith("_")) {
+      props[key] = m[key];
     }
-  });
+  }
   _send({
     type: "model_props",
     message: "",
-    payload: modelStateCopy,
+    payload: props,
   });
-
 }
 
 const get_model_types = function () {

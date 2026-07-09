@@ -15,7 +15,8 @@
 
 import { getInterfaceForType } from "@/model-interface/registry";
 import type { InterfaceField } from "@/model-interface/types";
-import { isAllowed, isDiagramAction, type CommandOp, type DiagramAction } from "./botCommandAllowlist";
+import { isAllowed, isDiagramAction, isScaleGroup, SCALE_GROUPS, type CommandOp, type DiagramAction } from "./botCommandAllowlist";
+import { LIVE_TARGETS } from "@explain/helpers/Calibrator";
 import { PICTOS, PATH_TYPES, LAYOUT_PATCH_WHITELIST } from "@/render/diagramConstants";
 // type-only import keeps this module Vue/Pinia-free (the value lives in the store)
 import type { EventChange } from "@/stores/events";
@@ -30,10 +31,13 @@ export interface BotCommand {
   it?: number; // setProp: tween time in seconds (optional)
   at?: number; // delay before applying, seconds (optional)
   seconds?: number; // calculate
-  name?: string; // load (scenario) / diagram (component name) / event (event name)
+  name?: string; // load (scenario) / diagram (component name) / event (event name) / loadDefinition (patient name)
   group?: string; // scale
   factor?: number; // scale
   reason?: string; // optional human label for the action card
+  // --- loadDefinition (op: "loadDefinition"): replace the whole model ---
+  summary?: string; // loadDefinition: short human description of the built patient
+  definition?: unknown; // loadDefinition: inline definition (small/dev fallback; normally arrives in response.artifact)
   // --- event (op: "event"): a named bundle of scheduled prop changes ---
   changes?: EventChangeInput[]; // event: the property changes
   fire_at?: number; // event: optional absolute sim-time to auto-fire (panel feature)
@@ -64,6 +68,10 @@ export type NormalizedCommand =
   | { kind: "call"; fn: string; args: unknown[]; at: number }
   | { kind: "setProp"; prop: string; value: number | boolean | string; it: number; at: number }
   | { kind: "event"; name: string; fire_at: number | null; changes: EventChange[] }
+  | { kind: "loadDefinition"; name: string; summary: string; definition?: unknown }
+  | { kind: "scale"; group: string; factor: number }
+  | { kind: "tune"; targets: Record<string, number> }
+  | { kind: "revert" }
   | { kind: "start" }
   | { kind: "stop" }
   | DiagramNormalized;
@@ -276,6 +284,103 @@ function validateEventCommand(cmd: BotCommand, modelState: any, scope: CommandSc
   };
 }
 
+// Sanity-check that an inline `definition` object looks like a runnable scenario
+// (a `models` map with ≥1 entry, each carrying a string `model_type`). Accepts
+// either a full scenario file ({model_definition:{models}}) or a bare definition
+// ({models}). Returns an error string or null. Belt-and-braces only — the engine
+// build is the real validator; this just rejects obvious garbage before it runs.
+function definitionError(def: unknown): string | null {
+  if (!def || typeof def !== "object") return "definition must be an object";
+  const inner = (def as any).model_definition ?? def;
+  const models = inner?.models;
+  if (!models || typeof models !== "object" || Array.isArray(models)) return "definition has no models map";
+  const entries = Object.values(models as Record<string, any>);
+  if (!entries.length) return "definition models map is empty";
+  if (!entries.every((m) => m && typeof m.model_type === "string"))
+    return "every model entry must have a string model_type";
+  return null;
+}
+
+// Max inline-definition size (full scenarios are ~300 KB and must use the
+// out-of-band response `artifact` instead; inline is a dev/small fallback only).
+const MAX_INLINE_DEFINITION_BYTES = 64 * 1024;
+
+// Validate an `op:"loadDefinition"` command: load+run a complete bot-built patient.
+// Replaces the whole model, so it is Full-scope only (rejected in Guided). The
+// definition normally arrives out-of-band in the chat response `artifact` (the
+// chat store passes it to loadFromObject); an inline `definition` is a small/dev
+// fallback and is sanity-checked + size-capped here.
+function validateLoadDefinition(cmd: BotCommand, scope: CommandScope): ValidationResult {
+  const name = (cmd.name ?? "").trim() || "patient";
+  const summary = cmd.summary || cmd.reason || "";
+  const label = cmd.reason || `load patient "${name}"`;
+  if (scope === "guided")
+    return reject(label, "loadDefinition is disabled in Guided scope — switch to Full scope to build/run new patients");
+  if (cmd.definition !== undefined) {
+    const err = definitionError(cmd.definition);
+    if (err) return reject(label, `inline definition invalid: ${err}`);
+    if (JSON.stringify(cmd.definition).length > MAX_INLINE_DEFINITION_BYTES)
+      return reject(label, "inline definition too large — the bot must deliver it via the response artifact, not the command block");
+  }
+  return {
+    ok: true,
+    normalized: { kind: "loadDefinition", name, summary, definition: cmd.definition },
+    description: cmd.reason || (summary ? `load patient: ${summary}` : `load patient "${name}"`),
+  };
+}
+
+// Validate an `op:"tune"` command: closed-loop drive measured quantities of the
+// running model to exact target values. Full scope only. `changes` is a list of
+// { target, value } where target ∈ LIVE_TARGETS (map/co/hr/po2/spo2/pco2/be/ph/
+// blood_volume) and value is a finite number. Builds the {target:value} map the
+// engine's tune() consumes.
+function validateTuneCommand(cmd: BotCommand, scope: CommandScope): ValidationResult {
+  const label = cmd.reason || "tune";
+  if (scope === "guided")
+    return reject(label, "tune is disabled in Guided scope — switch to Full scope");
+  const changes = Array.isArray(cmd.changes) ? cmd.changes : [];
+  if (!changes.length) return reject(label, "tune requires a non-empty 'changes' array of {target, value}");
+  const targets: Record<string, number> = {};
+  const parts: string[] = [];
+  for (const ch of changes) {
+    const t = (ch.target ?? "").trim();
+    const v = ch.value;
+    if (!t || !(LIVE_TARGETS as readonly string[]).includes(t))
+      return reject(label, `unknown tune target "${t}" — allowed: ${LIVE_TARGETS.join(", ")}`);
+    if (typeof v !== "number" || !Number.isFinite(v))
+      return reject(label, `tune target "${t}" needs a numeric value`);
+    targets[t] = v;
+    parts.push(`${t}→${v}`);
+  }
+  return {
+    ok: true,
+    normalized: { kind: "tune", targets },
+    description: cmd.reason || `tune ${parts.join(", ")}`,
+  };
+}
+
+// Validate an `op:"scale"` command: multiply a whole ModelScaler group by a
+// factor (1.0 = baseline). Full scope only — it touches many parameters at once.
+// The group must be in the curated SCALE_GROUPS allowlist and the factor a
+// positive number.
+function validateScaleCommand(cmd: BotCommand, scope: CommandScope): ValidationResult {
+  const group = (cmd.group ?? "").trim();
+  const factor = cmd.factor;
+  const label = cmd.reason || `scale ${group || "?"}`;
+  if (scope === "guided")
+    return reject(label, "scale is disabled in Guided scope — switch to Full scope");
+  if (!group) return reject(label, "scale requires a 'group'");
+  if (!isScaleGroup(group))
+    return reject(label, `unknown scale group "${group}" — allowed: ${SCALE_GROUPS.join(", ")}`);
+  if (typeof factor !== "number" || !Number.isFinite(factor) || factor <= 0)
+    return reject(label, "scale 'factor' must be a positive number (1.0 = baseline)");
+  return {
+    ok: true,
+    normalized: { kind: "scale", group, factor },
+    description: cmd.reason || `scale ${group} ×${factor}`,
+  };
+}
+
 // Validate a single parsed command against the scope gate + the model-interface
 // schema, converting display units to raw. Pure (no engine access) so it can be
 // unit-tested with a plain modelState object. `scope` selects the gate: "guided"
@@ -298,8 +403,16 @@ export function validateCommand(
     return { ok: true, normalized: { kind: "start" }, description: cmd.reason || "start simulation" };
   if (op === "stop")
     return { ok: true, normalized: { kind: "stop" }, description: cmd.reason || "stop simulation" };
+  if (op === "revert")
+    return { ok: true, normalized: { kind: "revert" }, description: cmd.reason || "revert to the loaded patient" };
   // event: a named bundle of scheduled changes; gated per-change (no early gate)
   if (op === "event") return validateEventCommand(cmd, modelState, scope);
+  // loadDefinition: replace the whole model with a bot-built patient (Full scope only)
+  if (op === "loadDefinition") return validateLoadDefinition(cmd, scope);
+  // scale: multiply a whole parameter group (blood volume, SVR, contractility…) live
+  if (op === "scale") return validateScaleCommand(cmd, scope);
+  // tune: closed-loop drive measured quantities to exact target values, in place
+  if (op === "tune") return validateTuneCommand(cmd, scope);
   if (op !== "setProp" && op !== "call")
     return reject(label, `unsupported op "${op}"`);
 
@@ -552,6 +665,10 @@ export interface ExplainHandle {
   setProp: (prop: string, value: any, it?: number, at?: number) => void;
   start: () => void;
   stop: () => void;
+  loadFromObject: (obj: any) => void;
+  scale: (group: string, factor: number) => void;
+  tune: (targets: Record<string, number>, opts?: Record<string, unknown>) => void;
+  revert: () => void;
 }
 
 // Thin, renderer-backed handle for diagram edits (keeps this module Pixi-free).
@@ -582,6 +699,21 @@ export function executeCommand(norm: NormalizedCommand, explain: ExplainHandle):
       break;
     case "stop":
       explain.stop();
+      break;
+    case "scale":
+      explain.scale(norm.group, norm.factor);
+      break;
+    case "tune":
+      explain.tune(norm.targets);
+      break;
+    case "revert":
+      explain.revert();
+      break;
+    case "loadDefinition":
+      // inline-definition fallback only; the normal artifact path is handled in
+      // the chat store (applyCommand), which has the response artifact in hand.
+      if (norm.definition) explain.loadFromObject(norm.definition);
+      else throw new Error("no patient definition available (expected response artifact)");
       break;
   }
 }
