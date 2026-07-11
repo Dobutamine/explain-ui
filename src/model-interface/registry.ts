@@ -132,6 +132,15 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": true
     },
     {
+      "target": "lus_drug_factor",
+      "type": "number",
+      "caption": "applied lusitropy factor (<1 = better relaxation)",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
       "target": "svr_drug_factor",
       "type": "number",
       "caption": "applied SVR factor",
@@ -2231,88 +2240,6 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "type": "factor"
     }
   ],
-  "HeadUpTilt": [
-    {
-      "target": "description",
-      "type": "string",
-      "build_prop": true,
-      "edit_mode": "all",
-      "readonly": true,
-      "caption": "description"
-    },
-    {
-      "target": "is_enabled",
-      "type": "boolean",
-      "build_prop": true,
-      "edit_mode": "all",
-      "readonly": false,
-      "caption": "enabled"
-    },
-    {
-      "target": "is_active",
-      "type": "boolean",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "tilt active"
-    },
-    {
-      "target": "tilt_angle",
-      "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "tilt angle (deg)",
-      "delta": 1,
-      "factor": 1,
-      "rounding": 0,
-      "ll": 0,
-      "ul": 90
-    },
-    {
-      "target": "upper_column_cm",
-      "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "upper-body column height (cm)",
-      "delta": 1,
-      "factor": 1,
-      "rounding": 0
-    },
-    {
-      "target": "lower_column_cm",
-      "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "lower-body column height (cm)",
-      "delta": 1,
-      "factor": 1,
-      "rounding": 0
-    },
-    {
-      "target": "set_tilt_angle",
-      "type": "function",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "set tilt angle",
-      "args": [
-        {
-          "target": "angle",
-          "caption": "angle (deg)",
-          "type": "number",
-          "factor": 1,
-          "default": 0,
-          "delta": 1,
-          "rounding": 0,
-          "ll": 0,
-          "ul": 90
-        }
-      ]
-    }
-  ],
   "Heart": [
     {
       "target": "description",
@@ -2719,6 +2646,13 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "caption": "elastance non linear factor",
       "target": "el_k_factor_ps",
       "type": "factor"
+    },
+    {
+      "caption": "drug lusitropy factor (Drugs; <1 = better relaxation)",
+      "target": "el_min_drug_factor",
+      "type": "factor",
+      "edit_mode": "factors",
+      "readonly": true
     },
     {
       "caption": "acute load contractility factor (HeartFunction)",
