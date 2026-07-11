@@ -14419,6 +14419,8 @@ export class Drugs extends BaseModelClass {
         hr_ec50: 20.0, hr_emax: 0.6, hr_hill: 1.5,
         // PD — contractility / inotropy (β1)
         cont_ec50: 25.0, cont_emax: 0.8, cont_hill: 1.5,
+        // PD — lusitropy / diastolic relaxation (β1); negative emax lowers el_min = faster relaxation
+        lus_ec50: 25.0, lus_emax: -0.25, lus_hill: 1.5,
         // PD — systemic vascular resistance (α1); higher EC50 (α dominates at higher concentration)
         svr_ec50: 40.0, svr_emax: 0.5, svr_hill: 2.0,
       },
@@ -14430,6 +14432,8 @@ export class Drugs extends BaseModelClass {
         // PD — predominantly α1 vasoconstriction, modest β1 inotropy, minimal direct chronotropy
         hr_ec50: 30.0, hr_emax: 0.1, hr_hill: 1.5,
         cont_ec50: 30.0, cont_emax: 0.35, cont_hill: 1.5,
+        // PD — modest β1 lusitropy (negative emax → better relaxation)
+        lus_ec50: 30.0, lus_emax: -0.12, lus_hill: 1.5,
         svr_ec50: 25.0, svr_emax: 0.9, svr_hill: 2.0,
       },
       pge1: {
@@ -14456,6 +14460,7 @@ export class Drugs extends BaseModelClass {
     this.conc_eff = 0.0; // adrenaline effect-site conc (convenience read-out)
     this.hr_drug_factor = 1.0; // applied (summed) → Heart.hr_drug_factor (1.0 = no effect)
     this.cont_drug_factor = 1.0; // applied (summed) → each chamber's el_max_drug_factor (1.0 = no effect)
+    this.lus_drug_factor = 1.0; // applied (summed) → each chamber's el_min_drug_factor (1.0 = no effect, <1 = better relaxation)
     this.svr_drug_factor = 1.0; // applied (summed) → Circulation.svr_factor_drug (1.0 = no effect)
     this.pda_drug_factor = 1.0; // applied (summed) → Pda.diameter_drug_factor (1.0 = no effect)
 
@@ -14493,8 +14498,15 @@ export class Drugs extends BaseModelClass {
     super.init_model(args); // a scenario may overwrite drug_defs with an older/partial baked set
     // Merge the built-in defaults UNDER the scenario-provided defs: scenario tuning wins for drugs it
     // defines, but any built-in drug the baked state predates (e.g. pge1 added after those scenarios
-    // were serialized) is still present — so we don't have to re-bake every scenario JSON.
-    this.drug_defs = { ...default_defs, ...this.drug_defs };
+    // were serialized) is still present — so we don't have to re-bake every scenario JSON. The merge is
+    // per-drug so it also fills in *individual PD params* a baked def predates (e.g. the lus_* lusitropy
+    // channel added after those scenarios were serialized): baked values still win where present.
+    const baked = this.drug_defs;
+    const merged = { ...default_defs, ...baked };
+    for (const drug of Object.keys(merged)) {
+      if (default_defs[drug] && baked[drug]) merged[drug] = { ...default_defs[drug], ...baked[drug] };
+    }
+    this.drug_defs = merged;
   }
 
   calc_model() {
@@ -14534,7 +14546,7 @@ export class Drugs extends BaseModelClass {
     });
 
     // 3. EFFECT — biophase lag (optional) then sum each effect across all enabled drugs
-    let hr_sum = 0.0, cont_sum = 0.0, svr_sum = 0.0, pda_sum = 0.0;
+    let hr_sum = 0.0, cont_sum = 0.0, lus_sum = 0.0, svr_sum = 0.0, pda_sum = 0.0;
     Object.keys(this.drug_defs).forEach((drug) => {
       const def = this.drug_defs[drug];
       const c_site = this._effect?.drugs?.[drug] ?? 0.0;
@@ -14552,11 +14564,13 @@ export class Drugs extends BaseModelClass {
       // every drug needing every channel (e.g. pge1 has only pda_*, the catecholamines only hr/cont/svr)
       hr_sum   += this._emax(c_drive, def.hr_emax,   def.hr_ec50,   def.hr_hill);
       cont_sum += this._emax(c_drive, def.cont_emax, def.cont_ec50, def.cont_hill);
+      lus_sum  += this._emax(c_drive, def.lus_emax,  def.lus_ec50,  def.lus_hill);
       svr_sum  += this._emax(c_drive, def.svr_emax,  def.svr_ec50,  def.svr_hill);
       pda_sum  += this._emax(c_drive, def.pda_emax,  def.pda_ec50,  def.pda_hill);
     });
     this.hr_drug_factor = 1.0 + hr_sum;
     this.cont_drug_factor = 1.0 + cont_sum;
+    this.lus_drug_factor = 1.0 + lus_sum;
     this.svr_drug_factor = 1.0 + svr_sum;
     this.pda_drug_factor = 1.0 + pda_sum;
     this.conc_eff = this.concentrations.adrenaline ?? 0.0;
@@ -14565,6 +14579,7 @@ export class Drugs extends BaseModelClass {
     // write the (summed) effector channels
     if (this._heart) this._heart.hr_drug_factor = this.hr_drug_factor; // already wired into HR calc
     this._write_chamber_inotropy(this.cont_drug_factor); // mirrors the Mob inotropy path
+    this._write_chamber_lusitropy(this.lus_drug_factor); // diastolic-relaxation channel (el_min side)
     if (this._circ) this._circ.svr_factor_drug = this.svr_drug_factor; // independent SVR channel
     if (this._pda) this._pda.diameter_drug_factor = this.pda_drug_factor; // ductal patency (PGE1)
 
@@ -14627,6 +14642,19 @@ export class Drugs extends BaseModelClass {
     if (h._ra) h._ra.el_max_drug_factor = factor;
   }
 
+  // write the lusitropy factor to every heart chamber (el_min side); mirrors _write_chamber_inotropy.
+  // factor < 1 lowers el_min = faster diastolic relaxation; 1.0 = no effect.
+  _write_chamber_lusitropy(factor) {
+    const h = this._heart;
+    if (!h) return;
+    if (h._lv) h._lv.el_min_drug_factor = factor;
+    if (h._rv) h._rv.el_min_drug_factor = factor;
+    if (h._la) h._la.el_min_drug_factor = factor;
+    if (h._raivci) h._raivci.el_min_drug_factor = factor;
+    if (h._rasvc) h._rasvc.el_min_drug_factor = factor;
+    if (h._ra) h._ra.el_min_drug_factor = factor;
+  }
+
   // ensure every blood compartment carries each drug key (the dicts ship empty), so the existing
   // volume_in mixing has something to propagate, and resolve the organ-localized clearance targets.
   // Runs once, after Circulation has built its components onto model.models.
@@ -14660,10 +14688,12 @@ export class Drugs extends BaseModelClass {
     this._resolve_refs();
     if (this._heart) this._heart.hr_drug_factor = 1.0;
     this._write_chamber_inotropy(1.0);
+    this._write_chamber_lusitropy(1.0);
     if (this._circ) this._circ.svr_factor_drug = 1.0;
     if (this._pda) this._pda.diameter_drug_factor = 1.0;
     this.hr_drug_factor = 1.0;
     this.cont_drug_factor = 1.0;
+    this.lus_drug_factor = 1.0;
     this.svr_drug_factor = 1.0;
     this.pda_drug_factor = 1.0;
   }
@@ -14835,7 +14865,9 @@ export class Gas extends BaseModelClass {
   }
 
   calc_model() {
-    // empty for now
+    // no per-step work: Gas is an orchestrator. The gas physics run in the individual
+    // GasCapacitance elements (pressure/volume) and GasComposition (fractions/partial
+    // pressures) during their own step calls; Gas only owns build-time setup here.
   }
 
   set_atmospheric_pressure(new_pres_atm) {
@@ -15393,13 +15425,11 @@ export class Heart extends BaseModelClass {
     this.cont_factor_left = 1.0; // left heart contractility factor
     this.cont_factor_right = 1.0; // right heart contractility factor
     this.cont_mob_factor = 1.0; // contractility factor of myocardial oxygen balance model
-    this.cont_drug_factor = 1.0; // contractility factor of drug model (not implemented yet)
 
     this.relax_factor = 1.0; // relaxation factor (higher is less relaxation!)
     this.relax_factor_left = 1.0; // left heart relaxation factor
     this.relax_factor_right = 1.0; // right heart relaxation factor
     this.relax_mob_factor = 1.0; // relaxation factor of myocardial oxygen balance model
-    this.relax_drug_factor = 1.0; // relaxation factor of drug model (not implemented yet)
 
     this.pc_el_factor = 1.0; // elastance factor of the pericardium
     this.pc_extra_volume = 0.0; // additional volume of the pericardium
@@ -16084,6 +16114,7 @@ export class HeartChamber extends TimeVaryingElastance {
     this.ans_activity = 1.0; // activiaty of the ans
     this.el_max_mob_factor = 1.0; // contractility factor from the myocardial oxygen balance model (Mob); 1.0 = no effect
     this.el_max_drug_factor = 1.0; // contractility (inotropy) factor from the Drugs PK/PD model; 1.0 = no effect
+    this.el_min_drug_factor = 1.0; // lusitropy (diastolic relaxation) factor from the Drugs PK/PD model; <1.0 = better relaxation, 1.0 = no effect
 
     // load-induced contractility factors written by the HeartFunction model (1.0 = no effect, NOT reset each step)
     this.el_max_load_factor = 1.0; // acute, reversible contractility depression from high wall stress (afterload mismatch / over-dilation)
@@ -16115,6 +16146,7 @@ export class HeartChamber extends TimeVaryingElastance {
         + (this.el_min_factor - 1) * this.el_min
         + (this.el_min_factor_ps - 1) * this.el_min
         + (this.el_min_factor_scaling_ps - 1) * this.el_min
+        + (this.el_min_drug_factor - 1) * this.el_min   // drug lusitropy (Drugs PK/PD): <1 lowers el_min = better relaxation
         - (this.ans_activity - 1) * this.el_min * this.ans_sens
 
     // ans influences ANS systolic function B1 receptor activation -> positive intropic effect
@@ -21114,13 +21146,47 @@ export function buildLiveControllers(model, targets, tolOverrides = {}) {
       makeController({ key, readKey: READ_KEY[key] ?? key, target: targets[key], tol: tol(key), ...spec }),
     );
 
-  // MAP <- systemic arteriolar resistance factor (composes; ↑ raises MAP)
+  // MAP <- systemic arteriolar resistance. Nudge the arterioles' persistent r_factor_ps DIRECTLY
+  // (delta-accumulating), NOT Circulation.svr_factor_art: that master knob is owned and OVERWRITTEN
+  // every step by the Hormones model (RAAS, Hormones.js -> _circ.svr_factor_art = svr_factor), so a
+  // write to it does not stick and the live MAP tune cannot lower MAP. Circulation's own master knobs
+  // (svr_factor_art/_ven/_drug) all fan out DELTAS to these same arterioles' r_factor_ps, so applying
+  // our own delta composes additively with the Hormones/ANS/Drugs contributions instead of colliding,
+  // and is not clobbered. ↑ factor => ↑ resistance => ↑ MAP.
   if (targets.map != null && model.models.Circulation) {
-    mk("map", {
-      lo: -8, hi: 12, sign: +1, gain: 0.05,
-      value: model.models.Circulation.svr_factor_art ?? 1,
-      set: (v) => (model.models.Circulation.svr_factor_art = v),
-    });
+    // Align the baroreflex arterial-pressure set-point to the target so the ANS defends the NEW
+    // operating point instead of dragging MAP back toward the loaded baseline (mirrors the offline
+    // builder's BR_MAP.set_value = target.map). Without this the arteriolar lever below is opposed
+    // each step by the baroreflex and MAP only partly moves.
+    if (model.models.BR_MAP && typeof model.models.BR_MAP.set_value === "number") {
+      model.models.BR_MAP.set_value = targets.map;
+    }
+    // Use the SAME broad systemic-resistance vessel set the offline builder scales
+    // (scaler_config.blood_systemic.resistance: the whole systemic tree, not just the four organ
+    // arterioles). Nudging only Circulation.systemic_arterioles has weak MAP authority — halving
+    // those organ beds barely moves MAP because flow/CO compensates — whereas the full systemic set
+    // gives clean bidirectional authority. Fall back to the arterioles if no scaler config is present.
+    const sysRes =
+      model.scaler_config?.blood_systemic?.resistance ||
+      model.ModelScaler?._config?.blood_systemic?.resistance ||
+      model.models.Circulation.systemic_arterioles ||
+      [];
+    let applied = 1.0;
+    const set = (v) => {
+      const delta = v - applied;
+      for (const n of sysRes) {
+        const m = model.models[n];
+        if (m && typeof m.r_factor_ps === "number") {
+          let f = m.r_factor_ps + delta;
+          if (f < 0) f = 0;
+          m.r_factor_ps = f;
+        }
+      }
+      applied = v;
+    };
+    // Gentle seed gain: the broad systemic set is a strong lever (~30 mmHg per unit r_factor_ps), so
+    // a large first step overshoots; keep the seed small and let the secant refine.
+    mk("map", { lo: 0.2, hi: 8, sign: +1, gain: 0.02, value: 1.0, set });
   }
   // Cardiac output <- ventricular contractility (el_max persistent factor)
   if (targets.co != null) {
@@ -23111,6 +23177,15 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "target": "cont_drug_factor",
       "type": "number",
       "caption": "applied contractility factor",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "target": "lus_drug_factor",
+      "type": "number",
+      "caption": "applied lusitropy factor (<1 = better relaxation)",
       "factor": 1,
       "rounding": 3,
       "edit_mode": "extra",
@@ -25216,88 +25291,6 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "type": "factor"
     }
   ],
-  "HeadUpTilt": [
-    {
-      "target": "description",
-      "type": "string",
-      "build_prop": true,
-      "edit_mode": "all",
-      "readonly": true,
-      "caption": "description"
-    },
-    {
-      "target": "is_enabled",
-      "type": "boolean",
-      "build_prop": true,
-      "edit_mode": "all",
-      "readonly": false,
-      "caption": "enabled"
-    },
-    {
-      "target": "is_active",
-      "type": "boolean",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "tilt active"
-    },
-    {
-      "target": "tilt_angle",
-      "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "tilt angle (deg)",
-      "delta": 1,
-      "factor": 1,
-      "rounding": 0,
-      "ll": 0,
-      "ul": 90
-    },
-    {
-      "target": "upper_column_cm",
-      "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "upper-body column height (cm)",
-      "delta": 1,
-      "factor": 1,
-      "rounding": 0
-    },
-    {
-      "target": "lower_column_cm",
-      "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "lower-body column height (cm)",
-      "delta": 1,
-      "factor": 1,
-      "rounding": 0
-    },
-    {
-      "target": "set_tilt_angle",
-      "type": "function",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "set tilt angle",
-      "args": [
-        {
-          "target": "angle",
-          "caption": "angle (deg)",
-          "type": "number",
-          "factor": 1,
-          "default": 0,
-          "delta": 1,
-          "rounding": 0,
-          "ll": 0,
-          "ul": 90
-        }
-      ]
-    }
-  ],
   "Heart": [
     {
       "target": "description",
@@ -25704,6 +25697,13 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "caption": "elastance non linear factor",
       "target": "el_k_factor_ps",
       "type": "factor"
+    },
+    {
+      "caption": "drug lusitropy factor (Drugs; <1 = better relaxation)",
+      "target": "el_min_drug_factor",
+      "type": "factor",
+      "edit_mode": "factors",
+      "readonly": true
     },
     {
       "caption": "acute load contractility factor (HeartFunction)",
@@ -30159,8 +30159,8 @@ Rules of thumb:
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
-Snapshot: **45 model_types**, **410 settable params**, **28 functions**
-(+ 29 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
+Snapshot: **44 model_types**, **405 settable params**, **27 functions**
+(+ 32 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
 ## Guided mode — curated safe set
@@ -30197,6 +30197,9 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `revert`  — undo all live changes — reload the patient as it was loaded
 - `tune`  — tune the live model to target value(s): map/co/hr/po2/spo2/pco2/be/ph/blood_volume (Full scope)
 - `loadDefinition`  — load+run a bot-built calibrated patient (Full scope; definition rides in response.artifact)
+- `setProp` `Pda.diameter_relative` — Ductus arteriosus (PDA) size — directional nudge lever
+- `setProp` `Shunts.diameter_fo` — Foramen ovale size — directional nudge lever
+- `setProp` `Shunts.diameter_vsd` — Ventricular septal defect (VSD) size — directional nudge lever
 
 ---
 
@@ -30463,18 +30466,6 @@ _setProp_:
 - `hgp_rate` — hepatic glucose production (mmol/kg/min) (number, mmol/kg/min)
 - `glu_use_rate` — glucose utilization (mmol/kg/min) (number, mmol/kg/min) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
-
-### HeadUpTilt
-
-_setProp_:
-- `is_active` — tilt active (boolean)
-- `tilt_angle` — tilt angle (deg) (number, deg, range 0–90)
-- `upper_column_cm` — upper-body column height (cm) (number, cm)
-- `lower_column_cm` — lower-body column height (cm) (number, cm)
-- `is_enabled` — enabled (boolean) _(all)_
-
-_call_:
-- `set_tilt_angle(angle (number, deg, range 0–90))` — set tilt angle
 
 ### Heart
 
@@ -30844,6 +30835,84 @@ _call_:
 
 ---
 
+## Common tasks — directional nudges
+
+Curated relative adjustments ("raise PVR 30%", "halve contractility"). Each maps onto an EXISTING
+`setProp` or `scale` op — there is no special nudge op. Two resolution rules:
+
+- **setProp levers** (a `*_factor_ps` factor or a plain number): if the field's value is shown in the
+  live monitor context, multiply by (1+step) to raise / 1/(1+step) to lower; otherwise set an ABSOLUTE
+  target in DISPLAY units within the field's range. Values are display units (divided by the field
+  factor on apply), like any setProp.
+- **scale levers** (a ModelScaler group): `factor` is ABSOLUTE from baseline 1.0 (the current factor
+  is NOT visible in state) — reason about prior nudges this conversation. Apply the SAME factor to
+  every listed group; >1 raises, <1 lowers.
+- **absolute setProp levers** (shunt sizes — PDA/foramen ovale/VSD): set an ABSOLUTE value in DISPLAY
+  units within the stated range; 0 = closed/none. The engine treats diameter 0 as a hard-closed fast
+  path, so open a closed shunt by setting a positive diameter (e.g. PDA 50 = ~half-open).
+
+For inverse quantities (lung compliance ↔ elastance; preload ↔ unstressed volume) raising the
+physiological quantity LOWERS the lever — noted per task.
+
+### Vascular tone
+
+- **Systemic vascular resistance (afterload)** — scale `systemic_resistances`, default ±30%. LV afterload. Up = vasoconstriction/pressor; down = vasodilation. (MAP is partly defended by the baroreflex — CO/HR shift too.)
+  - e.g. `{"op":"scale","group":"systemic_resistances","factor":<absolute, 1.0=baseline>,"reason":"SVR nudge"}`
+- **Pulmonary vascular resistance (RV afterload)** — scale `pulmonary_resistances`, default ±30%. Pulmonary hypertension (up) vs vasodilator / iNO (down).
+  - e.g. `{"op":"scale","group":"pulmonary_resistances","factor":<absolute, 1.0=baseline>,"reason":"PVR nudge"}`
+- **Venous tone / preload** — scale `systemic_u_vol`, default ±20%. _(inverse: raising the quantity lowers the lever)_ Up = more venous return/preload (lowers unstressed volume).
+  - e.g. `{"op":"scale","group":"systemic_u_vol","factor":<absolute, 1.0=baseline>,"reason":"Preload nudge"}`
+
+### Cardiac performance
+
+- **Contractility (both ventricles)** — scale `heart_el_max`, default ±30%. Inotropy. Down 0.5 = halve contractility.
+  - e.g. `{"op":"scale","group":"heart_el_max","factor":<absolute, 1.0=baseline>,"reason":"Contractility nudge"}`
+- **Diastolic stiffness** — scale `heart_el_min`, default ±30%. Up = stiffer ventricle / diastolic dysfunction.
+  - e.g. `{"op":"scale","group":"heart_el_min","factor":<absolute, 1.0=baseline>,"reason":"Diastolic stiffness nudge"}`
+
+### Rate & rhythm
+
+- **Heart rate (reference)** — setProp `Heart.heart_rate_ref`, default ±20%. Tachycardia (up) / bradycardia (down).
+  - e.g. `{"op":"setProp","model":"Heart","target":"heart_rate_ref","value":<target in display units, or current×(1±20%) if shown>,"reason":"adjust Heart rate"}`
+
+### Lung mechanics
+
+- **Lung compliance** — scale `left_lung_elastances` + `right_lung_elastances`, default ±20%. _(inverse: raising the quantity lowers the lever)_ Down = stiffer lungs (RDS / hypoplasia); up = more compliant.
+  - e.g. `{"op":"scale","group":"left_lung_elastances","factor":<absolute, 1.0=baseline>,"reason":"Lung compliance nudge"}`
+- **Airway resistance** — scale `airway_lower_resistances`, default ±30%. Up = bronchospasm / obstruction.
+  - e.g. `{"op":"scale","group":"airway_lower_resistances","factor":<absolute, 1.0=baseline>,"reason":"Airway resistance nudge"}`
+
+### Gas exchange
+
+- **O2 diffusion capacity** — setProp `dif_o2_factor_ps` on each `GasExchanger` instance, default ±30%. Down = impaired alveolar O2 transfer.
+  - e.g. `{"op":"setProp","model":"<instance>","target":"dif_o2_factor_ps","value":<target in display units, or current×(1±30%) if shown>,"reason":"adjust O2 diffusion"}`
+
+### Shunts & fetal channels
+
+- **Ductus arteriosus (PDA) size** — setProp `Pda.diameter_relative`, step ±10 %, range 0–100. Relative patency 0 (closed) → 1 (fully open).
+  - e.g. `{"op":"setProp","model":"Pda","target":"diameter_relative","value":<0–100 %; 0=closed/none>,"reason":"set PDA"}`
+- **Foramen ovale size** — setProp `Shunts.diameter_fo`, step ±1 mm, range 0–10. Atrial-level shunt. 0 = closed.
+  - e.g. `{"op":"setProp","model":"Shunts","target":"diameter_fo","value":<0–10 mm; 0=closed/none>,"reason":"set Foramen ovale"}`
+- **Ventricular septal defect (VSD) size** — setProp `Shunts.diameter_vsd`, step ±1 mm, range 0–10. Ventricular-level shunt. 0 = none.
+  - e.g. `{"op":"setProp","model":"Shunts","target":"diameter_vsd","value":<0–10 mm; 0=closed/none>,"reason":"set VSD"}`
+
+### Ventilation drive
+
+- **Ventilation drive (reference minute volume)** — setProp `Breathing.minute_volume_ref`, default ±20%. Up = hyperventilation (↓pCO2); down = hypoventilation (↑pCO2).
+  - e.g. `{"op":"setProp","model":"Breathing","target":"minute_volume_ref","value":<target in display units, or current×(1±20%) if shown>,"reason":"adjust Ventilation drive"}`
+
+### Metabolic & thermal
+
+- **Metabolic demand (VO2)** — setProp `Metabolism.vo2`, default ±20%. Up = sepsis/hypermetabolism; down = hypothermia/sedation.
+  - e.g. `{"op":"setProp","model":"Metabolism","target":"vo2","value":<target in display units, or current×(1±20%) if shown>,"reason":"adjust VO2"}`
+
+### Blood & acid-base
+
+- **Blood volume** — scale `blood_volume`, default ±10%. Down = hemorrhage; up = fluid overload.
+  - e.g. `{"op":"scale","group":"blood_volume","factor":<absolute, 1.0=baseline>,"reason":"Blood volume nudge"}`
+
+---
+
 ## Events & scheduling — `op:"event"`
 
 Bundle several property changes into one **named event** the user can replay. Each entry
@@ -30928,6 +30997,7 @@ Available scenarios are listed in `public/model_definitions/index.json`.
   "cdh_severe",
   "cdh_moderate",
   "cdh_lv_dysfunction",
+  "pphn",
   "dtga",
   "hlhs",
   "hlhs_restrictive",

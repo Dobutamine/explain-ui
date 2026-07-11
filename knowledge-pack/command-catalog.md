@@ -24,7 +24,7 @@ Rules of thumb:
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
-Snapshot: **45 model_types**, **410 settable params**, **28 functions**
+Snapshot: **44 model_types**, **405 settable params**, **27 functions**
 (+ 32 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
@@ -331,18 +331,6 @@ _setProp_:
 - `hgp_rate` — hepatic glucose production (mmol/kg/min) (number, mmol/kg/min)
 - `glu_use_rate` — glucose utilization (mmol/kg/min) (number, mmol/kg/min) _(advanced)_
 - `is_enabled` — enabled (boolean) _(all)_
-
-### HeadUpTilt
-
-_setProp_:
-- `is_active` — tilt active (boolean)
-- `tilt_angle` — tilt angle (deg) (number, deg, range 0–90)
-- `upper_column_cm` — upper-body column height (cm) (number, cm)
-- `lower_column_cm` — lower-body column height (cm) (number, cm)
-- `is_enabled` — enabled (boolean) _(all)_
-
-_call_:
-- `set_tilt_angle(angle (number, deg, range 0–90))` — set tilt angle
 
 ### Heart
 
