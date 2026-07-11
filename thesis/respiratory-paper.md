@@ -428,7 +428,7 @@ disabled.
 
 See shared Methods S5 (reuse verbatim): framework-agnostic JavaScript/TypeScript engine running in
 a Web Worker, declarative JSON model definitions, real-time step loop, freely available at
-https://explain-user.com; source annotated and available upon request. The respiratory models run
+https://explain-modeling.com; source annotated and available upon request. The respiratory models run
 in the same insertion-ordered step loop as the circulation, sharing the blood compartments so that
 gas exchange, transport, metabolism and acid–base are solved together each step.
 

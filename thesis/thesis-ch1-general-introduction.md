@@ -93,7 +93,7 @@ Three commitments shape the design and recur throughout the thesis:
   state — is defined declaratively as a JSON *model definition*, which makes patient profiles and
   structural variants straightforward to inspect, share, and modify. The interactive application,
   built on the Vue framework, presents the animated model, parameter editors, and clinical monitors,
-  and is freely available online at https://explain-user.com.
+  and is freely available online at https://explain-modeling.com.
 
 The model is specified for a full-term neonate but is not limited to one. Degrees of prematurity do
 not require a change in model *structure*; they are represented by scaling and by modifying selected

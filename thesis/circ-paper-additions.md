@@ -204,7 +204,7 @@ implementation … available upon request" sentence) with:
 > which makes patient profiles and structural variants straightforward to inspect, share
 > and modify. The interactive application, built on the Vue framework, presents the
 > animated model, parameter editors and clinical monitors, and is freely available at
-> https://explain-user.com. The engine source code is extensively annotated and
+> https://explain-modeling.com. The engine source code is extensively annotated and
 > available upon request.
 
 The bulleted lists of what "developers should be able to" do can be retained; only
@@ -217,7 +217,7 @@ model definition to create a hypotensive patient", "add a component module").
   researchers, ensuring transparency and extensibility."*
 - **Introduction:** replace *"The complete source code in Python is available upon
   request."* with *"The complete source code is available upon request."*
-- The two availability statements (abstract, §4.3) and the URL https://explain-user.com
+- The two availability statements (abstract, §4.3) and the URL https://explain-modeling.com
   remain consistent with Block E — no other change needed.
 
 ---
