@@ -10,7 +10,7 @@ Anchors already used and formatted in the cardiovascular paper (reuse verbatim t
 Beneken & DeWit (circuit elements), Suga (time-varying elastance), Burkhoff & Tyberg,
 van Meurs (integrated model / numerical methods), Bischoff et al. (preterm PDA cohort),
 Jones (pulmonary hypertension), van Laere (PDA Doppler); Anthropic Claude / Claude Agent SDK;
-Burden & Faires (secant method). See `articles/circ-paper-additions.md` Block G for the
+Burden & Faires (secant method). See `thesis/circ-paper-additions.md` Block G for the
 already-drafted software/AI citations.
 
 ---

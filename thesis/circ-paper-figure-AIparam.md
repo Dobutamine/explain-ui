@@ -2,8 +2,8 @@
 
 **Rendered.** The figure has been produced and is embedded as **Fig. 6** in
 `ExplainCircPaper_WORKING_with_AIparam.docx`:
-- `articles/Fig6_AI_parameterization.png` — 300 dpi raster (embedded in the working docx).
-- `articles/Fig6_AI_parameterization.svg` — editable vector.
+- `thesis/Fig6_AI_parameterization.png` — 300 dpi raster (embedded in the working docx).
+- `thesis/Fig6_AI_parameterization.svg` — editable vector.
 
 The SVG can be opened/tweaked in any vector editor; if you prefer to keep all figures in
 the OmniGraffle set, redraw it as `AIParameterization.umdx` in `../explain-papers/Graphs/`

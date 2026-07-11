@@ -430,7 +430,7 @@ unsupported patient to full mechanical and extracorporeal support.
 
 ## References
 
-See `articles/_references.md`. Paper-5 sources to confirm via PubMed: an endotracheal-tube resistance
+See `thesis/_references.md`. Paper-5 sources to confirm via PubMed: an endotracheal-tube resistance
 reference for Eq. 2; standard references for ventilator modes (PC/PRVC/PS/CPAP) and flow-cycling; and
 ECMO circuit/oxygenator references. Reuse the respiratory paper's gas-exchange citations (the ECMO
 oxygenator shares that law) and the series' shared software/AI citations.

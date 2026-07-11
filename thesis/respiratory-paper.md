@@ -129,7 +129,7 @@ advective transport of dissolved substances by flow, the cycle counters, and the
 implementation — are described once in the series' shared Methods (see `_shared-methods.md`,
 Sections S2–S5) and are not repeated here.
 
-**Fig. 1** (`articles/Fig1_respiratory_subsystem.svg`, editable vector source; PNG export
+**Fig. 1** (`thesis/Fig1_respiratory_subsystem.svg`, editable vector source; PNG export
 `Fig1_respiratory_subsystem.png` for the manuscript). Schematic of the neonatal respiratory
 subsystem and its couplings. Inspired gas passes from the airway opening (`MOUTH`, fixed at
 atmospheric composition and FiO₂) through the anatomical dead space (`DS`) — with upper- and
@@ -698,7 +698,7 @@ teaching and investigating neonatal cardiorespiratory physiology.
 
 ## References
 
-See `articles/_references.md` (running series bibliography). Paper-2 core sources to confirm via
+See `thesis/_references.md` (running series bibliography). Paper-2 core sources to confirm via
 PubMed before submission: Stewart (strong-ion acid–base), Figge/Fencl (albumin–phosphate buffering),
 Siggaard-Andersen (Van Slyke base excess), Kelman/Severinghaus/Dash–Bassingthwaighte (O₂–Hb
 dissociation and P₅₀ shifts), Fick (diffusion), Mecklenburgh (rate/tidal-volume relation),

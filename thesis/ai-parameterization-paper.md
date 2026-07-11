@@ -479,9 +479,9 @@ retuning of running simulations.
 
 ## References
 
-See `articles/_references.md`. Core citations for this paper: Anthropic Claude (large language model)
+See `thesis/_references.md`. Core citations for this paper: Anthropic Claude (large language model)
 and the Claude Agent SDK (software); Burden & Faires or van Meurs for the secant/root-finding method;
 the cardiovascular and respiratory companion papers for the model and lever definitions. Reuse the
-already-drafted software/AI citations of `articles/circ-paper-additions.md` Block G, and confirm the
+already-drafted software/AI citations of `thesis/circ-paper-additions.md` Block G, and confirm the
 exact Claude model/version and access date, and the AI-disclosure placement, against the journal's
 current policy before submission.

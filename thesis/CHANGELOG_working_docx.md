@@ -10,7 +10,7 @@ highlighted (they sit mid-paragraph); they are listed below so nothing is missed
 ## Inserted (highlighted)
 - **Methods §2.4 "AI-assisted patient-specific parameterization"** — new subsection before RESULTS: problem framing, interpretation layer (LLM), calibration layer, Eq. 13–15 (plain-text placeholders — **re-key as native Word equations**), tolerance bands, levers, body-size/seed pass, two entry points.
 - **Table X** — Calibration levers (real Word table, inserted in §2.4).
-- **Fig. 6** — the AI-parameterization pipeline diagram (`articles/Fig6_AI_parameterization.png`, editable source `.svg`) is now embedded in §2.4 with its caption.
+- **Fig. 6** — the AI-parameterization pipeline diagram (`thesis/Fig6_AI_parameterization.png`, editable source `.svg`) is now embedded in §2.4 with its caption.
 - **"Use of AI in this study."** — formal AI-disclosure paragraph, end of §2.4 (Methods).
 - **Abstract** — one sentence on the AI-assisted parameterization pipeline (before "We demonstrate…").
 - **Introduction** — one sentence naming patient-specific parameterization as a second contribution (before the respiratory-model sentence).
@@ -28,7 +28,7 @@ highlighted (they sit mid-paragraph); they are listed below so nothing is missed
 
 ## Author to-do before submission
 1. **Re-key Eq. 13–15** as native OMML equations (currently plain-text placeholders prefixed "[re-key as native equation]").
-2. **Fig. 6** is embedded (auto-generated). If you want it in the OmniGraffle house style, redraw from `articles/Fig6_AI_parameterization.svg` as a `.umdx`.
+2. **Fig. 6** is embedded (auto-generated). If you want it in the OmniGraffle house style, redraw from `thesis/Fig6_AI_parameterization.svg` as a `.umdx`.
 3. **Refs 24–25**: set exact Claude model/version + access date; format per the journal's software/AI-citation style. If van Meurs [10] is preferred for the secant method, drop ref 26 and cite [10] at Eq. 13–14.
 4. Springer Nature / ICMJE: the AI-disclosure paragraph in §2.4 covers method use; confirm placement (Methods vs a dedicated declarations section) against the journal's current policy. No AI authorship is claimed.
 5. Optionally convert the highlighted insertions into tracked changes if you want a reviewable diff against the master.

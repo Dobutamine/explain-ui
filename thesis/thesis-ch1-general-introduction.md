@@ -6,7 +6,7 @@ parameterization problem that motivates the methodological core of the thesis, a
 and outline. The per-system mathematics is developed in Chapters 2–5, the parameterization method in
 Chapter 6, and the validation across virtual patients in Chapter 7. Citation numbering is local to
 this chapter and will be merged into the consolidated thesis bibliography at assembly; entries marked
-**[VERIFY]** reuse the running series pool (`articles/_references.md`) and are to be confirmed against
+**[VERIFY]** reuse the running series pool (`thesis/_references.md`) and are to be confirmed against
 PubMed before submission.*
 
 ---
@@ -267,7 +267,7 @@ General Discussion, and is organized to be read in that order:
 *Local numbering; to be merged into the consolidated Vancouver bibliography at assembly. Anchors
 [2]–[15] denote the group of existing-model and foundational citations already formatted in the
 cardiovascular paper (Chapter 2); [S2]–[S5] refer to the shared-methods blocks of the series. Entries
-marked **[VERIFY]** are to be confirmed against PubMed before submission, per `articles/_references.md`.*
+marked **[VERIFY]** are to be confirmed against PubMed before submission, per `thesis/_references.md`.*
 
 1. Explanatory (interactive, animated) models of physiology for clinical reasoning and communication. **[VERIFY — Chapter 2 ref 1]**
 2–9. Existing physiological models that individually do not meet EXPLAIN's combined requirements of breadth, neonatal specificity, real-time interactivity, and mechanistic transparency. **[VERIFY — reuse Chapter 2 refs 2–9]**

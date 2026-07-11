@@ -8,9 +8,9 @@ is taken directly from the engine source (paths given). Draft in Markdown; autho
 equations as native Word (OMML) objects for submission, matching Eqs. 1–12 of the
 cardiovascular paper.
 
-Paper-1 anchor for style/notation: `articles/ExplainCircPaper(27012026)_WPdB_TA_WvM.docx`
+Paper-1 anchor for style/notation: `thesis/ExplainCircPaper(27012026)_WPdB_TA_WvM.docx`
 (+ working copy with AI-parameterization additions). Insert-ready source blocks:
-`articles/circ-paper-additions.md`.
+`thesis/circ-paper-additions.md`.
 
 ---
 

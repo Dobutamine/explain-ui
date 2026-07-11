@@ -1,7 +1,7 @@
 # EXPLAIN cardiovascular paper — insert-ready additions
 
 **Purpose.** These are drop-in content blocks for the master manuscript
-`articles/ExplainCircPaper(27012026)_WPdB_TA_WvM.docx`. Each block names its exact
+`thesis/ExplainCircPaper(27012026)_WPdB_TA_WvM.docx`. Each block names its exact
 target location in the paper and whether it is an **insert** or a **replacement**.
 The `.docx` remains the master — paste these into Word and re-key the equations as
 native (OMML) objects, matching the style of Eqs. 1–12. New references (Block G) are

@@ -722,7 +722,7 @@ by hand.
 ## References
 
 *(Vancouver, renumbered in citation order at submission; entries marked [VERIFY] in
-`articles/_references.md` must be confirmed against PubMed before use. Anchors shared with the
+`thesis/_references.md` must be confirmed against PubMed before use. Anchors shared with the
 cardiovascular paper — Beneken & DeWit, Suga, van Meurs — are reused verbatim. Cerebral
 autoregulation and Monro–Kellie, renal Starling/tubuloglomerular-feedback, RAAS/ADH endocrine
 control, Meeh surface-area law / Q10 / non-shivering thermogenesis, neonatal glucose turnover, and
