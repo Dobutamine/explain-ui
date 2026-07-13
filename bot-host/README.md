@@ -14,7 +14,7 @@ proxy talks to. It wraps the Claude Agent SDK (`query()`), and adds the
 - Accepts `attachments` (PDF → document block, CSV/text → text block, image) on
   `POST /v1/ask`, so the bot can read uploaded target-value sheets.
 - After the model replies, `maybe_build()` looks for a fenced ` ```explain-build ` block
-  holding a build **SPEC**, runs `scripts/build_patient.mjs` itself (fixed argv, spec on
+  holding a build **SPEC**, runs `explain/scripts/build_patient.mjs` itself (fixed argv, spec on
   stdin, 300 s timeout, off the event loop), and returns the calibrated patient as the
   response **`artifact`** — splicing the calibration report + a `loadDefinition` action
   card into the visible answer. The model needs **no shell/Write tools**: it only emits
@@ -28,7 +28,7 @@ plain `git pull` does **not** update it — use the deploy script below, which s
 
 | var | default | meaning |
 |-----|---------|---------|
-| `EXPLAIN_REPO`  | `<workdir>/../explain-repo` | checkout holding `scripts/build_patient.mjs` |
+| `EXPLAIN_REPO`  | `<workdir>/../explain-repo` | checkout holding `explain/scripts/build_patient.mjs` (in the `explain` submodule) |
 | `NODE_BIN`      | `$(which node)` → `/opt/homebrew/bin/node` | node used to run the builder |
 | `BUILD_TIMEOUT` | `300` | max seconds for one patient build |
 | `ALLOWED_TOOLS` | `Read,Glob,Grep,WebSearch,WebFetch` | the bot stays read-only — **do not add Bash/Write** |

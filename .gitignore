@@ -17,3 +17,6 @@ public/model_definitions/
 # macOS Finder + Obsidian editor cruft
 .DS_Store
 .obsidian/
+
+# Python bytecode cache
+__pycache__/
