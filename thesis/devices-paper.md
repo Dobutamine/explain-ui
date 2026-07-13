@@ -1,6 +1,6 @@
 # An integrated model for simulation of neonatal physiology — THE mechanical support devices: ventilation and ECMO
 
-*Fifth paper in the EXPLAIN series (companion to the cardiovascular, respiratory, other-systems and
+*Fourth paper in the EXPLAIN series (companion to the cardiovascular, respiratory, other-systems and
 AI-parameterization papers). Target journal: Pediatric Research. Markdown working draft — equations to
 be re-keyed as native Word (OMML) objects. Every equation is transcribed from and checked against the
 engine source: `explain/device_models/Ventilator.js`, `explain/device_models/Ecls.js` (and, where
@@ -12,28 +12,15 @@ repeats.*
 
 ## Abstract
 
-*(Draft — tighten to journal word limit.)*
+*(Structured abstract — Pediatric Research Basic Science format. Prior long-form draft superseded.)*
 
-Sick newborns are frequently supported by devices that act directly on the physiology the other
-papers in this series describe: the mechanical ventilator, which drives gas into the lungs, and
-extracorporeal membrane oxygenation (ECMO), which takes over gas exchange and, in its veno-arterial
-form, circulatory support. We describe the device layer of EXPLAIN, a real-time whole-body neonatal
-physiology simulator, and its coupling to the patient. The ventilator is modelled as a gas-pressure
-source connected to the airway through an endotracheal tube whose resistance follows a
-diameter- and length-dependent law; it implements the clinically used modes — pressure control,
-pressure-regulated volume control, pressure support and continuous positive airway pressure — through
-an inspiratory/expiratory valve network with time- or flow-cycling, patient triggering and a
-per-breath volume-targeting servo, and it interacts with the patient's own respiratory drive so that
-assisted and spontaneous breaths compose. Oxygenation and carbon-dioxide clearance are not prescribed
-by the device but emerge from the alveolar gas exchange of the respiratory model under the ventilation
-the device delivers. ECMO is modelled as a blood pump, a membrane oxygenator that reuses the same
-partial-pressure-driven gas-exchange equations as the native lung, and cannulae represented as
-resistors draining from and returning to named circulatory compartments, in veno-arterial and
-veno-venous configurations. We demonstrate that the ventilator restores oxygenation and ventilation in
-a surfactant-deficient lung as a function of inspired oxygen and airway pressure, and that ECMO
-supports systemic gas exchange as a function of pump flow and sweep gas. Because the devices act
-through the same mechanistic compartments as the native physiology, their effects — and their
-interactions with the patient — are emergent and interpretable.
+**Background:** Sick newborns are frequently supported by devices that act on the physiology — the mechanical ventilator, which drives gas into the lungs, and extracorporeal membrane oxygenation (ECMO), which takes over gas exchange and circulation. We model these devices in the EXPLAIN neonatal simulator.
+
+**Methods:** Each device is a physical source wired into the same compartments as the native physiology, so its effects emerge rather than being prescribed. The ventilator is a gas circuit connected through a resistive endotracheal tube, implementing the clinical modes (pressure control, PRVC, pressure support, CPAP) with triggering and volume-targeting, composing with spontaneous breathing. ECMO is a blood pump and a membrane oxygenator that reuses the native lung's gas-exchange law, with cannulae to named compartments (veno-arterial or veno-venous).
+
+**Results:** In a surfactant-deficient lung, ventilation restored oxygenation with inspired oxygen and pressure and cleared carbon dioxide with rate, the servo holding tidal volume fixed. Veno-arterial ECMO rescued profound hypoxaemia (arterial PO₂ 11→95 mmHg) as pump flow rose, with carbon-dioxide removal set by sweep-gas flow. All blood gases were emergent, not prescribed.
+
+**Conclusion:** Because the devices act through shared compartments, delivered volumes, blood gases and device–patient interactions are emergent and interpretable, completing the simulator.
 
 ---
 
@@ -259,9 +246,11 @@ the calibration pipeline (parameterization companion paper) reads as its measure
 
 ### 2.4 Software implementation and AI-assisted parameterization
 
-See shared Methods (respiratory paper §S5) for the engine implementation, and the parameterization
-companion paper for how device settings and patient parameters are set by the AI-assisted calibration
-pipeline. The devices run in the same insertion-ordered step loop as the patient models, sharing the
+See shared Methods (respiratory paper §S5) for the engine implementation; the interactive model is
+freely available at https://explain-modeling.com and the complete, annotated engine source code is
+publicly available at ‹repository URL› and archived with a persistent identifier at ‹Zenodo/archive DOI›.
+See the parameterization companion paper [P6] for how device settings and patient parameters are set by
+the AI-assisted calibration pipeline. The devices run in the same insertion-ordered step loop as the patient models, sharing the
 gas and blood compartments so that support and physiology are solved together.
 
 ---
@@ -430,7 +419,10 @@ unsupported patient to full mechanical and extracorporeal support.
 
 ## References
 
-See `thesis/_references.md`. Paper-5 sources to confirm via PubMed: an endotracheal-tube resistance
-reference for Eq. 2; standard references for ventilator modes (PC/PRVC/PS/CPAP) and flow-cycling; and
-ECMO circuit/oxygenator references. Reuse the respiratory paper's gas-exchange citations (the ECMO
-oxygenator shares that law) and the series' shared software/AI citations.
+See `thesis/_references.md` (device sources verified against PubMed, 2026-07-12; renumber in citation
+order at assembly). Endotracheal-tube resistance for Eq. 2: Jarreau et al. 1999 (PMID 10409556) and
+Spaeth et al. 2015 (PMID 25491944). Ventilator modes (PC/PRVC/PS/CPAP) and volume targeting: Keszler
+2005 (PMID 15861164) and Schulzke & Stoecklin 2021 (PMID 34878697). ECMO circuit/oxygenator: Butt et
+al. 2013 (PMID 23735980) and Cortesi et al. 2022 (PMID 36090551). The ECMO membrane oxygenator reuses
+the respiratory paper's partial-pressure gas-exchange law, so its citations are shared; the series'
+shared software/AI citations apply for the engine and the parameterization pipeline.

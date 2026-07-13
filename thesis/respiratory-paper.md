@@ -11,30 +11,15 @@ value until its probe has produced it.*
 
 ## Abstract
 
-*(Draft — tighten to journal word limit.)*
+*(Structured abstract — Pediatric Research Basic Science format. The prior long-form draft is superseded.)*
 
-Mechanistic, explanatory models of neonatal physiology can make the invisible couplings of
-intensive-care medicine visible and manipulable in real time. We describe the respiratory
-subsystem of EXPLAIN, an integrated, real-time neonatal physiology simulator whose
-cardiovascular system is presented in a companion paper. The respiratory model comprises a set
-of interconnected lumped compartments: gas-filled elastic compartments for the airways and
-alveoli enclosed by an elastic thorax; a spontaneous respiratory-drive model that converts a
-target minute ventilation into rate, tidal volume and a respiratory-muscle pressure waveform;
-partial-pressure-driven alveolar gas exchange; a physicochemical (Stewart strong-ion) blood
-acid–base and oxygen-transport solver coupling O₂ and CO₂ carriage to pH, temperature and
-haemoglobin; whole-body oxygen consumption and carbon-dioxide production distributed across
-tissue compartments; a hypoxia-driven lactate model that closes the loop from tissue oxygen debt
-to metabolic acidosis; and a dynamic surfactant/alveolar-recruitment model with hysteresis that
-reproduces respiratory distress syndrome and its response to surfactant therapy. Each component
-is expressed as a small set of governing equations with physiologically interpretable parameters.
-Patient-specific parameter values are set by an AI-assisted closed-loop calibration pipeline
-(companion paper). We demonstrate that the model reproduces the expected qualitative and
-quantitative behaviour of neonatal gas exchange and acid–base physiology — the dependence of
-arterial oxygenation on inspired oxygen fraction and alveolar diffusion, of arterial carbon
-dioxide on ventilatory drive, of pH and base excess on metabolic and respiratory perturbations,
-and of pulmonary compliance and oxygenation on surfactant — and that the whole subsystem runs
-in real time in a standard web browser. Annotated source code is available to researchers,
-ensuring transparency and extensibility.
+**Background:** Respiratory care of the newborn requires inferring a tightly coupled system — alveolar ventilation, inspired oxygen, the diffusing capacity of an immature lung, perfusion, metabolism and buffering — from few monitored outputs. Real-time models can make these couplings explicit.
+
+**Methods:** We describe the respiratory subsystem of EXPLAIN, an integrated neonatal simulator: elastic gas compartments and thoracic mechanics, a spontaneous respiratory drive, partial-pressure-driven alveolar gas exchange, a physicochemical (Stewart strong-ion) acid–base and oxygen-transport solver, whole-body metabolism with hypoxia-driven lactate, and a dynamic surfactant/alveolar-recruitment model, all solved together on the blood substrate shared with the circulation; patient-specific parameters are set by an AI-assisted closed-loop calibration pipeline.
+
+**Results:** The model reproduces a normal term-neonate blood gas within reference ranges; arterial oxygenation rises with inspired oxygen and alveolar diffusion while carbon dioxide tracks ventilatory drive; added unmeasured anions produce a graded metabolic acidosis separated from the respiratory axis; and surfactant in preterm respiratory distress recruits the lung over minutes, raising PaO₂ from 55 to 74 mmHg and SpO₂ from 91 to 96%.
+
+**Conclusion:** Solving ventilation, gas exchange, transport, acid–base and metabolism together makes the arterial blood gas an emergent, patient-specific property, providing a transparent real-time platform for neonatal respiratory physiology.
 
 ---
 
@@ -91,7 +76,7 @@ pipeline in which a large language model interprets the available clinical targe
 deterministic calibrator drives the mechanistic model onto them to within clinician-meaningful
 tolerances. For the respiratory system the relevant targets are the arterial oxygen tension and
 saturation, the carbon-dioxide tension, the pH and the base excess; the method is summarized in
-Section 2.4 and described in full in the companion parameterization paper. Below we specify the
+Section 2.4 and described in full in the companion parameterization paper [P6]. Below we specify the
 respiratory model (Section 2), and demonstrate that it reproduces the expected quantitative
 behaviour of neonatal gas exchange and acid–base physiology (Section 3).
 
@@ -428,15 +413,16 @@ disabled.
 
 See shared Methods S5 (reuse verbatim): framework-agnostic JavaScript/TypeScript engine running in
 a Web Worker, declarative JSON model definitions, real-time step loop, freely available at
-https://explain-modeling.com; source annotated and available upon request. The respiratory models run
+https://explain-modeling.com; the complete, annotated engine source code is publicly available at
+‹repository URL› and archived with a persistent identifier at ‹Zenodo/archive DOI›. The respiratory models run
 in the same insertion-ordered step loop as the circulation, sharing the blood compartments so that
 gas exchange, transport, metabolism and acid–base are solved together each step.
 
 ### 2.4 AI-assisted patient-specific parameterization (pointer)
 
 Patient-specific respiratory and acid–base parameters are not tuned by hand but are set by the
-AI-assisted, closed-loop calibration pipeline described in the companion parameterization paper
-(and summarized in Section 2.4 of the cardiovascular paper): a large language model interprets the
+AI-assisted, closed-loop calibration pipeline described in full in the companion parameterization paper [P6]
+(and summarized as a compact highlight—Box 1—in the cardiovascular paper [P1]): a large language model interprets the
 available clinical targets and emits a validated specification, and a deterministic calibrator
 drives one physiologically interpretable lever per target to within a clinician-meaningful
 tolerance. For the models of this paper the levers are: **alveolar O₂ diffusion** *D*_O₂
