@@ -10,16 +10,22 @@ import path from "node:path";
 // so snapshots become first-class scenarios selectable from the dropdown.
 // DELETE /api/delete-snapshot removes a file and its index entry.
 function snapshotApi(): Plugin {
-  const dir = fileURLToPath(new URL("./public/model_definitions", import.meta.url));
-  const idxPath = path.join(dir, "index.json");
+  // Canonical scenario library now lives in the `explain` submodule; the app
+  // serves a synced mirror from public/ (see scripts/sync-scenarios.mjs). A
+  // developer save writes to BOTH: canonical (committable in the submodule) and
+  // served (so the running app sees it immediately).
+  const canonicalDir = fileURLToPath(new URL("./explain/model_definitions", import.meta.url));
+  const servedDir = fileURLToPath(new URL("./public/model_definitions", import.meta.url));
   const safeName = (name: unknown) =>
     path.basename(String(name ?? "").trim().replace(/[^a-zA-Z0-9._-]/g, "_"));
-  const readIndex = (): string[] => {
-    try {
-      return JSON.parse(fs.readFileSync(idxPath, "utf8"));
-    } catch {
-      return [];
-    }
+  // Rebuild a directory's index.json as the sorted list of scenario basenames.
+  const rebuildIndex = (d: string) => {
+    const names = fs
+      .readdirSync(d)
+      .filter((f) => f.endsWith(".json") && f !== "index.json")
+      .map((f) => f.slice(0, -".json".length))
+      .sort();
+    fs.writeFileSync(path.join(d, "index.json"), JSON.stringify(names, null, 2) + "\n");
   };
 
   // POST-with-JSON-body middleware helper
@@ -77,13 +83,11 @@ function snapshotApi(): Plugin {
         jsonPost(({ name, data }, reply) => {
           const safe = safeName(name);
           if (!safe) return reply(400, { ok: false, error: "invalid name" });
-          fs.writeFileSync(path.join(dir, `${safe}.json`), JSON.stringify(data, null, 2));
-          const idx = readIndex();
-          if (!idx.includes(safe)) {
-            idx.push(safe);
-            idx.sort();
-            fs.writeFileSync(idxPath, JSON.stringify(idx, null, 2));
-          }
+          const json = JSON.stringify(data, null, 2);
+          fs.writeFileSync(path.join(canonicalDir, `${safe}.json`), json);
+          fs.writeFileSync(path.join(servedDir, `${safe}.json`), json);
+          rebuildIndex(canonicalDir);
+          rebuildIndex(servedDir);
           reply(200, { ok: true, name: safe });
         }),
       );
@@ -93,10 +97,11 @@ function snapshotApi(): Plugin {
         jsonPost(({ name }, reply) => {
           const safe = safeName(name);
           if (!safe) return reply(400, { ok: false, error: "invalid name" });
-          const file = path.join(dir, `${safe}.json`);
-          if (fs.existsSync(file)) fs.unlinkSync(file);
-          const idx = readIndex().filter((n) => n !== safe);
-          fs.writeFileSync(idxPath, JSON.stringify(idx, null, 2));
+          for (const d of [canonicalDir, servedDir]) {
+            const file = path.join(d, `${safe}.json`);
+            if (fs.existsSync(file)) fs.unlinkSync(file);
+            rebuildIndex(d);
+          }
           reply(200, { ok: true, name: safe });
         }),
       );

@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "sync-scenarios": "node scripts/sync-scenarios.mjs",
+    "predev": "node scripts/sync-scenarios.mjs",
+    "prebuild": "node scripts/sync-scenarios.mjs",
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",

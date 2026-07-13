@@ -47,7 +47,12 @@ await esbuild.build({
   format: "esm",
   platform: "node",
   outfile: tmp,
-  alias: { "@": path.resolve(ROOT, "src") },
+  alias: {
+    "@": path.resolve(ROOT, "src"),
+    // src/services/botCommands.ts imports @explain/helpers/Calibrator; mirror the
+    // vite.config alias so this bundle resolves it through the `explain` submodule.
+    "@explain": path.resolve(ROOT, "explain"),
+  },
   logLevel: "warning",
 });
 const {
