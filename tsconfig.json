@@ -19,7 +19,7 @@
     "types": ["vite/client", "node"],
     "paths": {
       "@/*": ["./src/*"],
-      "@explain/*": ["./explain/*"]
+      "@explain/*": ["./explain-engine/*"]
     }
   },
   "include": ["src", "env.d.ts", "vite.config.ts"]

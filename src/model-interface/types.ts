@@ -1,6 +1,6 @@
 // UI-owned schema for editing model parameters. This metadata was formerly a
 // `static model_interface` array on each engine model class; it has been
-// relocated here so the physics engine (explain/) stays pure — UI presentation
+// relocated here so the physics engine (explain-engine/) stays pure — UI presentation
 // is not the model's concern. See registry.ts for the per-model_type data.
 
 // One editable field describing a model property (or a callable method for

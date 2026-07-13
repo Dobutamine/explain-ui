@@ -2,7 +2,7 @@
 // arrays (verbatim, inheritance resolved). Keyed by model_type. UI presentation
 // metadata lives here, not in the physics engine. To regenerate after a model
 // gains/changes a tunable parameter, dump each class's effective interface from
-// explain/ModelIndex.js and replace MODEL_INTERFACES below.
+// explain-engine/ModelIndex.js and replace MODEL_INTERFACES below.
 
 import type { InterfaceField } from "./types";
 

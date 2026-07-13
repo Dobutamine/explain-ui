@@ -103,7 +103,7 @@ function onSelect(node: TreeNode) {
 
 // Intercept clicks on rendered links: keep cross-doc navigation inside the
 // viewer; let external links open a new tab; ignore links to non-doc files
-// (e.g. ../../explain/Model.js source links) so nothing 404s.
+// (e.g. ../../explain-engine/Model.js source links) so nothing 404s.
 function onLinkClick(e: MouseEvent) {
   const a = (e.target as HTMLElement)?.closest("a");
   if (!a) return;

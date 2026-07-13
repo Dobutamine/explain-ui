@@ -6,7 +6,7 @@
 # It does the things a deploy needs and `git pull` alone does NOT:
 #   1. `git pull` the repo checkout, then update the `explain` submodule — the
 #      engine now lives in a separate repo (github.com/Dobutamine/explain-engine)
-#      mounted at explain/, so the bot's builder explain/scripts/build_patient.mjs
+#      mounted at explain-engine/, so the bot's builder explain-engine/scripts/build_patient.mjs
 #      and the scenario library only arrive when the submodule is synced
 #   2. copy the bot-facing docs into the bot's workdir (the bot reads them there,
 #      they are NOT read from the checkout)
@@ -37,9 +37,9 @@ RESTART=0
 
 echo "==> 1/4 git pull + submodule sync  ($REPO_DIR)"
 git -C "$REPO_DIR" pull --ff-only
-# The engine (explain/) is a git submodule; --init handles a fresh checkout, and
+# The engine (explain-engine/) is a git submodule; --init handles a fresh checkout, and
 # --recursive covers any nested submodules. Without this the checkout would carry
-# a stale/empty explain/ and the bot's builder + scenarios would be missing.
+# a stale/empty explain-engine/ and the bot's builder + scenarios would be missing.
 git -C "$REPO_DIR" submodule update --init --recursive
 
 echo "==> 2/4 deploy bot docs -> workdir  ($WORKDIR)"

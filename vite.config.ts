@@ -10,11 +10,11 @@ import path from "node:path";
 // so snapshots become first-class scenarios selectable from the dropdown.
 // DELETE /api/delete-snapshot removes a file and its index entry.
 function snapshotApi(): Plugin {
-  // Canonical scenario library now lives in the `explain` submodule; the app
-  // serves a synced mirror from public/ (see scripts/sync-scenarios.mjs). A
+  // Canonical scenario library now lives in the `explain-engine` submodule; the
+  // app serves a synced mirror from public/ (see scripts/sync-scenarios.mjs). A
   // developer save writes to BOTH: canonical (committable in the submodule) and
   // served (so the running app sees it immediately).
-  const canonicalDir = fileURLToPath(new URL("./explain/model_definitions", import.meta.url));
+  const canonicalDir = fileURLToPath(new URL("./explain-engine/model_definitions", import.meta.url));
   const servedDir = fileURLToPath(new URL("./public/model_definitions", import.meta.url));
   const safeName = (name: unknown) =>
     path.basename(String(name ?? "").trim().replace(/[^a-zA-Z0-9._-]/g, "_"));
@@ -418,7 +418,7 @@ export default defineConfig(({ mode }) => {
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
-      "@explain": fileURLToPath(new URL("./explain", import.meta.url)),
+      "@explain": fileURLToPath(new URL("./explain-engine", import.meta.url)),
     },
   },
   // the ModelEngine worker is spawned as an ES module

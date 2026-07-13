@@ -1,8 +1,8 @@
 // Populate public/model_definitions/ from the engine submodule's canonical
 // scenario library, then regenerate index.json.
 //
-// After the engine was split into its own repo (mounted as the `explain/`
-// submodule), the canonical scenarios live at explain/model_definitions/.
+// After the engine was split into its own repo (mounted as the `explain-engine/`
+// submodule), the canonical scenarios live at explain-engine/model_definitions/.
 // The Vue app still serves them statically from public/model_definitions/, so
 // this script copies them across. It is:
 //   - additive: it copies/overwrites canonical files but NEVER deletes extras,
@@ -17,12 +17,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const srcDir = path.join(root, "explain", "model_definitions");
+const srcDir = path.join(root, "explain-engine", "model_definitions");
 const dstDir = path.join(root, "public", "model_definitions");
 
 if (!fs.existsSync(srcDir)) {
   console.error(
-    `[sync-scenarios] ${srcDir} not found — is the 'explain' submodule initialised?\n` +
+    `[sync-scenarios] ${srcDir} not found — is the 'explain-engine' submodule initialised?\n` +
       `  run: git submodule update --init`,
   );
   process.exit(1);

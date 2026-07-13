@@ -62,17 +62,17 @@ const listDir = (rel, pred) => {
 const isJs = (f) => f.endsWith(".js");
 
 // Engine JS, grouped so the pack reads in a sensible order.
-const ENGINE_DIRS_CORE = ["explain"]; // Model.js, ModelEngine.js, ModelEmitter.js, ModelIndex.js
+const ENGINE_DIRS_CORE = ["explain-engine"]; // Model.js, ModelEngine.js, ModelEmitter.js, ModelIndex.js
 const ENGINE_DIRS_FULL = [
-  "explain/base_models",
-  "explain/component_models",
-  "explain/device_models",
-  "explain/helpers",
-  "explain/realtime",
+  "explain-engine/base_models",
+  "explain-engine/component_models",
+  "explain-engine/device_models",
+  "explain-engine/helpers",
+  "explain-engine/realtime",
 ];
 
-const coreEngineFiles = listDir("explain", isJs);
-const baseModelFiles = listDir("explain/base_models", isJs);
+const coreEngineFiles = listDir("explain-engine", isJs);
+const baseModelFiles = listDir("explain-engine/base_models", isJs);
 
 const docFiles = listDir("docs/engine", (f) => f.endsWith(".md"));
 
@@ -112,7 +112,7 @@ const embedBlock = (heading, lang, content) => {
 // Trim a full scenario JSON down to its model_definition with only a few sample
 // model entries — the format matters, the bulk of 60+ entries does not.
 const scenarioExcerpt = () => {
-  const rel = "explain/model_definitions/term_neonate_clean.json";
+  const rel = "explain-engine/model_definitions/term_neonate_clean.json";
   if (!exists(rel)) return null;
   const raw = JSON.parse(fs.readFileSync(path.resolve(ROOT, rel), "utf8"));
   const md = raw.model_definition || raw;
@@ -166,13 +166,13 @@ parts.push(
     `**Tier:** ${tierBlurb}`,
     "",
     "Every embedded file is introduced by a `### FILE: <path>` header so you can cite exact",
-    "source locations (e.g. `explain/base_models/Capacitance.js`) in answers. Treat the source",
+    "source locations (e.g. `explain-engine/base_models/Capacitance.js`) in answers. Treat the source",
     "and docs below as the ground truth; prefer quoting them over recalling general knowledge.",
     "",
     "## How this pack is organized",
     "",
     "1. **Architecture** — the repo's CLAUDE.md (build flow, message envelope, model contract, the factor/effective-value pattern).",
-    "2. **Engine onboarding** — explain/README.md.",
+    "2. **Engine onboarding** — explain-engine/README.md.",
     "3. **Physiology docs** — docs/engine/*.md, the per-model derivations and math.",
     "4. **Engine source** — the live ES-module classes that run in the Web Worker.",
     ...(TIER === "full"
@@ -190,7 +190,7 @@ addFileSection("CLAUDE.md");
 
 // --- 2. Engine onboarding ---
 parts.push("\n## 2. Engine onboarding\n");
-addFileSection("explain/README.md");
+addFileSection("explain-engine/README.md");
 
 // --- 3. Physiology docs ---
 parts.push("\n## 3. Physiology docs\n");
@@ -240,7 +240,7 @@ parts.push(
 if (exists("public/model_definitions/index.json")) addFileSection("public/model_definitions/index.json");
 const excerpt = scenarioExcerpt();
 if (excerpt) {
-  fileList.push("explain/model_definitions/term_neonate_clean.json (trimmed excerpt)");
+  fileList.push("explain-engine/model_definitions/term_neonate_clean.json (trimmed excerpt)");
   parts.push(embedBlock("EXCERPT: model_definition (trimmed)", "json", excerpt));
 }
 
@@ -262,7 +262,7 @@ UI/integration layer. Use it as your primary source of truth.
 
 Guidelines:
 - Ground every answer in the embedded source and docs. Cite exact paths (e.g.
-  \`explain/base_models/Resistor.js\`, \`docs/engine/Heart.md\`) and quote the relevant
+  \`explain-engine/base_models/Resistor.js\`, \`docs/engine/Heart.md\`) and quote the relevant
   formula or contract rather than recalling generic physiology.
 - The pack is a **snapshot** taken at build time. If asked about behavior you cannot find
   in it, say so plainly instead of guessing.

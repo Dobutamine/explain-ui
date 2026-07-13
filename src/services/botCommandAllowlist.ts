@@ -165,7 +165,7 @@ export function isAllowed(op: string, model?: string, target?: string): boolean 
 //
 // `scale` multiplies a whole GROUP of related parameters in one command (e.g.
 // total blood volume, all systemic resistances) — what you'd otherwise need many
-// setProps for. It routes to ModelScaler (explain/helpers/ModelScaler.js) via
+// setProps for. It routes to ModelScaler (explain-engine/helpers/ModelScaler.js) via
 // useExplain().scale(group, factor); factor 1.0 = baseline, <1 lowers, >1 raises.
 // Reversible and stackable. Curated to the physiologically-useful, safe groups
 // (weight_scale / incorporate / reset / add_volume are excluded — special

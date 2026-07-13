@@ -62,9 +62,9 @@ PATIENTS_DIR = BOT_DIR / "patients"  # built patient JSONs are archived here (au
 # Patient-builder (the wrapper runs this itself — the bot only produces a SPEC, it
 # is NOT granted shell). EXPLAIN_REPO is the checkout holding scripts/build_patient.mjs.
 EXPLAIN_REPO = Path(os.environ.get("EXPLAIN_REPO", str(BOT_DIR.parent / "explain-repo")))
-# build_patient.mjs moved into the `explain` engine submodule when the engine was
-# split into its own repo; it now lives under explain/scripts/ in the checkout.
-BUILD_SCRIPT = EXPLAIN_REPO / "explain" / "scripts" / "build_patient.mjs"
+# build_patient.mjs moved into the `explain-engine` submodule when the engine was
+# split into its own repo; it now lives under explain-engine/scripts/ in the checkout.
+BUILD_SCRIPT = EXPLAIN_REPO / "explain-engine" / "scripts" / "build_patient.mjs"
 NODE_BIN = os.environ.get("NODE_BIN") or shutil.which("node") or "/opt/homebrew/bin/node"
 BUILD_TIMEOUT = int(os.environ.get("BUILD_TIMEOUT", "300"))
 BUILD_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"

@@ -43,7 +43,7 @@ try {
 // Questions answerable only from the bundle. Correct answers should match, respectively:
 //   1. p_eff = p + (factor-1)*p + (factor_ps-1)*p + (factor_scaling_ps-1)*p
 //   2. model.ncc_ventricular (and ncc_atrial), on the engine `model` object, watched by DataCollector
-//   3. add an export line in explain/ModelIndex.js (and a registry.ts entry for editability)
+//   3. add an export line in explain-engine/ModelIndex.js (and a registry.ts entry for editability)
 const QUESTIONS = [
   "What are the three multiplier layers in the factor/effective-value pattern, and give the exact formula for an effective value (e.g. el_base -> el_base_eff)?",
   "Which counter does the Heart use to drive ECG/ventricular timing, and where does that counter live — on the component or the engine model object?",

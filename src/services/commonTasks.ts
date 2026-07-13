@@ -16,7 +16,7 @@
 //   - scale lever — the quantity is a bundle of many components with no single
 //     prop (contractility, lung elastances, …) handled by ModelScaler. Scale
 //     groups are ABSOLUTE (1.0 = baseline) AND the current factor is NOT in the
-//     state snapshot (explain/Model.js strips ModelScaler), so the UI tracks the
+//     state snapshot (explain-engine/Model.js strips ModelScaler), so the UI tracks the
 //     factor client-side per task id and the bot treats `factor` as absolute.
 
 export type TaskCategory =
