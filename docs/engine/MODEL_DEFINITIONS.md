@@ -2,7 +2,7 @@
 
 A scenario file is a single JSON document that describes one complete patient/experiment: the engine settings, every model instance with its parameters and current state, plus the UI metadata (diagram, animation, saved tabs/presets). They live in `public/model_definitions/*.json` and are served statically. `Model.load(name)` fetches `/model_definitions/<name>.json`, unwraps it, and hands the result to `build()`. The set of available scenarios is `public/model_definitions/index.json` — a flat JSON array of filename **stems** (no `.json`), each of which is a valid argument to `Model.load(name)`.
 
-> The canonical, served copies are under `public/model_definitions/`. `explain/model_definitions/` and `explain/states/` hold separate dev copies; edit the served set unless you know you want the dev mirror.
+> The canonical, served copies are under `public/model_definitions/`. `explain/model_definitions/` holds a separate dev copy; edit the served set unless you know you want the dev mirror.
 
 ## Top-level keys
 

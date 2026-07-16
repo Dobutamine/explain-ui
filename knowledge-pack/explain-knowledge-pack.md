@@ -7,13 +7,13 @@ the model with the same grounding Claude Code has when working in the repo.
 **Tier:** FULL tier: architecture notes, all physiology docs, the complete engine source, the UI/integration layer, and the scenario format.
 
 Every embedded file is introduced by a `### FILE: <path>` header so you can cite exact
-source locations (e.g. `explain/base_models/Capacitance.js`) in answers. Treat the source
+source locations (e.g. `explain-engine/base_models/Capacitance.js`) in answers. Treat the source
 and docs below as the ground truth; prefer quoting them over recalling general knowledge.
 
 ## How this pack is organized
 
 1. **Architecture** — the repo's CLAUDE.md (build flow, message envelope, model contract, the factor/effective-value pattern).
-2. **Engine onboarding** — explain/README.md.
+2. **Engine onboarding** — explain-engine/README.md.
 3. **Physiology docs** — docs/engine/*.md, the per-model derivations and math.
 4. **Engine source** — the live ES-module classes that run in the Web Worker.
 5. **UI / integration layer** — the parameter-edit schema and the chat store.
@@ -34,16 +34,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-This directory is a **standalone Vue 3 + Vite + TypeScript web app** built around the `explain/` physiological simulation engine (plain ES modules that run inside a **Web Worker**) plus a set of scenario definitions (`model_definitions/`). The app was migrated off Quasar; it now uses Vue 3 + Vite + TypeScript + PrimeVue + Tailwind, while the engine in `explain/` is kept framework-agnostic. The repo has its own `package.json`, `vite.config.ts`, and `node_modules`.
+This directory is a **standalone Vue 3 + Vite + TypeScript web app** built around the `explain-engine/` physiological simulation engine (plain ES modules that run inside a **Web Worker**) plus a set of scenario definitions (`model_definitions/`). The app was migrated off Quasar; it now uses Vue 3 + Vite + TypeScript + PrimeVue + Tailwind, while the engine in `explain-engine/` is kept framework-agnostic. The repo has its own `package.json`, `vite.config.ts`, and `node_modules`.
 
-Run it from this directory: `npm run dev` (Vite dev server), `npm run build` (`vue-tsc --noEmit && vite build`), `npm run typecheck`, `npm run preview`. The Vue layer bootstraps the engine through `src/composables/useExplain.ts` — a singleton that does `new Model()` (imported as `@explain/Model`, an alias to `./explain/` set in `vite.config.ts`/`tsconfig.json`). `Model.js` spawns the worker via `new Worker(new URL("./ModelEngine.js", import.meta.url), { type: "module" })`. Scenario definitions are served from `public/model_definitions/`.
+Run it from this directory: `npm run dev` (Vite dev server), `npm run build` (`vue-tsc --noEmit && vite build`), `npm run typecheck`, `npm run preview`. The Vue layer bootstraps the engine through `src/composables/useExplain.ts` — a singleton that does `new Model()` (imported as `@explain/Model`, an alias to `./explain-engine/` set in `vite.config.ts`/`tsconfig.json`). `Model.js` spawns the worker via `new Worker(new URL("./ModelEngine.js", import.meta.url), { type: "module" })`. Scenario definitions are served from `public/model_definitions/`.
 
 ## Architecture
 
 Two threads, one wire protocol:
 
-- **`explain/Model.js`** — main-thread wrapper (extends `ModelEmitter`). Spawns the worker, exposes the public API (`build`/`load`/`start`/`stop`/`calculate`/`setPropValue`/`callModelFunction`/`watchModelProps`/`scaleModel`/…), and re-emits worker responses as events you subscribe to with `explain.on(event, handler)`.
-- **`explain/ModelEngine.js`** — the Web Worker. Owns the live `model` object (`{ models: {…}, modeling_stepsize, model_time_total, ncc_* counters, … }`), the build/step loop, and the GET/POST/PUT/DELETE message router (`self.onmessage`).
+- **`explain-engine/Model.js`** — main-thread wrapper (extends `ModelEmitter`). Spawns the worker, exposes the public API (`build`/`load`/`start`/`stop`/`calculate`/`setPropValue`/`callModelFunction`/`watchModelProps`/`scaleModel`/…), and re-emits worker responses as events you subscribe to with `explain.on(event, handler)`.
+- **`explain-engine/ModelEngine.js`** — the Web Worker. Owns the live `model` object (`{ models: {…}, modeling_stepsize, model_time_total, ncc_* counters, … }`), the build/step loop, and the GET/POST/PUT/DELETE message router (`self.onmessage`).
 
 **Message envelope** (both directions): `{ type: "GET"|"PUT"|"POST"|"DELETE", message: string, payload: any }`. `Model.send()` posts to the worker; the worker `_send()`/`postMessage()` back. `Model.receive()` maps inbound types (`state`, `data`, `rtf`/`rts` realtime fast/slow, `model_ready`, `status`, `error`, …) to emitter events. Payloads crossing the boundary are JSON-stringified for `build`/`property_value`/`call` and re-parsed by `_normalize_payload` in the worker.
 
@@ -53,7 +53,7 @@ Two threads, one wire protocol:
 
 ## Model class contract
 
-Every model lives in `explain/base_models/`, `explain/component_models/`, or `explain/device_models/` and extends `BaseModelClass` (directly or via an intermediate like `Capacitance`/`Resistor`/`TimeVaryingElastance`). Contract:
+Every model lives in `explain-engine/base_models/`, `explain-engine/component_models/`, or `explain-engine/device_models/` and extends `BaseModelClass` (directly or via an intermediate like `Capacitance`/`Resistor`/`TimeVaryingElastance`). Contract:
 
 - static `model_type` (string key used at build time and in definition JSON). Model classes carry **no UI metadata** — the parameter-edit schema lives in the UI layer at `src/model-interface/` (see below), not on the class.
 - constructor `(model_ref, name = "")` — `model_ref` is the whole engine `model` object; store it as `this._model_engine` (done by the base). Initialize independent props (config), dependent props (computed outputs), and `_`-prefixed local refs. (`build()` passes a 3rd `model_type` arg that the base constructor ignores.)
@@ -61,7 +61,7 @@ Every model lives in `explain/base_models/`, `explain/component_models/`, or `ex
 - `step_model()` — base impl runs `calc_model()` only when `is_enabled && _is_initialized`. Don't override unless you need custom gating.
 - `calc_model()` — where the physics happens. Override this.
 
-**Registering a new model:** create the class, give it a static `model_type`, then **add an `export` line in `explain/ModelIndex.js`** (the engine builds its `available_model_map` from everything ModelIndex exports). Forgetting the export is the usual cause of "model type not found" at build. To make its parameters editable in the app, add a `model_type` entry to `src/model-interface/registry.ts`.
+**Registering a new model:** create the class, give it a static `model_type`, then **add an `export` line in `explain-engine/ModelIndex.js`** (the engine builds its `available_model_map` from everything ModelIndex exports). Forgetting the export is the usual cause of "model type not found" at build. To make its parameters editable in the app, add a `model_type` entry to `src/model-interface/registry.ts`.
 
 ## The factor/effective-value pattern (important)
 
@@ -71,7 +71,7 @@ Core physics params (`el_base`, `u_vol`, `el_k` on capacitances; `r_for`, `r_bac
 - `<p>_factor_ps` — **persistent**; survives steps (user/scenario adjustments).
 - `<p>_factor_scaling_ps` — **persistent scaling**; written by `ModelScaler` for allometric/weight scaling.
 
-Formula (see `Capacitance.calc_elastances`, `Resistor.calc_resistance`): `p_eff = p + (factor-1)*p + (factor_ps-1)*p + (factor_scaling_ps-1)*p`. When adding a tunable parameter, follow this convention so it composes with interventions and scaling. `ModelScaler` (`explain/helpers/ModelScaler.js`) only ever touches the `*_scaling_ps` layer; `scaleModel(group, factor)` in the API routes to its many `scale_*` methods via the big `switch` in `ModelEngine.scale_model`. `reset` restores `model.weight = model._baseline_weight`.
+Formula (see `Capacitance.calc_elastances`, `Resistor.calc_resistance`): `p_eff = p + (factor-1)*p + (factor_ps-1)*p + (factor_scaling_ps-1)*p`. When adding a tunable parameter, follow this convention so it composes with interventions and scaling. `ModelScaler` (`explain-engine/helpers/ModelScaler.js`) only ever touches the `*_scaling_ps` layer; `scaleModel(group, factor)` in the API routes to its many `scale_*` methods via the big `switch` in `ModelEngine.scale_model`. `reset` restores `model.weight = model._baseline_weight`.
 
 ## Flow / pressure mechanics
 
@@ -90,13 +90,13 @@ Formula (see `Capacitance.calc_elastances`, `Resistor.calc_resistance`): `p_eff 
 
 Files in `model_definitions/*.json` are full scenarios. Top level: `name`, `user`, `description`, `diagram_definition`, `animation_definition`, `configuration`, and **`model_definition`** (the part the engine consumes). `Model.load()` fetches `/model_definitions/<name>.json` and unwraps `jsonData.model_definition || jsonData` before `build()`.
 
-Inside `model_definition`: engine-level settings (`weight`, `height`, `gestational_age`, `age`, `modeling_stepsize`, `model_time_total`, `scaler_config`, `_baseline_weight`) plus **`models`** — a map of `name → { name, model_type, …params }`. A typical neonate scenario has ~60 components (one each of the high-level systems: `Heart`, `Breathing`, `Ans`, `Circulation`, `Respiration`, `Blood`, `Gas`, `Metabolism`, `Pda`, `Shunts`, devices `Ventilator`/`Ecls`/`Monitor`/`Resuscitation`, …) wired together by ~40 `Resistor` entries via their `comp_from`/`comp_to` names. Available scenarios are listed in `model_definitions/index.json`. Note: `explain/model_definitions/` and `explain/states/` hold separate dev copies; the canonical set is the top-level `model_definitions/`.
+Inside `model_definition`: engine-level settings (`weight`, `height`, `gestational_age`, `age`, `modeling_stepsize`, `model_time_total`, `scaler_config`, `_baseline_weight`) plus **`models`** — a map of `name → { name, model_type, …params }`. A typical neonate scenario has ~60 components (one each of the high-level systems: `Heart`, `Breathing`, `Ans`, `Circulation`, `Respiration`, `Blood`, `Gas`, `Metabolism`, `Pda`, `Shunts`, devices `Ventilator`/`Ecls`/`Monitor`/`Resuscitation`, …) wired together by ~40 `Resistor` entries via their `comp_from`/`comp_to` names. Available scenarios are listed in `model_definitions/index.json`. Note: `explain-engine/model_definitions/` holds a separate dev copy; the canonical set is the top-level `model_definitions/`.
 
 ## `model_interface` schema (UI layer — `src/model-interface/`)
 
 The parameter-edit schema is **owned by the UI, not the engine**. It lives in `src/model-interface/`: `registry.ts` holds `MODEL_INTERFACES` (a `Record<model_type, InterfaceField[]>`) plus `getInterfaceForType()`, and `types.ts` defines `InterfaceField` and the `groupByEditMode()` helper. The Vue layer reads it via `useModelInterface()` (`src/composables/useModelInterface.ts`), which maps a model instance → its `model_type` → the registry entry; the generic `ModelEditor.vue` renders the controls (there is no `ParameterPanel.vue` — subsystem-specific editing lives in the bespoke `controls/*Panel.vue` files).
 
-Each `InterfaceField` describes one editable field: `target` (prop name, or method name for `function`), `type` (`number`/`boolean`/`string`/`list`/`multiple-list`/`factor`/`function`/`prop-list`/`reference`), `caption`, `edit_mode` (`basic`/`extra`/`factors`/`advanced`), `build_prop`, `readonly`; numbers add `factor` (display = raw×factor), `delta`, `rounding`, `ll`/`ul`, `slider`; lists add `options`/`choices`/`custom_options`; functions add `args`. When you add a configurable parameter, add a matching field to the model_type's array in `registry.ts` or it won't be editable in the app. The registry was generated by dumping each class's effective (inheritance-resolved) interface from `explain/ModelIndex.js`.
+Each `InterfaceField` describes one editable field: `target` (prop name, or method name for `function`), `type` (`number`/`boolean`/`string`/`list`/`multiple-list`/`factor`/`function`/`prop-list`/`reference`), `caption`, `edit_mode` (`basic`/`extra`/`factors`/`advanced`), `build_prop`, `readonly`; numbers add `factor` (display = raw×factor), `delta`, `rounding`, `ll`/`ul`, `slider`; lists add `options`/`choices`/`custom_options`; functions add `args`. When you add a configurable parameter, add a matching field to the model_type's array in `registry.ts` or it won't be editable in the app. The registry was generated by dumping each class's effective (inheritance-resolved) interface from `explain-engine/ModelIndex.js`.
 
 ## Composite models
 
@@ -104,9 +104,9 @@ Some component models build sub-models inside `init_model` via the `this.compone
 
 ## Docs
 
-All prose documentation now lives under the top-level [`docs/`](docs/README.md), split into two clearly separated sets: [`docs/engine/`](docs/engine/README.md) (the physics engine) and [`docs/ui/`](docs/ui/README.md) (the Vue app). The engine *code* still lives under `explain/`.
+All prose documentation now lives under the top-level [`docs/`](docs/README.md), split into two clearly separated sets: [`docs/engine/`](docs/engine/README.md) (the physics engine) and [`docs/ui/`](docs/ui/README.md) (the Vue app). The engine *code* still lives under `explain-engine/`.
 
-[`docs/engine/*.md`](docs/engine/README.md) contains the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
+[`docs/engine/*.md`](docs/engine/README.md) contains the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain-engine/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
 
 ## UI documentation
 
@@ -117,10 +117,13 @@ The **Vue UI layer** (everything under `src/`) is documented in [`docs/ui/`](doc
 
 ## 2. Engine onboarding
 
-### FILE: explain/README.md
+### FILE: explain-engine/README.md
 
 ````markdown
 # Explain Model (`src/explain`)
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21389097.svg)](https://doi.org/10.5281/zenodo.21389097)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 This folder contains the in-browser physiological simulation engine used by the web app.
 The model runs in a dedicated Web Worker (`ModelEngine.js`) and is controlled from the main thread through the `Model` wrapper (`Model.js`).
@@ -305,6 +308,15 @@ A few things that bite newcomers: payloads crossing the worker boundary are JSON
 ### 6. Cleanup
 
 - When done (component unmount, hot reload), call `explain.dispose()` to terminate the worker and drop listeners.
+
+## Citation
+
+If you use this software, please cite it via its archived release. The DOI below is the
+**concept (all-versions) DOI** and always resolves to the latest release:
+
+> Antonius, T. *Explain: a whole-body physiological simulation engine* (v0.1.0). Zenodo. https://doi.org/10.5281/zenodo.21389097
+
+Machine-readable metadata lives in [`CITATION.cff`](./CITATION.cff); GitHub's "Cite this repository" button reads it directly. To cite a specific version, use that release's version-specific DOI from the [Zenodo record](https://doi.org/10.5281/zenodo.21389097) instead of the concept DOI.
 
 
 ````
@@ -5515,7 +5527,7 @@ From `term_neonate.json`:
 
 A scenario file is a single JSON document that describes one complete patient/experiment: the engine settings, every model instance with its parameters and current state, plus the UI metadata (diagram, animation, saved tabs/presets). They live in `public/model_definitions/*.json` and are served statically. `Model.load(name)` fetches `/model_definitions/<name>.json`, unwraps it, and hands the result to `build()`. The set of available scenarios is `public/model_definitions/index.json` — a flat JSON array of filename **stems** (no `.json`), each of which is a valid argument to `Model.load(name)`.
 
-> The canonical, served copies are under `public/model_definitions/`. `explain/model_definitions/` and `explain/states/` hold separate dev copies; edit the served set unless you know you want the dev mirror.
+> The canonical, served copies are under `public/model_definitions/`. `explain/model_definitions/` holds a separate dev copy; edit the served set unless you know you want the dev mirror.
 
 ## Top-level keys
 
@@ -9660,7 +9672,7 @@ All PMIDs were retrieved and confirmed via PubMed metadata; Rashkind 1966 [#17] 
 
 ## 4. Engine source
 
-### FILE: explain/Model.js
+### FILE: explain-engine/Model.js
 
 ```javascript
 import ModelEmitter from "./ModelEmitter";
@@ -10270,7 +10282,7 @@ export default class Model extends ModelEmitter {
 
 ```
 
-### FILE: explain/ModelEmitter.js
+### FILE: explain-engine/ModelEmitter.js
 
 ```javascript
 /**
@@ -10310,7 +10322,7 @@ export default class ModelEmitter {
 
 ```
 
-### FILE: explain/ModelEngine.js
+### FILE: explain-engine/ModelEngine.js
 
 ```javascript
 // This is a dedicated web worker instance for the physiological model engine
@@ -11325,7 +11337,7 @@ const _send_error = function (message, err) {
 
 ```
 
-### FILE: explain/ModelIndex.js
+### FILE: explain-engine/ModelIndex.js
 
 ```javascript
 // import the base models
@@ -11384,7 +11396,7 @@ export { Resuscitation } from "./device_models/Resuscitation";
 export { Ventilator } from "./device_models/Ventilator";
 ```
 
-### FILE: explain/base_models/BaseModelClass.js
+### FILE: explain-engine/base_models/BaseModelClass.js
 
 ```javascript
 import * as Models from "../ModelIndex.js"
@@ -11449,7 +11461,7 @@ export class BaseModelClass {
 
 ```
 
-### FILE: explain/base_models/BloodDiffusor.js
+### FILE: explain-engine/base_models/BloodDiffusor.js
 
 ```javascript
 import { BaseModelClass } from "./BaseModelClass";
@@ -11561,7 +11573,7 @@ export class BloodDiffusor extends BaseModelClass {
 
 ```
 
-### FILE: explain/base_models/Capacitance.js
+### FILE: explain-engine/base_models/Capacitance.js
 
 ```javascript
 import { BaseModelClass } from "./BaseModelClass";
@@ -11691,7 +11703,7 @@ export class Capacitance extends BaseModelClass {
 
 ```
 
-### FILE: explain/base_models/Container.js
+### FILE: explain-engine/base_models/Container.js
 
 ```javascript
 import { BaseModelClass } from "./BaseModelClass";
@@ -11815,7 +11827,7 @@ export class Container extends BaseModelClass {
 
 ```
 
-### FILE: explain/base_models/GasDiffusor.js
+### FILE: explain-engine/base_models/GasDiffusor.js
 
 ```javascript
 import { BaseModelClass } from "./BaseModelClass";
@@ -11942,7 +11954,7 @@ export class GasDiffusor extends BaseModelClass {
 
 ```
 
-### FILE: explain/base_models/GasExchanger.js
+### FILE: explain-engine/base_models/GasExchanger.js
 
 ```javascript
 import { BaseModelClass } from "./BaseModelClass";
@@ -12058,7 +12070,7 @@ export class GasExchanger extends BaseModelClass {
 
 ```
 
-### FILE: explain/base_models/Resistor.js
+### FILE: explain-engine/base_models/Resistor.js
 
 ```javascript
 import { BaseModelClass } from "./BaseModelClass";
@@ -12215,7 +12227,7 @@ export class Resistor extends BaseModelClass {
 
 ```
 
-### FILE: explain/base_models/TimeVaryingElastance.js
+### FILE: explain-engine/base_models/TimeVaryingElastance.js
 
 ```javascript
 import { BaseModelClass } from "./BaseModelClass";
@@ -12362,7 +12374,7 @@ export class TimeVaryingElastance extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Ans.js
+### FILE: explain-engine/component_models/Ans.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -12416,7 +12428,7 @@ export class Ans extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/AnsAfferent.js
+### FILE: explain-engine/component_models/AnsAfferent.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -12512,7 +12524,7 @@ export class AnsAfferent extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/AnsEfferent.js
+### FILE: explain-engine/component_models/AnsEfferent.js
 
 ```javascript
 
@@ -12604,7 +12616,7 @@ export class AnsEfferent extends BaseModelClass {
 }
 ```
 
-### FILE: explain/component_models/Blood.js
+### FILE: explain-engine/component_models/Blood.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -12801,7 +12813,7 @@ export class Blood extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/BloodCapacitance.js
+### FILE: explain-engine/component_models/BloodCapacitance.js
 
 ```javascript
 import { Capacitance } from "../base_models/Capacitance";
@@ -12878,7 +12890,7 @@ export class BloodCapacitance extends Capacitance {
 
 ```
 
-### FILE: explain/component_models/BloodComposition.js
+### FILE: explain-engine/component_models/BloodComposition.js
 
 ```javascript
 
@@ -13219,7 +13231,7 @@ function _brent_root_finding(f, x0, x1, max_iter, tolerance) {
 
 ```
 
-### FILE: explain/component_models/BloodPump.js
+### FILE: explain-engine/component_models/BloodPump.js
 
 ```javascript
 import { BloodCapacitance } from "./BloodCapacitance";
@@ -13284,7 +13296,7 @@ export class BloodPump extends BloodCapacitance {
 
 ```
 
-### FILE: explain/component_models/BloodTimeVaryingElastance.js
+### FILE: explain-engine/component_models/BloodTimeVaryingElastance.js
 
 ```javascript
 import { TimeVaryingElastance } from "../base_models/TimeVaryingElastance";
@@ -13361,7 +13373,7 @@ export class BloodTimeVaryingElastance extends TimeVaryingElastance {
 
 ```
 
-### FILE: explain/component_models/BloodVessel.js
+### FILE: explain-engine/component_models/BloodVessel.js
 
 ```javascript
 import { BloodCapacitance } from "./BloodCapacitance";
@@ -13600,7 +13612,7 @@ export class BloodVessel extends BloodCapacitance {
 
 ```
 
-### FILE: explain/component_models/Brain.js
+### FILE: explain-engine/component_models/Brain.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -13858,7 +13870,7 @@ export class Brain extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Breathing.js
+### FILE: explain-engine/component_models/Breathing.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -14067,7 +14079,7 @@ export class Breathing extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Circulation.js
+### FILE: explain-engine/component_models/Circulation.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -14344,7 +14356,7 @@ export class Circulation extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Drugs.js
+### FILE: explain-engine/component_models/Drugs.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -14708,7 +14720,7 @@ export class Drugs extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Fluids.js
+### FILE: explain-engine/component_models/Fluids.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -14792,7 +14804,7 @@ export class Fluids extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Gas.js
+### FILE: explain-engine/component_models/Gas.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -14931,7 +14943,7 @@ export class Gas extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/GasCapacitance.js
+### FILE: explain-engine/component_models/GasCapacitance.js
 
 ```javascript
 import { Capacitance } from "../base_models/Capacitance";
@@ -15098,7 +15110,7 @@ export class GasCapacitance extends Capacitance {
 
 ```
 
-### FILE: explain/component_models/GasComposition.js
+### FILE: explain-engine/component_models/GasComposition.js
 
 ```javascript
 export function calc_gas_composition(
@@ -15164,7 +15176,7 @@ export function calc_gas_composition(
 }
 ```
 
-### FILE: explain/component_models/Glucose.js
+### FILE: explain-engine/component_models/Glucose.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -15371,7 +15383,7 @@ export class Glucose extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Heart.js
+### FILE: explain-engine/component_models/Heart.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -16091,7 +16103,7 @@ export class Heart extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/HeartChamber.js
+### FILE: explain-engine/component_models/HeartChamber.js
 
 ```javascript
 import { TimeVaryingElastance } from "../base_models/TimeVaryingElastance";
@@ -16234,7 +16246,7 @@ export class HeartChamber extends TimeVaryingElastance {
 
 ```
 
-### FILE: explain/component_models/HeartFunction.js
+### FILE: explain-engine/component_models/HeartFunction.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -16514,7 +16526,7 @@ export class HeartFunction extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/HeartValve.js
+### FILE: explain-engine/component_models/HeartValve.js
 
 ```javascript
 import { Resistor } from "../base_models/Resistor";
@@ -16525,7 +16537,7 @@ export class HeartValve extends Resistor {
 }
 ```
 
-### FILE: explain/component_models/Hormones.js
+### FILE: explain-engine/component_models/Hormones.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -16821,7 +16833,7 @@ export class Hormones extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Kidneys.js
+### FILE: explain-engine/component_models/Kidneys.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass.js";
@@ -17232,7 +17244,7 @@ export class Kidneys extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Lactate.js
+### FILE: explain-engine/component_models/Lactate.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -17400,7 +17412,7 @@ export class Lactate extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/MaternalPlacenta.js
+### FILE: explain-engine/component_models/MaternalPlacenta.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass.js";
@@ -17600,7 +17612,7 @@ export class MaternalPlacenta extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Metabolism.js
+### FILE: explain-engine/component_models/Metabolism.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -17691,7 +17703,7 @@ export class Metabolism extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Mob.js
+### FILE: explain-engine/component_models/Mob.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -17923,7 +17935,7 @@ export class Mob extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Pda.js
+### FILE: explain-engine/component_models/Pda.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -18195,7 +18207,7 @@ export class Pda extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Placenta.js
+### FILE: explain-engine/component_models/Placenta.js
 
 ```javascript
 
@@ -18349,7 +18361,7 @@ export class Placenta extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Respiration.js
+### FILE: explain-engine/component_models/Respiration.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -18521,7 +18533,7 @@ export class Respiration extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Shunts.js
+### FILE: explain-engine/component_models/Shunts.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -18689,7 +18701,7 @@ export class Shunts extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Surfactant.js
+### FILE: explain-engine/component_models/Surfactant.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -18925,7 +18937,7 @@ export class Surfactant extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Thermoregulation.js
+### FILE: explain-engine/component_models/Thermoregulation.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -19151,7 +19163,7 @@ export class Thermoregulation extends BaseModelClass {
 
 ```
 
-### FILE: explain/component_models/Uterus.js
+### FILE: explain-engine/component_models/Uterus.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass.js";
@@ -19465,7 +19477,7 @@ export class Uterus extends BaseModelClass {
 
 ```
 
-### FILE: explain/device_models/Ecls.js
+### FILE: explain-engine/device_models/Ecls.js
 
 ```javascript
 
@@ -19836,7 +19848,7 @@ export class Ecls extends BaseModelClass {
 
 ```
 
-### FILE: explain/device_models/Monitor.js
+### FILE: explain-engine/device_models/Monitor.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass.js";
@@ -20138,7 +20150,7 @@ export class Monitor extends BaseModelClass {
 
 ```
 
-### FILE: explain/device_models/Resuscitation.js
+### FILE: explain-engine/device_models/Resuscitation.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass.js";
@@ -20293,7 +20305,7 @@ export class Resuscitation extends BaseModelClass {
 
 ```
 
-### FILE: explain/device_models/Ventilator.js
+### FILE: explain-engine/device_models/Ventilator.js
 
 ```javascript
 import { BaseModelClass } from "../base_models/BaseModelClass";
@@ -20809,7 +20821,7 @@ export class Ventilator extends BaseModelClass {
 
 ```
 
-### FILE: explain/helpers/AnimationPacker.js
+### FILE: explain-engine/helpers/AnimationPacker.js
 
 ```javascript
 // AnimationPacker.js  (worker side)
@@ -20972,7 +20984,7 @@ export default class AnimationPacker {
 
 ```
 
-### FILE: explain/helpers/Calibrator.js
+### FILE: explain-engine/helpers/Calibrator.js
 
 ```javascript
 // Shared closed-loop calibrator for the Explain engine.
@@ -21247,7 +21259,7 @@ export const LIVE_TARGETS = ["map", "co", "hr", "po2", "spo2", "pco2", "be", "ph
 
 ```
 
-### FILE: explain/helpers/ChannelWriter.js
+### FILE: explain-engine/helpers/ChannelWriter.js
 
 ```javascript
 // ChannelWriter.js  (worker side)
@@ -21494,7 +21506,7 @@ export default class ChannelWriter {
 
 ```
 
-### FILE: explain/helpers/DataCollector.js
+### FILE: explain-engine/helpers/DataCollector.js
 
 ```javascript
 export default class Datacollector {
@@ -21842,7 +21854,7 @@ export default class Datacollector {
 
 ```
 
-### FILE: explain/helpers/ModelScaler.js
+### FILE: explain-engine/helpers/ModelScaler.js
 
 ```javascript
 // ModelScaler provides granular factor-based controls for scaling
@@ -22305,7 +22317,7 @@ export default class ModelScaler {
 
 ```
 
-### FILE: explain/helpers/RealTimeMovingAverage.js
+### FILE: explain-engine/helpers/RealTimeMovingAverage.js
 
 ```javascript
 /**
@@ -22365,7 +22377,7 @@ export default class RealTimeMovingAverage {
   }
 ```
 
-### FILE: explain/helpers/RealtimeChannels.js
+### FILE: explain-engine/helpers/RealtimeChannels.js
 
 ```javascript
 // RealtimeChannels.js
@@ -22478,7 +22490,7 @@ export function sharedMemoryAvailable() {
 
 ```
 
-### FILE: explain/helpers/TaskScheduler.js
+### FILE: explain-engine/helpers/TaskScheduler.js
 
 ```javascript
 /**
@@ -22677,7 +22689,7 @@ export default class TaskScheduler {
 
 ```
 
-### FILE: explain/realtime/ChannelReader.js
+### FILE: explain-engine/realtime/ChannelReader.js
 
 ```javascript
 // ChannelReader.js  (main thread)
@@ -22911,7 +22923,7 @@ export default class ChannelReader {
 
 ```
 
-### FILE: explain/realtime/RealtimeBus.js
+### FILE: explain-engine/realtime/RealtimeBus.js
 
 ```javascript
 // RealtimeBus.js  (main thread)
@@ -23053,7 +23065,7 @@ export default class RealtimeBus {
 // arrays (verbatim, inheritance resolved). Keyed by model_type. UI presentation
 // metadata lives here, not in the physics engine. To regenerate after a model
 // gains/changes a tunable parameter, dump each class's effective interface from
-// explain/ModelIndex.js and replace MODEL_INTERFACES below.
+// explain-engine/ModelIndex.js and replace MODEL_INTERFACES below.
 
 import type { InterfaceField } from "./types";
 
@@ -29374,7 +29386,7 @@ export function getInterfaceForType(modelType: string): InterfaceField[] {
 ```typescript
 // UI-owned schema for editing model parameters. This metadata was formerly a
 // `static model_interface` array on each engine model class; it has been
-// relocated here so the physics engine (explain/) stays pure — UI presentation
+// relocated here so the physics engine (explain-engine/) stays pure — UI presentation
 // is not the model's concern. See registry.ts for the per-model_type data.
 
 // One editable field describing a model property (or a callable method for
