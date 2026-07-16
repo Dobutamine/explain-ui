@@ -162,24 +162,23 @@ Integrated on one shared blood-and-gas substrate and parameterized patient-by-pa
 
 *In order of appearance (Vancouver, matching the companion papers). Inline [N] markers are wired
 throughout the body; companion papers are cited as unnumbered [P1]–[P7] tokens (fill with real
-refs/DOIs at assembly; cite [P6] as its bioRxiv preprint). Entries marked **[VERIFY]** — the fetal,
-neonatal-BP and CDH/transposition anchors (5–9, 10, 14) — still await the PubMed confirmation pass;
-the rest carry confirmed PMIDs/DOIs.*
+refs/DOIs at assembly; cite [P6] as its bioRxiv preprint). All journal entries carry PubMed-verified
+PMIDs/DOIs (confirmed 2026-07-16); ref 5 (Rudolph) is a textbook and is cited by edition.*
 
 1. Sá-Couto CD, Andriessen P, van Meurs WL, Ayres-de-Campos D, Sá-Couto PM. A model for educational simulation of hemodynamic transitions at birth. *Pediatr Res.* 2010;67(2):158–165.
 2. Munneke AG, Lumens J, Delhaas T. Cardiovascular fetal-to-neonatal transition: an in silico model. *Pediatr Res.* 2021;91(1):116–128. doi:10.1038/s41390-021-01401-0.
 3. van Willigen BG, Krabben BC, van der Hout-van der Jagt MB, Huberts W, van de Vosse FN. The hemodynamic impact of congenital heart diseases during fetal-to-neonatal transition: an in-silico investigation. *Pediatr Res.* 2026 (advance online). doi:10.1038/s41390-025-04565-1.
 4. May RW, Gentles TL, Bloomfield FH, Maso Talou G, Safaei S, Argus F. Newborn cardiovascular digital twins. *Maternal and Children's Health* (Karger). 2025;1(1):26–36. doi:10.1159/000546724.
-5. Rudolph AM. *Congenital Diseases of the Heart: Clinical–Physiological Considerations.* (fetal circulation reference values). **[VERIFY edition/year]**
-6. Kiserud T, Acharya G. The fetal circulation. *Prenat Diagn.* 2004;24(13):1049–59. **[VERIFY]**
-7. Nuntnarumit P, Yang W, Bada-Ellzey HS. Blood pressure measurements in the newborn. *Clin Perinatol.* 1999;26(4):981–96. **[VERIFY]** (MAP ≈ gestational age in mmHg).
-8. Versmold HT, et al. Aortic blood pressure during the first 12 hours of life in infants 610–4220 g. *Pediatrics.* 1981;67(5):607–13. **[VERIFY]**
-9. Bischoff AR, et al. Ductus arteriosus and PDA-associated hemodynamics in preterm infants (cohort). *Echocardiography.* 2021;38(9):1524–33. **[VERIFY]**
-10. Bhombal S, Patel N. Diagnosis and management of pulmonary hypertension and cardiac dysfunction in CDH. *Semin Fetal Neonatal Med.* 2022. doi:10.1016/j.siny.2022.101383. **[VERIFY]**
+5. Rudolph AM. *Congenital Diseases of the Heart: Clinical–Physiological Considerations.* 3rd ed. Chichester: Wiley-Blackwell; 2009. *(Textbook — fetal-circulation reference values; not in PubMed.)*
+6. Kiserud T, Acharya G. The fetal circulation. *Prenat Diagn.* 2004;24(13):1049–59. PMID 15614842. doi:10.1002/pd.1062.
+7. Nuntnarumit P, Yang W, Bada-Ellzey HS. Blood pressure measurements in the newborn. *Clin Perinatol.* 1999;26(4):981–96. PMID 10572732. *(MAP ≈ gestational age in mmHg.)*
+8. Versmold HT, Kitterman JA, Phibbs RH, Gregory GA, Tooley WH. Aortic blood pressure during the first 12 hours of life in infants with birth weight 610 to 4,220 grams. *Pediatrics.* 1981;67(5):607–13. PMID 7254989.
+9. Bischoff AR, Giesinger RE, Stanford AH, Ashwath R, McNamara PJ. Assessment of superior vena cava flow and cardiac output in different patterns of patent ductus arteriosus shunt. *Echocardiography.* 2021;38(9):1524–33. PMID 34309068. doi:10.1111/echo.15163.
+10. Bhombal S, Patel N. Diagnosis & management of pulmonary hypertension in congenital diaphragmatic hernia. *Semin Fetal Neonatal Med.* 2022;27(4):101383. PMID 35995665. doi:10.1016/j.siny.2022.101383.
 11. Singh Y, Lakshminrusimha S. Pathophysiology and management of persistent pulmonary hypertension of the newborn. *Clin Perinatol.* 2021;48(3):595–618. doi:10.1016/j.clp.2021.05.009. (PMID 34353582)
 12. Sharma V, Berkelhamer S, Lakshminrusimha S. Persistent pulmonary hypertension of the newborn. *Matern Health Neonatol Perinatol.* 2015;1:14. doi:10.1186/s40748-015-0015-4. (PMID 27057331)
 13. Khalil M, … Schranz D. Ductal-dependent congenital heart disease: classification and balanced parallel circulation. *Transl Pediatr.* 2019. PMID 31161078.
-14. Messmore M, DeCampli W, Kassab A. Computational model for predicting optimal clinical intervention in pre-operative neonates with transposition of the great arteries. *Cardiovasc Eng Technol.* 2026. doi:10.1007/s13239-026-00839-9. **[VERIFY citation/PMID at assembly]** (independent neonatal lumped-parameter SA: systemic saturation governed chiefly by systemic vascular resistance and ductal diameter).
+14. Messmore M, DeCampli W, Kassab A. Computational model for predicting optimal clinical intervention in pre-operative neonates with transposition of the great arteries. *Cardiovasc Eng Technol.* 2026. PMID 42115554. doi:10.1007/s13239-026-00839-9. *(Independent neonatal lumped-parameter SA: systemic saturation governed chiefly by systemic vascular resistance and ductal diameter.)*
 
 *Companion papers (series): [P1] Cardiovascular · [P2] Respiratory, gas exchange and metabolism · [P3a] Cerebral haemodynamics and intracranial pressure · [P3b] Homeostatic regulation · [P4] Mechanical support devices · [P6] AI-assisted parameterization method · [P7] duct-/foramen-ovale-dependent congenital heart disease. Full citations/DOIs at assembly.*
 

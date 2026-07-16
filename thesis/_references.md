@@ -245,7 +245,7 @@ temperature and 2,3-DPG. Verified provenance:
 - **Gutenkunst RN, et al.** Universally sloppy parameter sensitivities in systems biology models. *PLoS Comput Biol* 2007;3:e189. — "sloppiness."
 - **Transtrum MK, et al.** Perspective: Sloppiness and emergent theories in physics, biology, and beyond. *J Chem Phys* 2015;143:010901. — "sloppiness" perspective.
 - **Eck VG, et al.** A guide to uncertainty quantification and sensitivity analysis for cardiovascular applications. *Int J Numer Method Biomed Eng* 2016;32:e02755. — SA guide for cardiovascular models.
-- **Messmore M, DeCampli W, Kassab A.** Computational model for predicting optimal clinical intervention in pre-operative neonates with transposition of the great arteries. *Cardiovasc Eng Technol* 2026. doi:10.1007/s13239-026-00839-9. — **neonatal LPM SA precedent**; independently finds SpO₂ most sensitive to SVR and PDA diameter (corroborates the operating-point oxygenation finding). *(Verify final citation/PMID at assembly.)*
+- **Messmore M, DeCampli W, Kassab A.** Computational model for predicting optimal clinical intervention in pre-operative neonates with transposition of the great arteries. *Cardiovasc Eng Technol* 2026. **PMID 42115554. doi:10.1007/s13239-026-00839-9.** — **neonatal LPM SA precedent**; independently finds SpO₂ most sensitive to SVR and PDA diameter (corroborates the operating-point oxygenation finding). *(Verified via PubMed 2026-07-16.)*
 
 ---
 
