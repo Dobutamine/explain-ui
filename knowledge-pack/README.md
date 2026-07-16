@@ -8,7 +8,7 @@ and letting it read them on demand.
 
 | File | What it is | How produced |
 |------|------------|--------------|
-| `explain-knowledge-pack.md` | The corpus: architecture + all `docs/engine/*.md` + engine source + UI/integration source + scenario format. ~200K tokens (full tier). | `node scripts/build_knowledge_pack.mjs` |
+| `explain-knowledge-pack.md` | The corpus: architecture + all `docs/engine/*.md` + engine source + scenario format. Currently built at **lite** tier (~178K tokens, 78 files) so it fits a 200K-context model. | `node scripts/build_knowledge_pack.mjs --tier=lite` |
 | `explain-CLAUDE-section.md` | The `CLAUDE.md` pointer that orients an Agent-SDK bot to the pack (grep it, cite paths, handle the live patient-state block) and to the command files below. | hand-written |
 | `command-protocol.md` | **Bot-facing**: how to emit an action (the fenced `explain-command` JSON format + rules). The webapp parses these out of the reply and offers the user an Apply button. | hand-written |
 | `command-catalog.md` | **Bot-facing**: the exhaustive list of currently-allowed commands with value ranges. Generated from the webapp's allowlist + parameter schema so the bot can't propose something the app rejects. | `node scripts/build_command_catalog.mjs` |
@@ -18,9 +18,17 @@ and letting it read them on demand.
 Rebuild after any engine change:
 
 ```sh
-node scripts/build_knowledge_pack.mjs            # full tier (~200K tokens)
-node scripts/build_knowledge_pack.mjs --tier=lite # ~95K tokens, fits a 200K-context model
+node scripts/build_knowledge_pack.mjs --tier=lite # ~178K tokens, fits a 200K-context model — the checked-in build
+node scripts/build_knowledge_pack.mjs             # full tier (~359K tokens) — needs a 1M-context model
 ```
+
+Lite drops the `component_models/` and `device_models/` source, the `helpers/`
+(`ModelScaler`, `Calibrator`, `TaskScheduler`, `DataCollector`), `realtime/`, and the UI
+`model-interface` registry. The bot keeps the architecture notes, every physiology doc,
+and the core engine classes, so it can still reason about the model — it just can't quote
+those class bodies. The command files it needs to *act* (`command-protocol.md`,
+`command-catalog.md`) are deployed to the workdir separately by `update_bot_host.sh` and
+are unaffected by the tier.
 
 **The pack is a snapshot** — it does not update itself when the engine changes; the
 rebuild + redeploy is the maintenance cost.
