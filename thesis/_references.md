@@ -118,6 +118,17 @@ temperature and 2,3-DPG. Verified provenance:
 - **[not in PubMed — textbook]** The Starling principle itself (Starling EH, *J Physiol.* 1896;
   and standard renal-physiology texts, e.g. Boron & Boulpaep) is pre-MEDLINE/textbook.
 
+**Neonatal GFR reference values (baseline validation, Table 6)** *(verified via PubMed 2026-07-16)*
+- Allegaert K, Macente J, Mekahli D, van den Anker J, Annaert P, Smits A. Progression of the
+  estimated glomerular filtration rate in asphyxiated neonates undergoing therapeutic hypothermia
+  during the first 10 days of life. *Pediatr Nephrol.* 2025;41(1):233–8. **PMID 40968276.
+  doi:10.1007/s00467-025-06957-1.** — pooled healthy-term eGFR: day 1 ≈ 20, day 2 ≈ 26, day 7 ≈ 42
+  mL·min⁻¹·1.73 m⁻²; GFR matures 2–3× over the first week.
+- Gordjani N, Burghard R, Leititis JU, Brandis M. Serum creatinine and creatinine clearance in
+  healthy neonates and prematures during the first 10 days of life. *Eur J Pediatr.*
+  1988;148(2):143–5. **PMID 3234436. doi:10.1007/BF00445923.** — classic term/preterm creatinine-
+  clearance maturation curve.
+
 **Renal autoregulation: myogenic response + tubuloglomerular feedback**
 - Burke M, Pabbidi MR, Farley J, Roman RJ. Molecular mechanisms of renal blood flow
   autoregulation. *Curr Vasc Pharmacol.* 2014;12(6):845–58. **PMID 24066938.
@@ -194,6 +205,15 @@ temperature and 2,3-DPG. Verified provenance:
 - (Neonatal-specific companion) Cortesi V, Raffaeli G, Amelio GS, et al. Hemostasis in neonatal
   ECMO. *Front Pediatr.* 2022;10:988681. **PMID 36090551. doi:10.3389/fped.2022.988681.** —
   blood–circuit interaction in neonatal ECMO.
+
+**Neonatal ECMO target flow (baseline validation, devices Table 2a)** *(verified via PubMed 2026-07-16)*
+- Wild KT, Rintoul N, Kattan J, Gray B. Extracorporeal Life Support Organization (ELSO):
+  Guidelines for Neonatal Respiratory Failure. *ASAIO J.* 2020;66(5):463–70. **PMID 32282347.
+  doi:10.1097/MAT.0000000000001153.** — the ELSO neonatal respiratory guideline (target circuit
+  flow ~100–150 mL·kg⁻¹·min⁻¹).
+- Fletcher K, Chapman R, Keene S. An overview of medical ECMO for neonates. *Semin Perinatol.*
+  2018;42(2):68–79. **PMID 29336834. doi:10.1053/j.semperi.2017.12.002.** — neonatal ECMO
+  patient-management overview.
 
 ---
 

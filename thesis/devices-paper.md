@@ -284,6 +284,8 @@ ventilation the device delivers, not device outputs.
 | 0.7 | 79.7 | 96.3 | 49.9 | 5.0 |
 | 0.9 | 99.7 | 97.9 | 50.3 | 5.0 |
 
+*Reference: the delivered tidal volume (5 mL·kg⁻¹) sits within the neonatal lung-protective target of 4–6 mL·kg⁻¹ (Keszler 2005; Schulzke 2021), and the volume-targeting servo holds it there across the FiO₂ sweep.*
+
 **Table 1b. CO₂ clearance vs ventilator rate** (PRVC, target 5 mL, FiO₂ 0.5, PEEP 5 cmH₂O).
 
 | Rate (min⁻¹) | Minute vol. (mL·min⁻¹) | PaCO₂ (mmHg) |
@@ -325,6 +327,8 @@ device outputs.
 | 2500 | 0.43 | 85.3 | 98.4 | 81 | 100 |
 | 3500 | 0.47 | 95.5 | 98.8 | 83 | 100 |
 | 4500 | 0.47 | 98.3 | 98.9 | 83 | 100 |
+
+*Reference: the plateau circuit flow (≈130 mL·kg⁻¹·min⁻¹) sits within the 100–150 mL·kg⁻¹·min⁻¹ target-flow range for neonatal respiratory ECMO (Wild et al. 2020, ELSO Guidelines for Neonatal Respiratory Failure; Fletcher et al. 2018).*
 
 **Table 2b. CO₂ removal vs sweep-gas flow** (pump 3500 rpm, sweep FiO₂ 1.0).
 
@@ -373,6 +377,14 @@ carbon-dioxide removal (Tables 2a–b). In every case the blood gas is an emerge
 device–patient system rather than a device setting. As with the other companion papers, these are
 demonstrations of mechanistic behaviour across the operating range, not a formal clinical validation
 against device-specific performance data, which is future work.
+
+**Validation strategy (series).** This paper validates the device physiology — mechanical ventilation and
+ECMO gas exchange — in depth, in the directions and magnitudes its account is built on, against the cited
+literature and device values. Consistent with the series' two-altitude design, comprehensive quantitative
+validation of the AI-parameterized cohort as a whole, against published reference ranges and disease
+signatures, is centralized in the integrated flagship [P5], and the identifiability and one-lever-per-target
+basis of the parameterization is validated by the formal sensitivity analysis of [P6]. Validation throughout
+the series is to literature ranges and pattern, not to prospective individual-patient data.
 
 ### 4.3 Reproducibility and model expansion
 

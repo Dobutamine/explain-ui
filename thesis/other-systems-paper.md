@@ -36,9 +36,7 @@ neonate fail to — is a set of slower **homeostatic organ systems** layered on 
 This paper describes the mathematical models of those systems in EXPLAIN.
 
 Five of the six models share a common architecture that distinguishes them from the
-compartment models of Papers 1–2. They own no blood or gas volume of their own; instead each is
-a **process controller** that senses a small number of state variables (an arterial pressure, a
-blood volume, a solute concentration, a temperature), runs its control law on a slow update
+compartment models of Papers 1–2. They own no blood or gas volume of their own; instead each is a **process controller** that senses a small number of state variables (an arterial pressure, a blood volume, a solute concentration, a temperature), runs its control law on a slow update
 interval, and writes its output onto *effector channels* belonging to other models — a
 resistance factor on a named vessel, a reabsorption factor in the kidney, a metabolic-rate
 multiplier, a contractility multiplier on a heart chamber. The sixth, the intravenous-fluid
@@ -50,15 +48,7 @@ regulatory systems be switched on for a given scenario without recalibrating the
 localises each clinical intervention to one physiologically interpretable lever — the property
 the AI-parameterization method (Paper 6) exploits.
 
-The models span the homeostatic organ systems that dominate neonatal intensive care. (Cerebral
-autoregulation and intracranial pressure — the haemodynamic regulator of the brain — are developed
-in the companion paper [P3a]; the systems described here defend the body's internal volumetric,
-chemical and thermal milieu.) The **kidney** converts a
-passive renal vascular bed into an active filter — glomerular filtration driven by the Starling
-balance of hydrostatic and oncotic pressures, followed by per-solute tubular reabsorption — and
-optionally defends its own filtration rate by myogenic and tubuloglomerular-feedback
-autoregulation. The **renin–angiotensin–aldosterone and antidiuretic-hormone** axis is the slow
-neuro-hormonal counterpart to the fast baroreflex of Paper 1, defending volume and osmolality by
+The models span the homeostatic organ systems that dominate neonatal intensive care. (Cerebral autoregulation and intracranial pressure — the haemodynamic regulator of the brain — are developed in the companion paper [P3a]; the systems described here defend the body's internal volumetric, chemical and thermal milieu.) The **kidney** converts a passive renal vascular bed into an active filter — glomerular filtration driven by the Starling balance of hydrostatic and oncotic pressures, followed by per-solute tubular reabsorption — and optionally defends its own filtration rate by myogenic and tubuloglomerular-feedback autoregulation. The **renin–angiotensin–aldosterone and antidiuretic-hormone** axis is the slow neuro-hormonal counterpart to the fast baroreflex of Paper 1, defending volume and osmolality by
 adjusting vascular tone and renal sodium/water handling. **Thermoregulation** matters
 disproportionately in a neonate, which has a high surface-to-mass ratio, cannot shiver, and
 defends its temperature by non-shivering (brown-fat) thermogenesis; core temperature in turn
@@ -69,10 +59,7 @@ that carries blood gases and electrolytes (Paper 2), so a drug injected into a c
 distributes, is cleared by perfused organs, and acts on cardiovascular targets exactly as a real
 agent would.
 
-We describe each model conceptually and mathematically, give the provenance of its parameters,
-and demonstrate its behaviour with engine-driven simulations. As throughout the series, the aim
-is a rigorous, reproducible description of the models, not a formal clinical validation; every
-quantitative result is reproduced from the engine rather than asserted.
+We describe each model conceptually and mathematically, give the provenance of its parameters, and demonstrate its behaviour with engine-driven simulations. As throughout the series, the aim is a rigorous, reproducible description of the models, not a formal clinical validation; every quantitative result is reproduced from the engine rather than asserted.
 
 ---
 
@@ -88,13 +75,7 @@ composable effector layers, closing a control loop around the plant of Papers 1�
 ![Figure 1](Fig1_regulatory_systems.png)
 
 **Figure 1.** The homeostatic-controller layer. Five process controllers (Kidneys, Hormones,
-Thermoregulation, Glucose, Drugs) form closed loops with the shared physiological state — sensing
-a state variable and driving an effector channel — while the intravenous-fluid scheduler (Fluids)
-is a one-way source term. Every controller owns no compartment of its own, is neutral at the
-calibrated baseline, and writes only the persistent factor layer (Eq. S1), so its action composes
-additively with autonomic control (Paper 1) and allometric scaling (Paper 6) rather than
-overwriting them. Accent colours group related systems (renal/endocrine; thermal/metabolic;
-pharmacological). *(Figure to be updated to remove the Brain node, now in the companion paper [P3a].)*
+Thermoregulation, Glucose, Drugs) form closed loops with the shared physiological state — sensing a state variable and driving an effector channel — while the intravenous-fluid scheduler (Fluids) is a one-way source term. Every controller owns no compartment of its own, is neutral at the calibrated baseline, and writes only the persistent factor layer (Eq. S1), so its action composes additively with autonomic control (Paper 1) and allometric scaling (Paper 6) rather than overwriting them. Accent colours group related systems (renal/endocrine; thermal/metabolic; pharmacological). *(Figure to be updated to remove the Brain node, now in the companion paper [P3a].)*
 
 The five controllers (Kidneys, Hormones, Thermoregulation, Glucose, Drugs) and the fluid
 scheduler share the following structure, which we state once and do not repeat per model:
@@ -102,15 +83,12 @@ scheduler share the following structure, which we state once and do not repeat p
 1. **No owned compartment.** The controller resolves references to the compartments and
    resistors it senses and drives lazily, at initialisation, from the engine model map.
 2. **Slow update interval.** Rather than recomputing every integration step Δ*t* (default
-   0.0005 s), each controller accumulates elapsed time and runs its control law once per update
-   interval τ_u (1.0 s for the slow endocrine/thermal/glucose loops; 0.015 s for the fast
+   0.0005 s), each controller accumulates elapsed time and runs its control law once per update interval τ_u (1.0 s for the slow endocrine/thermal/glucose loops; 0.015 s for the fast
    renal-autoregulation loop; every step for Drugs). The elapsed interval *u* is
    passed to the update so the discrete integration is exact regardless of τ_u.
 3. **Owned effector channels, released on disable.** While enabled, the controller writes its
    outputs onto persistent factor layers (`*_factor_ps`) of other models — never their base
-   parameters — so its action composes additively with scenario settings, autonomic control and
-   allometric scaling through the effective-value law of Eq. (S1) (shared Methods S2). When
-   disabled it restores every channel it owns to unity exactly once.
+   parameters — so its action composes additively with scenario settings, autonomic control and allometric scaling through the effective-value law of Eq. (S1) (shared Methods S2). When disabled it restores every channel it owns to unity exactly once.
 4. **Auto-seeded neutrality.** After a short warm-up delay the controller pins its set-point(s)
    to the current calibrated state, so that at baseline its error signal is zero and its
    effectors are unity.
@@ -127,13 +105,11 @@ below; we write lag(*x* → *x*\*; *u*, τ) and clamp(·, *a*, *b*) for them.
 
 Notation and units follow shared Methods S1. Compartment abbreviations used here: **AA**
 ascending aorta (systemic arterial sample); **KID_ART/KID_CAP/KID_VEN** renal artery/capillary
-(glomerulus)/vein; **IVCI** the intra-abdominal caval (central-venous) injection
-site.
+(glomerulus)/vein; **IVCI** the intra-abdominal caval (central-venous) injection site.
 
 #### 2.2.1 Renal glomerular filtration (`Kidneys`)
 
-**Concept.** The renal bed KID_ART → KID_CAP → KID_VEN becomes an active nephron: the glomerular
-capillary filters plasma into Bowman's space at a rate set by the Starling net filtration
+**Concept.** The renal bed KID_ART → KID_CAP → KID_VEN becomes an active nephron: the glomerular capillary filters plasma into Bowman's space at a rate set by the Starling net filtration
 pressure and a filtration coefficient; the tubule then reabsorbs a large, hormonally modulated
 fraction of the filtered water and of each filtered solute by explicit mass balance; the
 un-reabsorbed remainder flows into an owned URINE reservoir. An optional autoregulation loop
@@ -180,8 +156,7 @@ Cl, lactate, Mg, phosphate, unmeasured anions}. Each solute's effective reabsorb
 > **(16)**  fr_s = clamp( (RF_s or FR_w^eff) · φ_s, 0, 0.9999 )
 
 where RF_s is an optional absolute per-solute set-point and φ_s is a hormonal multiplier written
-by the Hormones model — the channel through which aldosterone retains sodium (φ_Na > 1) and wastes
-potassium (φ_K < 1).
+by the Hormones model — the channel through which aldosterone retains sodium (φ_Na > 1) and wastes potassium (φ_K < 1).
 
 **GFR autoregulation (optional).** When enabled, a myogenic limb responds to renal arterial
 pressure and a tubuloglomerular-feedback (TGF) limb responds to distal solute delivery
@@ -196,24 +171,18 @@ resistance factor:
 
 Because the sensed variable is the *upstream* renal arterial pressure, the loop is intrinsically
 negative feedback (sense high → constrict → pressure and delivery fall). This limb is disabled by
-default in the neonatal scenarios (GFR is pressure-passive over the neonatal operating range) and
-enabled where autoregulation is being studied; the shipped scenario-calibration constants for the
-limbs differ from the class defaults quoted here and are tabulated in `docs/engine/Kidneys.md`.
+default in the neonatal scenarios (GFR is pressure-passive over the neonatal operating range) and enabled where autoregulation is being studied; the shipped scenario-calibration constants for the limbs differ from the class defaults quoted here and are tabulated in `docs/engine/Kidneys.md`.
 
-Parameter provenance: the Starling glomerular model and the ~99 %/~1 % filtered-fraction/FE_Na
-partition are textbook renal physiology; the myogenic + TGF two-limb autoregulation follows the
-standard renal-autoregulation literature (Burke et al. 2014).
+Parameter provenance: the Starling glomerular model and the ~99 %/~1 % filtered-fraction/FE_Na partition are textbook renal physiology; the myogenic + TGF two-limb autoregulation follows the standard renal-autoregulation literature (Burke et al. 2014).
 
 #### 2.2.2 Endocrine volume control — RAAS and ADH (`Hormones`)
 
 **Concept.** The slow neuro-hormonal controller of extracellular volume and osmolality, the
 counterpart to the fast baroreflex of Paper 1. It models three hormone activities as
 dimensionless levels (1.0 = resting baseline) — renin/angiotensin II, aldosterone, and
-antidiuretic hormone (ADH/vasopressin) — and writes them onto systemic vascular tone and renal
-sodium/water handling. It runs on a 1 s interval (hormones are slow).
+antidiuretic hormone (ADH/vasopressin) — and writes them onto systemic vascular tone and renal sodium/water handling. It runs on a 1 s interval (hormones are slow).
 
-**Sensing and hormone dynamics.** From renal perfusion pressure *p* (KID_ART), circulating volume
-*V* (Circulation total blood volume), and arterial Na⁺/K⁺ (with osmolality proxy 2·[Na]), the
+**Sensing and hormone dynamics.** From renal perfusion pressure *p* (KID_ART), circulating volume *V* (Circulation total blood volume), and arterial Na⁺/K⁺ (with osmolality proxy 2·[Na]), the
 model forms fractional errors ε_p, ε_V, ε_osm, ε_K against auto-seeded set-points and drives:
 
 > **(20)**  renin = clamp( 1 + *g*_r·ε_p + *g*_rV·ε_V, 0, 8 );   AngII ← lag(AngII → renin; *u*, τ_ang)
@@ -223,8 +192,7 @@ model forms fractional errors ε_p, ε_V, ε_osm, ε_K against auto-seeded set-p
 > **(22)**  adh\* = clamp( 1 + *g*_o·ε_osm + *g*_b·ε_V, 0, 8 );   adh ← lag(adh → adh\*; *u*, τ_adh)
 
 with renin gains *g*_r = *g*_rV = 3.0, angiotensin lag τ_ang = 30 s, aldosterone gains (*g*_a =
-1.0, *g*_aK = 2.0) and a deliberately slow τ_aldo = 1800 s (physiological ~30 min, compressed for
-demonstrations), and ADH gains (osmotic *g*_o = 4.0, baroregulatory *g*_b = 1.0) with τ_adh = 120
+1.0, *g*_aK = 2.0) and a deliberately slow τ_aldo = 1800 s (physiological ~30 min, compressed for demonstrations), and ADH gains (osmotic *g*_o = 4.0, baroregulatory *g*_b = 1.0) with τ_adh = 120
 s.
 
 **Effectors.** Angiotensin II and ADH raise systemic arterial and venous tone; angiotensin II
@@ -235,24 +203,19 @@ renal Na/K reabsorption multipliers and ADH sets the renal water-reabsorption ch
 
 > **(24)**  φ_Na = 1 + *g*_Na(aldo−1),  φ_K = 1 − *g*_K(aldo−1),  *f*_adh = 1 + *g*_w(adh−1)
 
-routed to Kidneys.reabsorption_factors.na/.k and Kidneys.reabs_factor_adh respectively (Na window
-[0.95, 1.02], K [0.2, 1.5], water [0.5, 1.03]). Critically, the model writes the renal *efferent*
+routed to Kidneys.reabsorption_factors.na/.k and Kidneys.reabs_factor_adh respectively (Na window [0.95, 1.02], K [0.2, 1.5], water [0.5, 1.03]). Critically, the model writes the renal *efferent*
 resistance (KID_CAP_KID_VEN) and never the *afferent* — which is owned by the Kidneys
 autoregulation loop (§2.2.1). This afferent/efferent division of labour is what lets the two
 renal controllers compose without collision, and it mirrors the physiology (angiotensin II acts
 preferentially on the efferent arteriole).
 
 Parameter provenance: the RAAS and ADH signalling structure and effector targets are standard
-endocrine physiology; the compressed aldosterone time constant is a documented modelling choice
-(Gilbert 2025; Bie et al. 2004).
+endocrine physiology; the compressed aldosterone time constant is a documented modelling choice (Gilbert 2025; Bie et al. 2004).
 
 #### 2.2.3 Thermoregulation (`Thermoregulation`)
 
 **Concept.** A single well-mixed core-temperature node whose temperature is the running balance
-of metabolic heat production against radiative, convective and evaporative loss. Because a neonate
-cannot shiver, cold defence is by non-shivering (brown-fat) thermogenesis; core temperature feeds
-back onto metabolic rate (a Q10 effect), heart rate, and blood temperature (which enters the
-acid–base/O₂-dissociation solver of Paper 2). It runs on a 1 s interval.
+of metabolic heat production against radiative, convective and evaporative loss. Because a neonate cannot shiver, cold defence is by non-shivering (brown-fat) thermogenesis; core temperature feeds back onto metabolic rate (a Q10 effect), heart rate, and blood temperature (which enters the acid–base/O₂-dissociation solver of Paper 2). It runs on a 1 s interval.
 
 **Heat production.** Metabolic heat is the effective oxygen consumption converted by the caloric
 equivalent of oxygen; brown-fat heat is proportional to the temperature deficit below set-point,
@@ -301,8 +264,7 @@ mechanism is standard neonatal physiology (Lidell 2019; Tews & Wabitsch 2011).
 circuit by the same volume-mixing as electrolytes (Eq. S2). The controller senses arterial
 glucose, drives an insulin and a counter-regulatory hormone level, and sets a hepatic **source**
 (into the central vein IVCI) and a peripheral **sink** distributed over the same metabolic
-consumption sites the Metabolism model uses; it is mass-balanced (production = utilisation) at the
-seeded set-point. It runs on a 1 s interval.
+consumption sites the Metabolism model uses; it is mass-balanced (production = utilisation) at the seeded set-point. It runs on a 1 s interval.
 
 **Controller.** With fractional glucose error ε_g = (*G* − *G*_sp)/*G*_sp,
 
@@ -322,8 +284,7 @@ sensitivity *a*_up = 1.0, and hepatic sensitivities *a*_hI = 0.8 (insulin-suppre
 
 with utilisation and hepatic-production rates *r*_use = *r*_hgp = 0.03 mmol·kg⁻¹·min⁻¹ (≈5.4
 mg·kg⁻¹·min⁻¹, and equal by construction so the model is neutral at rest). Intravenous dextrose is
-not handled here but enters through the Fluids model (§2.2.6) as a glucose-bearing fluid; glucose
-is deliberately excluded from the renal filterable set so there is no glucosuria in this version.
+not handled here but enters through the Fluids model (§2.2.6) as a glucose-bearing fluid; glucose is deliberately excluded from the renal filterable set so there is no glucosuria in this version.
 
 Parameter provenance: the ~5–6 mg·kg⁻¹·min⁻¹ neonatal glucose turnover and the insulin/
 counter-regulation antagonism are standard neonatal metabolic physiology (Bier et al. 1977).
@@ -343,9 +304,7 @@ the injection-site concentration:
 > **(37)**  bolus: *C*_inj += *D*/*V*_inj;   infusion: *C*_inj += (*r*·*m*/60)·Δ*t* / *V*_inj.
 
 **Clearance (sink).** Every compartment loses drug by a diffuse first-order term (metabolism,
-uptake), and named clearing organs additionally apply an intrinsic first-order term; because those
-organs are continuously perfused, this yields flow-scaled whole-body clearance (a well-stirred
-organ model — if organ perfusion falls, the drug lingers):
+uptake), and named clearing organs additionally apply an intrinsic first-order term; because those organs are continuously perfused, this yields flow-scaled whole-body clearance (a well-stirred organ model — if organ perfusion falls, the drug lingers):
 
 > **(38)**  *C* ← max(*C* − *C*·*k*_g·Δ*t*, 0)   (all compartments);   *C* ← max(*C* − *C*·*k*_site·Δ*t*, 0)   (clearing organs)
 
@@ -357,13 +316,7 @@ directly) precedes a sigmoid Emax response summed across enabled drugs onto each
 
 > **(40)**  *f*_X = 1 + Σ_d *E*_{d,X}(*C*_{d,drive}),   X ∈ {HR, contractility, SVR, ductal patency}
 
-routed to Heart.hr_drug_factor, each chamber's el_max_drug_factor, Circulation.svr_factor_drug and
-Pda.diameter_drug_factor. Three agents are provided (Table 1): adrenaline and noradrenaline (with
-diffuse plus renal/hepatic clearance and distinct HR/contractility/SVR Emax profiles) and
-prostaglandin E1 (alprostadil, brisk clearance reflecting ~80 % pulmonary first-pass metabolism;
-acts only on ductal patency, for duct-dependent congenital heart disease — the ductal physiology
-itself is described in Paper 1). Newly added built-in drugs merge under any scenario-baked
-definitions, so they become available in old scenarios without rebaking.
+routed to Heart.hr_drug_factor, each chamber's el_max_drug_factor, Circulation.svr_factor_drug and Pda.diameter_drug_factor. Three agents are provided (Table 1): adrenaline and noradrenaline (with diffuse plus renal/hepatic clearance and distinct HR/contractility/SVR Emax profiles) and prostaglandin E1 (alprostadil, brisk clearance reflecting ~80 % pulmonary first-pass metabolism; acts only on ductal patency, for duct-dependent congenital heart disease — the ductal physiology itself is described in Paper 1). Newly added built-in drugs merge under any scenario-baked definitions, so they become available in old scenarios without rebaking.
 
 **Table 1.** Default drug PK/PD parameters (transcribed from `Drugs.js`). Clearance in s⁻¹; EC₅₀ in
 ng·mL⁻¹; *E*_max as maximal fractional change on its channel; Hill exponent *n*.
@@ -374,87 +327,46 @@ ng·mL⁻¹; *E*_max as maximal fractional change on its channel; Hill exponent 
 | noradrenaline | 0.018 | KID 0.6, LS 1.0, INT 0.4 | 30, 0.1, 1.5 | 30, 0.35, 1.5 | 25, 0.9, 2.0 | — |
 | prostaglandin E1 | 0.08 | — | — | — | — | 0.02, 1.5, 1.0 |
 
-Parameter provenance: the Emax/Hill pharmacodynamic form and the effect-compartment (ke0) concept
-are standard clinical pharmacology; the catecholamine and alprostadil parameter bands are set to
-place clinical dose ranges on the rising limb of the sigmoid (Sheiner et al. 1979; Holford & Sheiner 1981).
+Parameter provenance: the Emax/Hill pharmacodynamic form and the effect-compartment (ke0) concept are standard clinical pharmacology; the catecholamine and alprostadil parameter bands are set to place clinical dose ranges on the rising limb of the sigmoid (Sheiner et al. 1979; Holford & Sheiner 1981).
 
 #### 2.2.6 Intravenous fluid administration (`Fluids`)
 
 **Concept.** A scheduler with no volume of its own. Each queued fluid is delivered as a stream of
-small volume increments (with its solute composition) into a target blood compartment through that
-compartment's volume-in mixing, over a prescribed infusion time. A fluid carries no oxygen or CO₂
-and low viscosity, so a large bolus haemodilutes the compartment's gas content and viscosity — the
-intended effect.
+small volume increments (with its solute composition) into a target blood compartment through that compartment's volume-in mixing, over a prescribed infusion time. A fluid carries no oxygen or CO₂ and low viscosity, so a large bolus haemodilutes the compartment's gas content and viscosity — the intended effect.
 
 **Delivery.** For a volume *V* (L) over infusion time *t*_in with update interval Δ*t*_u (0.015 s),
 the per-step increment is δ = *V*·Δ*t*_u/*t*_in; each update delivers δ into the target site,
-decrements the remaining volume and the timer, and stops when the timer expires. The increment is
-delivered *before* the timer is zeroed, so that even a single-step bolus delivers its full dose:
+decrements the remaining volume and the timer, and stops when the timer expires. The increment is delivered *before* the timer is zeroed, so that even a single-step bolus delivers its full dose:
 
 > **(41)**  site.volume_in(δ, fluid);   *V* −= δ;   *t*_left −= Δ*t*_u.
 
 The scenario supplies the fluid library (e.g. normal saline, Ringer's lactate, packed cells,
-albumin, and the dextrose solutions D5/D10 that couple to the Glucose model, §2.2.4). This is the
-common delivery path for volume resuscitation, maintenance fluids, blood products and the drug/
-dextrose vehicles used elsewhere in the model.
+albumin, and the dextrose solutions D5/D10 that couple to the Glucose model, §2.2.4). This is the common delivery path for volume resuscitation, maintenance fluids, blood products and the drug/ dextrose vehicles used elsewhere in the model.
 
 ### 2.3 Software implementation
 
-As described in shared Methods S5: EXPLAIN is a framework-agnostic JavaScript/TypeScript engine
-running in a Web Worker, with scenarios defined declaratively as JSON. Each model of §2.2 is a
-self-contained module whose `calc_model()` implements the equations above; the models run in
-insertion order each step, gated on being enabled and initialised. The regulatory controllers of
-this paper are ordinary such modules that happen to write onto other models' effector layers
-rather than owning a compartment, and they participate in the same step loop, data collection and
-task scheduling as the plant models. The interactive model is freely available at
-https://explain-modeling.com; the complete, annotated engine source code is publicly available at
-‹repository URL› and archived with a persistent identifier at ‹Zenodo/archive DOI›.
+As described in shared Methods S5: EXPLAIN is a framework-agnostic JavaScript/TypeScript engine running in a Web Worker, with scenarios defined declaratively as JSON. Each model of §2.2 is a self-contained module whose `calc_model()` implements the equations above; the models run in insertion order each step, gated on being enabled and initialised. The regulatory controllers of this paper are ordinary such modules that happen to write onto other models' effector layers rather than owning a compartment, and they participate in the same step loop, data collection and task scheduling as the plant models. The interactive model is freely available at https://explain-modeling.com; the complete, annotated engine source code is publicly available at ‹repository URL› and archived with a persistent identifier at ‹Zenodo/archive DOI›.
 
 ### 2.4 AI-assisted parameterization (pointer)
 
 Patient-specific parameter values in EXPLAIN are not tuned by hand but set by the AI-assisted,
-closed-loop calibration pipeline described in Paper 6 (shared Methods S6): a large language model
-interprets the available clinical targets and emits a validated specification, and a deterministic
-calibrator drives one physiologically interpretable lever per target to within a
+closed-loop calibration pipeline described in Paper 6 (shared Methods S6): a large language model interprets the available clinical targets and emits a validated specification, and a deterministic calibrator drives one physiologically interpretable lever per target to within a
 clinician-meaningful tolerance. The regulatory models of this paper contribute both **levers** and
 **guarded loops** to that pipeline. As levers, their set-points and gains individualise a patient
-(e.g. the renal filtration
-coefficient *K*_f for GFR; the thermoregulatory environment *T*_env for incubator setting). As
-guarded loops, they must be *respected* by the calibrator: because the RAAS/ADH axis defends
-arterial pressure and volume, a naïve pressure lever is opposed by the controller — the same class
-of interaction the baroreflex creates in Paper 1 — so the calibrator drives pressure through a
-resistance lever that composes with, rather than fights, the hormonal effector (see Paper 6 §3.2
-and the shared-methods lever table).
+(e.g. the renal filtration coefficient *K*_f for GFR; the thermoregulatory environment *T*_env for incubator setting). As guarded loops, they must be *respected* by the calibrator: because the RAAS/ADH axis defends arterial pressure and volume, a naïve pressure lever is opposed by the controller — the same class of interaction the baroreflex creates in Paper 1 — so the calibrator drives pressure through a resistance lever that composes with, rather than fights, the hormonal effector (see Paper 6 §3.2 and the shared-methods lever table).
 
 ---
 
 ## 3. Results — illustrative simulations
 
-All simulations use the calibrated `term_neonate` scenario unless noted, run headless through the
-engine's message protocol (shared Methods S7). Each subsection names the probe script that
-produced it. Where a controller interacts with the autonomic baroreflex, the baroreflex was
+All simulations use the calibrated `term_neonate` scenario unless noted, run headless through the engine's message protocol (shared Methods S7). Each subsection names the probe script that produced it. Where a controller interacts with the autonomic baroreflex, the baroreflex was
 disabled (`Ans.is_enabled = false`) to isolate the system under study, as noted.
 
 ### 3.1 Renal filtration and neuro-hormonal volume control
 
-`scripts/probe_renal.mjs` (Kidneys and Hormones together). At the calibrated baseline the kidney
-filters at a glomerular filtration rate of 4.46 mL·min⁻¹ with a urine output of 0.089 mL·min⁻¹ and a
-sodium fractional excretion of ~1 %, and the hormone levels sit near their resting values (Table 2;
-aldosterone 0.98, ADH 1.01 — renin is slightly suppressed at 0.83 because the calibrated renal
-perfusion pressure of 42 mmHg is marginally above the model's 40 mmHg set-point, a minor
-baseline-calibration offset). A 10 % haemorrhage lowers renal perfusion pressure and drives the
-integrated renal–endocrine response: glomerular filtration falls (4.46 → ~3.2 mL·min⁻¹, following
-the drop in Starling net filtration pressure), while the Hormones controller activates — renin and
-angiotensin II roughly double, aldosterone climbs progressively (0.98 → 1.25 over 30 min, its slow
-time constant visible), and ADH rises (1.01 → 1.13). The endocrine output closes onto the tubule:
-the sodium fractional excretion falls steadily from 1.02 % to 0.76 % as aldosterone raises the
-sodium-reabsorption factor — avid sodium retention, the expected defence of extracellular volume. A
-larger (20 %) haemorrhage drives glomerular filtration to zero (prerenal anuria) with the same
-hormonal pattern, confirming the graded behaviour.
+`scripts/probe_renal.mjs` (Kidneys and Hormones together). At the calibrated baseline the kidney filters at a glomerular filtration rate of 4.46 mL·min⁻¹ with a urine output of 0.089 mL·min⁻¹ and a sodium fractional excretion of ~1 %, and the hormone levels sit near their resting values (Table 2; aldosterone 0.98, ADH 1.01 — renin is slightly suppressed at 0.83 because the calibrated renal perfusion pressure of 42 mmHg is marginally above the model's 40 mmHg set-point, a minor baseline-calibration offset). A 10 % haemorrhage lowers renal perfusion pressure and drives the integrated renal–endocrine response: glomerular filtration falls (4.46 → ~3.2 mL·min⁻¹, following the drop in Starling net filtration pressure), while the Hormones controller activates — renin and angiotensin II roughly double, aldosterone climbs progressively (0.98 → 1.25 over 30 min, its slow time constant visible), and ADH rises (1.01 → 1.13). The endocrine output closes onto the tubule: the sodium fractional excretion falls steadily from 1.02 % to 0.76 % as aldosterone raises the sodium-reabsorption factor — avid sodium retention, the expected defence of extracellular volume. A larger (20 %) haemorrhage drives glomerular filtration to zero (prerenal anuria) with the same hormonal pattern, confirming the graded behaviour.
 
-**Table 2.** Renal and endocrine response to a 10 % haemorrhage (`probe_renal.mjs`, term_neonate;
-means/instantaneous at each epoch). GFR and urine in mL·min⁻¹; hormone levels dimensionless (1 =
-resting); FE_Na in %.
+**Table 2.** Renal and endocrine response to a 10 % haemorrhage (`probe_renal.mjs`, term_neonate; means/instantaneous at each epoch). GFR and urine in mL·min⁻¹; hormone levels dimensionless (1 = resting); FE_Na in %.
 
 | Epoch | renal *P* | GFR | urine | FE_Na | renin | AngII | aldosterone | ADH |
 |---|---|---|---|---|---|---|---|---|
@@ -465,16 +377,7 @@ resting); FE_Na in %.
 
 ### 3.2 Thermoregulation
 
-`scripts/probe_thermo.mjs`. At rest the core sits at 37.0 °C with heat production exactly matched
-to loss (9.62 W each, by the auto-seeded loss trim), the heart-rate and metabolic factors at unity,
-and blood temperature equal to core (Table 3, row 1). Dropping the incubator air from 32 to 24 °C
-raises heat loss to ~18 W; the core falls slowly (to 36.6 °C at 10 min), non-shivering
-thermogenesis engages (brown-fat heat rising from 0 to 2.2 W), the Q10 factor falls below unity
-(0.97, reducing metabolic rate as the tissue cools) and heart rate falls (131 → 127 min⁻¹) — the
-cold-stressed neonate. A hot environment (40 °C) reverses every sign: the core climbs above
-set-point (to 37.8 °C at 25 min), the Q10 factor exceeds unity (1.07) and heart rate rises (131 →
-144 min⁻¹). Blood temperature tracks the core throughout (feeding the temperature term of the
-acid–base/O₂-dissociation solver of Paper 2).
+`scripts/probe_thermo.mjs`. At rest the core sits at 37.0 °C with heat production exactly matched to loss (9.62 W each, by the auto-seeded loss trim), the heart-rate and metabolic factors at unity, and blood temperature equal to core (Table 3, row 1). Dropping the incubator air from 32 to 24 °C raises heat loss to ~18 W; the core falls slowly (to 36.6 °C at 10 min), non-shivering thermogenesis engages (brown-fat heat rising from 0 to 2.2 W), the Q10 factor falls below unity (0.97, reducing metabolic rate as the tissue cools) and heart rate falls (131 → 127 min⁻¹) — the cold-stressed neonate. A hot environment (40 °C) reverses every sign: the core climbs above set-point (to 37.8 °C at 25 min), the Q10 factor exceeds unity (1.07) and heart rate rises (131 → 144 min⁻¹). Blood temperature tracks the core throughout (feeding the temperature term of the acid–base/O₂-dissociation solver of Paper 2).
 
 **Table 3.** Thermoregulatory response to a cold then a hot environment (`probe_thermo.mjs`,
 term_neonate; incubator air stepped 32 → 24 °C, re-equilibrated, then → 40 °C).
@@ -491,14 +394,8 @@ term_neonate; incubator air stepped 32 → 24 °C, re-equilibrated, then → 40 
 
 ### 3.3 Glucose homeostasis
 
-`scripts/probe_glucose.mjs`. At rest arterial glucose holds at its seeded set-point (4.04 vs 4.06
-mmol·L⁻¹) with insulin and counter-regulation ≈1 (Table 4). A 2 mL bolus of 10 % dextrose into the
-central vein raises arterial glucose to 7.4 mmol·L⁻¹ at 30 s; insulin rises (peaking at 3.6 as the
-lagged signal integrates) and hepatic production is fully suppressed (factor 0), and by 10 min
-glucose has recovered to set-point (4.05 mmol·L⁻¹). Conversely, suppressing hepatic glucose output
-(*r*_hgp 0.03 → 0.005) produces hypoglycaemia (to 3.5 mmol·L⁻¹) with a compensatory rise in
-counter-regulation (to 1.8) and hepatic-production factor (to 3.3), stabilising glucose above the
-un-defended level without numerical failure.
+`scripts/probe_glucose.mjs`. At rest arterial glucose holds at its seeded set-point (4.04 vs 4.06 mmol·L⁻¹) with insulin and counter-regulation ≈1 (Table 4). A 2 mL bolus of 10 % dextrose into the central vein raises arterial glucose to 7.4 mmol·L⁻¹ at 30 s; insulin rises (peaking at 3.6 as the lagged signal integrates) and hepatic production is fully suppressed (factor 0), and by 10 min
+glucose has recovered to set-point (4.05 mmol·L⁻¹). Conversely, suppressing hepatic glucose output (*r*_hgp 0.03 → 0.005) produces hypoglycaemia (to 3.5 mmol·L⁻¹) with a compensatory rise in counter-regulation (to 1.8) and hepatic-production factor (to 3.3), stabilising glucose above the un-defended level without numerical failure.
 
 **Table 4.** Glucose homeostasis (`probe_glucose.mjs`, term_neonate).
 
@@ -517,17 +414,9 @@ un-defended level without numerical failure.
 mcg bolus of adrenaline into the central vein of the 3.5 kg term neonate distributes to the
 arterial sample within seconds, peaking at ~42 ng·mL⁻¹ at 5 s (Table 5). The heart-rate,
 contractility and systemic-vascular-resistance factors rise together (to 1.45, 1.55 and 1.26 at
-peak), heart rate rises from 131 to 194 min⁻¹, and mean arterial pressure rises from 59 to 73 mmHg
-over the concentration peak. The drug then washes out by first-order clearance (42 → 3.5 ng·mL⁻¹
-by 60 s → 0.66 by 120 s) and every effector returns toward baseline. Throttling the perfusion of
-the clearing organs (an eight-fold rise in their feeding-arteriolar resistance) slows the washout
-(concentration at 120 s rises from 0.66 to 0.85 ng·mL⁻¹), demonstrating the flow-scaled organ
-clearance of Eq. (38). Prostaglandin E1 reproduces the same PK/PD loop on the ductal-patency
-channel: in a duct-dependent lesion, an infusion re-opens a closing duct (patency factor 1 → 2.3,
-ductal flow 0.3 → 2.8 mL·s⁻¹) and its withdrawal closes it again (`probe_pge1.mjs`).
+peak), heart rate rises from 131 to 194 min⁻¹, and mean arterial pressure rises from 59 to 73 mmHg over the concentration peak. The drug then washes out by first-order clearance (42 → 3.5 ng·mL⁻¹ by 60 s → 0.66 by 120 s) and every effector returns toward baseline. Throttling the perfusion of the clearing organs (an eight-fold rise in their feeding-arteriolar resistance) slows the washout (concentration at 120 s rises from 0.66 to 0.85 ng·mL⁻¹), demonstrating the flow-scaled organ clearance of Eq. (38). Prostaglandin E1 reproduces the same PK/PD loop on the ductal-patency channel: in a duct-dependent lesion, an infusion re-opens a closing duct (patency factor 1 → 2.3, ductal flow 0.3 → 2.8 mL·s⁻¹) and its withdrawal closes it again (`probe_pge1.mjs`).
 
-**Table 5.** Adrenaline 5 mcg bolus (`probe_drugs.mjs`, term_neonate, baroreflex off; concentration
-at the arterial sample AA).
+**Table 5.** Adrenaline 5 mcg bolus (`probe_drugs.mjs`, term_neonate, baroreflex off; concentration at the arterial sample AA).
 
 | Time | HR (min⁻¹) | AA conc (ng·mL⁻¹) | HR factor | contractility factor | SVR factor |
 |---|---|---|---|---|---|
@@ -541,6 +430,23 @@ at the arterial sample AA).
 Arterial pressure (systolic/diastolic/mean, mmHg): baseline 72.9/45.7/58.9 → near concentration
 peak 83.5/60.6/72.6.
 
+### 3.5 Baseline homeostatic state against reference ranges
+
+Beyond the perturbation responses above, the resting (neutral) operating point of each controller sits within its published neonatal reference range (Table 6) — the counterpart of the baseline blood-gas table in the respiratory companion [P2]. All values are the calibrated `term_neonate` baseline (3.5 kg) produced by the probes named above; the controllers are auto-neutral at this point (insulin and counter-regulatory tone at 1.0), so these are the states the perturbations of §3.1–3.4 move away from and return to.
+
+**Table 6. Calibrated term-neonate homeostatic baseline versus published neonatal reference ranges.** *(Model values: `probe_renal.mjs`, `probe_thermo.mjs`, `probe_glucose.mjs`.)*
+
+| Quantity | Baseline (model) | Reference (term neonate) |
+|---|---|---|
+| Glomerular filtration rate | 4.46 mL·min⁻¹ (≈ 35 mL·min⁻¹·1.73 m⁻²) | 20 (day 1) → 42 (day 7) mL·min⁻¹·1.73 m⁻² (Allegaert 2025; Gordjani 1988) |
+| Urine output | 1.5 mL·kg⁻¹·h⁻¹ | 1–3 mL·kg⁻¹·h⁻¹ |
+| Fractional sodium excretion | ~1 % | < 1–2.5 % |
+| Core temperature | 37.0 °C | 36.5–37.5 °C |
+| Arterial glucose | 4.0 mmol·L⁻¹ (72 mg·dL⁻¹) | 2.6–5.5 mmol·L⁻¹ |
+| Insulin / counter-regulatory tone | 1.0 (resting) | dimensionless; 1 = rest |
+
+Glomerular filtration matures two- to three-fold over the first postnatal week (Allegaert 2025); the calibrated value (≈ 35 mL·min⁻¹·1.73 m⁻²) therefore corresponds to the mid-to-late first week rather than to the lower day-1 figure, consistent with the term-neonate baseline representing a stabilised rather than a just-born infant.
+
 ---
 
 ## 4. Discussion
@@ -550,10 +456,7 @@ cardiovascular and respiratory plant of Papers 1–2 into an integrated organism
 deliberately minimal — a small number of sensed variables, one control law, a handful of
 effector channels — but together they reproduce the defining regulatory behaviours of neonatal
 intensive care: the Starling determinants of glomerular filtration, the neuro-hormonal defence of
-volume and osmolality, non-shivering cold defence, glucose counter-regulation, and dose-dependent
-drug action with realistic distribution and clearance. Because every controller is neutral at the
-calibrated baseline, they can be composed in any subset onto a patient without disturbing the
-operating point the plant was calibrated to.
+volume and osmolality, non-shivering cold defence, glucose counter-regulation, and dose-dependent drug action with realistic distribution and clearance. Because every controller is neutral at the calibrated baseline, they can be composed in any subset onto a patient without disturbing the operating point the plant was calibrated to.
 
 **Originality.** The contribution is not any single control law — each is a simplification of a
 large physiological-modelling literature — but their *integration* on a shared, advective,
@@ -562,12 +465,7 @@ design choices are worth highlighting. First, effectors are written onto persist
 (Eq. S1), never base parameters, so that a hormonal, an autonomic, an allometric-scaling and an
 AI-calibration adjustment to the same vessel resistance coexist additively rather than
 overwriting one another. Second, the afferent/efferent division of renal control between the
-Kidneys autoregulation loop and the Hormones model lets two independently authored controllers
-act on the same organ without collision, mirroring the physiology. Third, the drug model rides
-the same volume-mixing transport (Eq. S2) that carries blood gases and electrolytes, so
-pharmacokinetics — distribution, perfusion-limited organ clearance, the lingering of a drug when
-its clearing organ is hypoperfused — are emergent from the circulation rather than prescribed by a
-separate compartmental PK model.
+Kidneys autoregulation loop and the Hormones model lets two independently authored controllers act on the same organ without collision, mirroring the physiology. Third, the drug model rides the same volume-mixing transport (Eq. S2) that carries blood gases and electrolytes, so pharmacokinetics — distribution, perfusion-limited organ clearance, the lingering of a drug when its clearing organ is hypoperfused — are emergent from the circulation rather than prescribed by a separate compartmental PK model.
 
 **Validity and limitations.** As stated for the series, these are *illustrative* simulations
 demonstrating that each model behaves qualitatively as intended, not a formal clinical validation
@@ -581,17 +479,12 @@ than predicting that operating point from anatomy. (iv) The renal GFR-autoregula
 disabled by default over the neonatal pressure range and its class-default constants differ from
 the scenario calibration. (v) Parameter provenance, while grounded in classical physiology, is
 reconciled against primary sources: the references are collected and PubMed-verified in
-`_references.md` (confirmed 2026-07-12; see the reference list below), and where an engine constant
-departs from a textbook value (e.g. the compressed aldosterone τ) we have stated the engine value
-rather than silently "correcting" it.
+`_references.md` (confirmed 2026-07-12; see the reference list below), and where an engine constant departs from a textbook value (e.g. the compressed aldosterone τ) we have stated the engine value rather than silently "correcting" it.
 
-**Coupling and future work.** The regulatory models are already cross-coupled — thermoregulation
-drives metabolic rate and the temperature term of the acid–base solver; glucose and drugs ride the
-circulation; the Hormones model drives both systemic tone and renal handling. Natural extensions
-include a multi-segment nephron with loop/distal/collecting
-handling, receptor-level endocrine dynamics, additional drugs (the merge mechanism makes this
-low-cost), and a maternal–fetal coupling of the volume and drug models to the obstetric systems
-of a planned maternal–fetal companion (deferred from the current series).
+**Validation strategy (series).** This paper validates homeostatic regulation — renal, endocrine, thermal, glucose and pharmacological control — in depth, in the directions and magnitudes its account is built on, against the cited literature, with the calibrated baseline sitting within published reference ranges (Table 6). Consistent with the series' two-altitude design, comprehensive quantitative validation of the AI-parameterized cohort as a whole, against published reference ranges and disease signatures, is centralized in the integrated flagship [P5], and the identifiability and one-lever-per-target basis of the parameterization is validated by the formal sensitivity analysis of [P6]. Validation throughout the series is to literature ranges and pattern, not to prospective individual-patient data.
+
+**Coupling and future work.** The regulatory models are already cross-coupled — thermoregulation drives metabolic rate and the temperature term of the acid–base solver; glucose and drugs ride the circulation; the Hormones model drives both systemic tone and renal handling. Natural extensions include a multi-segment nephron with loop/distal/collecting
+handling, receptor-level endocrine dynamics, additional drugs (the merge mechanism makes this low-cost), and a maternal–fetal coupling of the volume and drug models to the obstetric systems of a planned maternal–fetal companion (deferred from the current series).
 
 ---
 
@@ -601,8 +494,7 @@ The renal, endocrine, thermoregulatory, glucose and pharmacological models descr
 here provide the homeostatic closure of the EXPLAIN neonate. Each is a compact, auto-neutral,
 composable controller that senses the shared physiological state and acts through the engine's
 effective-value layers, and each reproduces the expected qualitative physiology under
-perturbation. Together with the plant models of Papers 1–2 and the device models of Paper 4, they
-make the simulator behave as an integrated organism; and as throughout the series, their
+perturbation. Together with the plant models of Papers 1–2 and the device models of Paper 4, they make the simulator behave as an integrated organism; and as throughout the series, their
 patient-specific parameters are set by the AI-assisted calibration pipeline of Paper 6 rather than
 by hand.
 

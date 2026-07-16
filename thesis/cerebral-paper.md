@@ -90,6 +90,8 @@ The dangerous state is the conjunction of raised intracranial pressure and lost 
 | oedema (ICP↑, autoregulation intact) | 58.8 | 3.4 | 55.4 | 115.6 | 0.15 | 4.018 |
 | oedema + lost autoregulation (HIE) | 59.8 | 16.6 | 43.1 | 100.0 | 1.00 | 3.402 |
 
+*Reference (literature): the validated quantity is the contrast, not an absolute value. With autoregulation intact the same hypotensive insult produces only a ~10 % fall in cerebral blood flow versus a ~46 % fall when the circulation is pressure-passive — the direction and relative magnitude reported for the intact versus impaired neonatal cerebral autoregulation of prematurity and IVH (Alderliesten et al. 2012) and of hypoxic–ischaemic encephalopathy (Massaro et al. 2015); absolute cerebral blood flow is model-scaled and reported here as an internal contrast rather than benchmarked against a measured band.*
+
 ### 3.4 Maturity grading
 
 The single maturity gain *g*_ar (Eq. 7) places a patient on a continuum between the two extremes of Table 1: *g*_ar = 1 for the intact term brain, graded downward with prematurity toward *g*_ar = 0 for the fully pressure-passive circulation of the sick extreme-preterm or asphyxiated infant. Because the same term-neonate baseline is scaled to each gestational age with the maturity gain set accordingly, the model expresses the clinically observed loss of autoregulatory reserve with decreasing gestation as a single interpretable lever, individualised by the parameterization pipeline (§2.4).
@@ -103,6 +105,8 @@ Compared with the in-silico neonatal literature, which is largely confined to th
 ### 4.2 Model validity
 
 The model reproduces the defining neonatal cerebral behaviours: an intact autoregulation that defends flow and oxygen delivery against hypotension versus a pressure-passive circulation that does not (the substrate of intraventricular haemorrhage; Alderliesten et al. 2012), the effect of raised intracranial pressure on perfusion pressure and flow through the Monro–Kellie relation (Mokri 2001), and the compounding of oedema with lost autoregulation that characterises hypoxic–ischaemic encephalopathy (Massaro et al. 2015). Validation is to the pattern and direction reported in that literature; the out-of-range values under insult are the intended signatures.
+
+**Validation strategy (series).** This paper validates cerebral autoregulation and intracranial-pressure physiology in depth — the mechanisms, directions and magnitudes its account is built on — against the cited literature. Consistent with the series' two-altitude design, comprehensive quantitative validation of the AI-parameterized cohort as a whole, against published reference ranges and disease signatures, is centralized in the integrated flagship [P5], and the identifiability and one-lever-per-target basis of the parameterization is validated by the formal sensitivity analysis of [P6]. Validation throughout the series is to literature ranges and pattern, not to prospective individual-patient data.
 
 ### 4.3 Limitations
 

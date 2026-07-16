@@ -346,11 +346,13 @@ to within 0.011. Each designated lever is then held to a three-part test — **d
 for its target), **interaction-freeness** (Sᵢ ≈ S_Tᵢ, with the correct sign) and **identifiability**
 (an early, well-conditioned pick in a column-pivoted-QR ordering) — and passes only if it satisfies
 all three. Because the sensitivity structure of a nonlinear closed-loop model is itself a function of
-the operating point, the campaign is run at the term-neonate baseline and at contrasting disease
+the operating point, the campaign is run at the term-neonate baseline — the design validation reported
+here — and, to characterise how that structure shifts with pathophysiology, at contrasting disease
 states (persistent pulmonary hypertension, severe diaphragmatic hernia, transposition, and preterm
-respiratory distress). The full methods, the justification for analysing at the lever altitude rather
-than over the several-hundred class-level parameters, and the complete identifiability results are
-given in the Supplement.
+respiratory distress), whose physiological read-out is reported with the integrated model [P5]. The
+full methods, the justification for analysing at the lever altitude rather than over the
+several-hundred class-level parameters, and the complete identifiability results are given in the
+Supplement.
 
 ---
 
@@ -487,19 +489,13 @@ oxyhaemoglobin dissociation curve. The local Fisher-information matrix is well c
 number ≈ 1.4 × 10³), and its column-pivoted-QR ordering ranks the diffusing-capacity lever **last** —
 the least-identifiable direction — in exact agreement with its near-zero influence.
 
-The oxygenation result sharpens at the disease operating points (Figure 2). Wherever the modelled
-patient is actually hypoxaemic — persistent pulmonary hypertension, severe diaphragmatic hernia,
-transposition, and the preterm cohort — the dominant local influence on SpO₂ shifts from the
-acid–base coupling to **pulmonary vascular resistance and shunt geometry**, not diffusing capacity,
-because the modelled desaturation is shunt- and ventilation/perfusion-mediated rather than
-diffusion-limited. *The correct oxygenation lever therefore depends on the mechanism of hypoxaemia*, so
-a single fixed lever-to-target map cannot be right for oxygenation across phenotypes — a concrete,
-actionable finding taken up in Section 4.4. The same structural conclusion was reached independently
-by a lumped-parameter transposition model whose sensitivity analysis found systemic saturation
-governed chiefly by systemic vascular resistance and ductal diameter (Messmore et al. 2026), which
-strengthens confidence that this is a property of the physiology rather than of EXPLAIN's particular
-implementation. (The full variance-based Sobol′/PRCC quantification at the disease points is deferred;
-the operating-point shifts reported here are from the completed local screens.)
+At the saturated term baseline, then, the O₂-diffusing-capacity lever is inert and the calibrator's
+oxygenation pairing does not hold. How oxygenation is *actually* governed once the modelled patient is
+hypoxaemic — and how the dominant lever shifts with the operating point across the disease library —
+is a property of the integrated model rather than of the calibration method, and is reported in the
+integrated-model paper [P5] (where the same variance-based analysis, extended across the library's
+operating points, shows the oxygenation influence moving to pulmonary vascular resistance and shunt
+geometry). Its consequence for the design of the oxygenation controller is taken up in Section 4.4.
 
 ---
 
@@ -552,13 +548,14 @@ fallback mitigate but do not eliminate.
 
 ### 4.4 Future work
 
-Several extensions follow. The sensitivity analysis of Sections 2.6 and 3.3 already identifies, for
-each target, the most informative lever and the operating regions where the one-lever-per-target
-assumption is weakest, and it yields one concrete, actionable design change: because oxygenation is
-governed by pulmonary vascular resistance and shunt geometry rather than by diffusing capacity
-wherever the patient is hypoxaemic, the SpO₂ controller should be re-based on those resistance/shunt
-levers, or made phenotype-aware, rather than relying on a diffusing-capacity lever that has little
-traction at any operating point tested. Building on that analysis, calibration could be extended from
+Several extensions follow. The sensitivity analysis of Sections 2.6 and 3.3 identifies, for each
+target, the most informative lever at the calibration baseline; extended across operating points it
+shows the one-lever-per-target assumption to be weakest for oxygenation [P5]. Together these yield one
+concrete, actionable design change: because modelled oxygenation is governed by pulmonary vascular
+resistance and shunt geometry rather than by diffusing capacity wherever the patient is hypoxaemic
+[P5], the SpO₂ controller should be re-based on those resistance/shunt levers, or made
+phenotype-aware, rather than relying on a diffusing-capacity lever that has little traction at any
+operating point tested. Building on that analysis, calibration could be extended from
 the present decoupled scheme to a joint multi-target optimization for the strongly coupled
 configurations where cross-effects dominate (for example by estimating the local multi-input Jacobian
 rather than per-lever slopes); the variance-based Sobol′/PRCC quantification could be completed at the
@@ -592,12 +589,9 @@ retuning of running simulations.
 - **Figure 1** (`FigSA_onelever_validation`) — one-lever validation of the calibration design: the
   designated lever's first-order (Sᵢ) and total (S_Tᵢ) Sobol′ indices per target, term neonate with
   weight held fixed, coloured by verdict (clean one-lever / dominant-interacting / design fails).
-- **Figure 2** (`FigSA_operating_point_dominance`) — operating-point-dependent dominance: the locally
-  dominant lever for each target across operating points (term, preterm, PPHN, severe CDH, d-TGA,
-  HLHS), showing the oxygenation-lever shift from acid–base coupling to pulmonary vascular resistance /
-  shunt in the hypoxaemic phenotypes.
 
-Both figures are regenerated from the on-disk sensitivity-analysis results by `scripts/sa/plot_sa.mjs`.
+Figure 1 is regenerated from the on-disk sensitivity-analysis results by `scripts/sa/plot_sa.mjs`
+(which also produces the operating-point-dominance figure carried by the integrated-model paper [P5]).
 The full sensitivity-analysis methods, the population (weight-sampled) decomposition and the complete
 identifiability results are provided as **Supplementary Information** (`P6_supplement_sensitivity-analysis.md`).
 

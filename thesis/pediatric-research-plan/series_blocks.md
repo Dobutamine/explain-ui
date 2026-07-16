@@ -1,6 +1,6 @@
 # Reusable series blocks — Explain @ Pediatric Research
 
-*Two blocks reused across all eight papers (see `PR_ARTICLE_SLATE.md`). Author once here; drop into each paper and edit only the bracketed `‹slots›`. Purpose: keep the differentiation and the AI-parameterization signature consistent and inside the anti-redundancy spine. Created 2026-07-12.*
+*Three blocks reused across the papers (see `PR_ARTICLE_SLATE.md`). Author once here; drop into each paper and edit only the bracketed `‹slots›`. Purpose: keep the differentiation, the AI-parameterization signature, and the validation strategy consistent and inside the anti-redundancy spine. Blocks A/B created 2026-07-12; Block C (validation strategy) added 2026-07-16.*
 
 **Assembly notes that apply to both blocks**
 - *Citations* are written as `(Author, Year)` here; convert to the target paper's **numbered parenthetical** style (PR uses `(1,2)`, numbered in order of appearance) at assembly. The shared reference list is at the bottom.
@@ -50,6 +50,37 @@ Every paper (P1–P8) carries this. Full **box** form is the default; a **short*
 | **P5** Flagship | the full lever set — this paper's showcase *is* the whole table applied across the cohort |
 | **P7** CHD | SpO₂ ← alveolar O₂ diffusion / shunt; mean PAP ← pulmonary vascular resistance; plus per-lesion structural modifiers (duct diameter, septal geometry) |
 | **P8** Review | no slot — the Review describes the pipeline in prose in its own section |
+
+---
+
+## Block C — validation strategy (the two-altitude signpost)
+
+Every subsystem paper (P2, P3a, P3b, P4, P7) carries this **once**, as the closing paragraph of its
+validity section, so that the difference in validation depth between the papers reads as a deliberate
+series design rather than an oversight. It makes explicit what `PR_ARTICLE_SLATE.md` calls "validation at
+two altitudes": each subsystem paper validates its *own* physiology; the whole-cohort quantitative
+literature validation is centralized in the flagship [P5], and the parameterization method is validated in
+[P6]. It is the reciprocal of the down-signpost the flagship already carries ("the depth behind each family
+lives in the companion papers"). P1 (the mature circulation paper) already carries its own quantitative
+literature-comparison tables and does not need the block; the Review (P8) states the strategy in prose.
+
+Fill only the `‹SUBSYSTEM›` slot (same values as Block A); keep each paper's existing "not prospective
+individual-patient data" disclaimer sentence — this block generalizes and situates it, it does not replace it.
+
+### C (≈70 words — closing paragraph of the validity section)
+
+> **Validation strategy (series).** This paper validates ‹SUBSYSTEM› physiology in depth — the mechanisms,
+> directions and magnitudes its account is built on — against the cited literature. Consistent with the
+> series' two-altitude design, comprehensive quantitative validation of the AI-parameterized cohort as a
+> whole, against published reference ranges and disease signatures, is centralized in the integrated
+> flagship [P5], and the identifiability and one-lever-per-target basis of the parameterization is validated
+> by the formal sensitivity analysis of [P6]. Validation throughout the series is to literature ranges and
+> pattern, not to prospective individual-patient data.
+
+**`‹SUBSYSTEM›` fill per paper (as in Block A):** P2 pulmonary gas exchange, blood-gas transport and
+acid–base · P3a cerebral autoregulation and intracranial pressure · P3b homeostatic regulation (renal,
+endocrine, thermal, glucose, pharmacology) · P4 the device physiology (mechanical ventilation and ECMO gas
+exchange) · P7 duct- and foramen-ovale-dependent congenital heart disease.
 
 ---
 
