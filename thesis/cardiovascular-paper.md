@@ -19,13 +19,9 @@ reference list (PubMed, 2026-07-16) is carried in `thesis/P1_references_verified
 *(Structured abstract — Pediatric Research Basic Science format.)*
 
 **Background:** The physiology of critically ill neonates is complex and frequently only
-partially understood, yet diagnostic reasoning, clinical decision-making and communication among
-members of the healthcare team often take place under time pressure. Explanatory models —
-interactive, animated visualizations of human physiology — hold promise to assist clinicians in
-these challenging cognitive tasks.
+partially understood, yet diagnostic reasoning, clinical decision-making and communication among members of the healthcare team often take place under time pressure. Explanatory models — interactive, animated visualizations of human physiology — hold promise to assist clinicians in these challenging cognitive tasks.
 
-**Methods:** We describe the conceptual and mathematical underpinnings of an integrated model of
-neonatal physiology, focusing on the cardiovascular system. The core of the model, called
+**Methods:** We describe the conceptual and mathematical underpinnings of an integrated model of neonatal physiology, focusing on the cardiovascular system. The core of the model, called
 "EXPLAIN", is a pulsatile, lumped-parameter representation of the neonatal heart and vascular
 system that accommodates multiple neonatal-specific features (e.g. foramen ovale and ductus
 arteriosus). The model is instantiated for individual patients not by hand but by an AI-assisted,
@@ -34,10 +30,7 @@ targets and a deterministic calibrator fits the model to within clinician-meanin
 this pipeline generated the patient-specific configurations validated here.
 
 **Results:** The model replicates both normal neonatal hemodynamics and pathological conditions
-such as a patent ductus arteriosus and acute pulmonary hypertension, using published literature as
-target data. Simulation results show close agreement with measured values for hemodynamic
-quantities including cardiac output, blood pressures and ductal Doppler flow patterns across a
-range of shunt magnitudes.
+such as a patent ductus arteriosus and acute pulmonary hypertension, using published literature as target data. Simulation results show close agreement with measured values for hemodynamic quantities including cardiac output, blood pressures and ductal Doppler flow patterns across a range of shunt magnitudes.
 
 **Conclusion:** An EXPLAIN user environment, running the model in real time, is freely available
 online (<https://explain-modeling.com/>), and annotated source code is provided for researchers,
