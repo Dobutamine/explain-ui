@@ -8,7 +8,7 @@
 
 | Recurring issue | Papers affected | Where to fix |
 |---|---|---|
-| **Deposit slots unfilled** — ‹repository URL› / ‹Zenodo DOI› blank (P1 still says "available upon request" ×3) | **all 8** | One sweep after repo goes public + DOI minted |
+| ~~**Deposit slots unfilled**~~ ✅ **filled 2026-07-16** — repo `github.com/Dobutamine/explain-engine` + Zenodo DOI `10.5281/zenodo.21389097` written into all 8 cover letters + P2/P3a/P3b/P4 manuscripts | P1 `.docx` only | inject the filled statement at the P1 Word pass |
 | **Companion refs `[P1]`–`[P7]` are placeholder tokens** (cite P6 as bioRxiv preprint) | all except P8 | Final assembly, after author list + preprint |
 | **Citations are author-name prose; inline `[N]` numbering not wired** | all manuscripts | Final assembly (each ref list is currently a pool) |
 | **Equations are Markdown blockquotes → must be re-keyed as Word OMML** | P1 (lost in docx), P2, P3a, P6 | At Word conversion |
@@ -36,7 +36,7 @@
 **Length:** main **~5478 w (OVER cap by ~480)**; abstract ~197 w (ok).
 **Worst edges:**
 - **Trim ~480 words** — Discussion 4.1/4.2 and the long Fig. 1 legend are the fat.
-- Deposit slots ‹repository URL›/‹Zenodo DOI› blank (§2.3). §2.4 correctly repoints method to P6 + P1 Box 1 — verify lands.
+- Deposit slots §2.3 ✅ filled 2026-07-16 (repo + Zenodo DOI `10.5281/zenodo.21389097`). §2.4 correctly repoints method to P6 + P1 Box 1 — verify lands.
 - Only **Fig. 1** present (≤6 allowed); Tables 1–5 filled. Refs are a pointer to `_references.md` "confirm via PubMed" list.
 **Cross-refs:** P1 (shared Methods, blood substrate), P6 (method), P4 (devices reuse gas-exchange eqs), P3b (placenta `BloodDiffusor`).
 

@@ -2,7 +2,7 @@
 
 *Wave-1 companion to P1. Manuscript: "An integrated model for simulation of neonatal physiology: the respiratory system, gas exchange and metabolism" (Antonius TAJ, van Meurs WL, Westerhof BE, de Boode WP). Article type: **Basic Science Article**. Drafted 2026-07-12 from `thesis/respiratory-paper.md`. Series-wide decisions applied: corresponding author = Antonius; public code deposit; no ECI framing; compact AI-param highlight (full method in P6). `‹slots›` to finalize before sending.*
 
-> **✅ Two P2 manuscript consistency edits DONE 2026-07-12** (in `respiratory-paper.md`): **(1)** §2.3 source-availability updated from "available upon request" to the **public-deposit** statement (‹repository URL›/‹DOI› slots pending the actual deposit). **(2)** §2.4 (and the intro pointer) repointed from "Section 2.4 of the cardiovascular paper" to the **companion parameterization paper [P6]** and P1's **Box 1**. Nothing further needed in the manuscript besides filling the deposit URL/DOI.
+> **✅ Two P2 manuscript consistency edits DONE 2026-07-12** (in `respiratory-paper.md`): **(1)** §2.3 source-availability updated from "available upon request" to the **public-deposit** statement (deposit slots filled 2026-07-16). **(2)** §2.4 (and the intro pointer) repointed from "Section 2.4 of the cardiovascular paper" to the **companion parameterization paper [P6]** and P1's **Box 1**. Nothing further needed in the manuscript ; the deposit URL/DOI are now filled (2026-07-16).
 
 ---
 
@@ -42,7 +42,7 @@ We believe this work fits the translational, mechanism-oriented scope of *Pediat
 
 In the interest of full transparency, this manuscript is the **second paper of a planned series** describing the EXPLAIN model. The cardiovascular subsystem (the companion paper referenced throughout) is being submitted to *Pediatric Research* as the lead paper of the series ‹state "submitted"/"in press"/co-submission and cite once available›; further companion papers on the regulatory organ systems, an AI-assisted patient-parameterization method, an integrated-model validation across a library of virtual patients, and duct-dependent congenital heart disease are in preparation. Each paper addresses a distinct physiological subsystem and carries its own validation; shared methodological machinery is described in full only in the lead paper and cross-referenced thereafter. We are happy to discuss the sequencing of the series with the editorial office. A large language model (Claude, Anthropic) is used as a component of the patient-parameterization *method* (not as an author, and not to generate scientific content or text); this is disclosed in the Methods.
 
-The manuscript is original, has not been published previously, and is not under consideration elsewhere. All authors have approved the submission and meet ICMJE authorship criteria. We have no competing financial interests to declare ‹confirm›. In line with the journal's data-availability policy, the interactive model is freely available at https://explain-modeling.com, and the complete, annotated engine source code is publicly available at ‹public repository URL› and archived with a persistent identifier at ‹Zenodo/archive DOI›; every quantitative result is reproduced by the named probe scripts reported in the manuscript.
+The manuscript is original, has not been published previously, and is not under consideration elsewhere. All authors have approved the submission and meet ICMJE authorship criteria. We have no competing financial interests to declare ‹confirm›. In line with the journal's data-availability policy, the interactive model is freely available at https://explain-modeling.com, and the complete, annotated engine source code is publicly available at https://github.com/Dobutamine/explain-engine and archived with a persistent identifier at https://doi.org/10.5281/zenodo.21389097; every quantitative result is reproduced by the named probe scripts reported in the manuscript.
 
 Thank you for considering our work. We look forward to your response.
 
@@ -58,7 +58,7 @@ on behalf of the co-authors (W.L. van Meurs, B.E. Westerhof, W.P. de Boode)
 
 1. **Corresponding author** — T.A.J. Antonius (series-wide decision). Fill degrees + full postal address/phone/email.
 2. **Two P2 manuscript consistency edits** (see banner): public-deposit availability wording; repoint §2.4 to the P6 companion paper + P1 Box 1.
-3. **Data/Code deposit** — same action as P1: make the engine repo public + mint a persistent DOI, then fill `‹repository URL›` and `‹DOI›`.
+3. **Data/Code deposit** — same action as P1: DONE: engine repo public + persistent Zenodo DOI minted (2026-07-16); filled `https://github.com/Dobutamine/explain-engine` and `https://doi.org/10.5281/zenodo.21389097`.
 4. **Lead-paper status line** — state whether P1 is "submitted," "in press," or co-submitted, and cite it once it has a reference/DOI (P2 leans on it as the companion).
 5. **Competing-interests line** — confirm "none," or state them.
 6. **Optional: suggested/excluded reviewers** — the competitor groups (Delhaas/Munneke, van de Vosse/van Willigen, May/Argus) plus acid–base/respiratory-physiology experts; decide whether to suggest or exclude.

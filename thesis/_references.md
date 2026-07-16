@@ -21,6 +21,18 @@ already-drafted software/AI citations.
 
 ---
 
+## Software / model archive (all papers — data/code-availability citation)
+
+The engine is the citable research artifact behind every paper; cite the **concept
+(all-versions) DOI** so it always resolves to the latest release. *(Zenodo record verified 2026-07-16.)*
+
+- Antonius T. *Explain: a whole-body physiological simulation engine* (Version v0.1.0) [Software].
+  Zenodo; 2026. **doi:10.5281/zenodo.21389097** (concept/all-versions DOI).
+  Source: https://github.com/Dobutamine/explain-engine (MIT). Interactive model:
+  https://explain-modeling.com.
+
+---
+
 ## Acid–base and blood-gas transport (Paper 2 keystone — `BloodComposition.js`)
 
 The solver is a Stewart physicochemical (strong-ion) model closed by electroneutrality,

@@ -71,4 +71,4 @@ with
 
 ## Data & Availability (decided: public code deposit)
 
-Update the manuscript's availability statement to: the interactive model is freely available at https://explain-modeling.com; the complete annotated engine source code is publicly available at ‹repository URL› and archived at ‹Zenodo/archive DOI›. **Action:** make the repo public + mint the DOI, then fill both here and in the cover letter.
+Update the manuscript's availability statement to: the interactive model is freely available at https://explain-modeling.com; the complete annotated engine source code is publicly available at https://github.com/Dobutamine/explain-engine and archived at https://doi.org/10.5281/zenodo.21389097. **Action:** DONE: repo public + DOI minted (2026-07-16); filled here and in the cover letter.

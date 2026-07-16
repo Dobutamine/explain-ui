@@ -248,7 +248,7 @@ the calibration pipeline (parameterization companion paper) reads as its measure
 
 See shared Methods (respiratory paper §S5) for the engine implementation; the interactive model is
 freely available at https://explain-modeling.com and the complete, annotated engine source code is
-publicly available at ‹repository URL› and archived with a persistent identifier at ‹Zenodo/archive DOI›.
+publicly available at https://github.com/Dobutamine/explain-engine and archived with a persistent identifier at https://doi.org/10.5281/zenodo.21389097.
 See the parameterization companion paper [P6] for how device settings and patient parameters are set by
 the AI-assisted calibration pipeline. The devices run in the same insertion-ordered step loop as the patient models, sharing the
 gas and blood compartments so that support and physiology are solved together.

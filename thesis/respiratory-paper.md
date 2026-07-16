@@ -297,7 +297,7 @@ disabled.
 
 ### 2.3 Software implementation and code verification
 
-See shared Methods S5 (reuse verbatim): framework-agnostic JavaScript/TypeScript engine running in a Web Worker, declarative JSON model definitions, real-time step loop, freely available at https://explain-modeling.com; the complete, annotated engine source code is publicly available at ‹repository URL› and archived with a persistent identifier at ‹Zenodo/archive DOI›. The respiratory models run in the same insertion-ordered step loop as the circulation, sharing the blood compartments so that gas exchange, transport, metabolism and acid–base are solved together each step.
+See shared Methods S5 (reuse verbatim): framework-agnostic JavaScript/TypeScript engine running in a Web Worker, declarative JSON model definitions, real-time step loop, freely available at https://explain-modeling.com; the complete, annotated engine source code is publicly available at https://github.com/Dobutamine/explain-engine and archived with a persistent identifier at https://doi.org/10.5281/zenodo.21389097. The respiratory models run in the same insertion-ordered step loop as the circulation, sharing the blood compartments so that gas exchange, transport, metabolism and acid–base are solved together each step.
 
 ### 2.4 AI-assisted patient-specific parameterization (pointer)
 
