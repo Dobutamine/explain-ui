@@ -173,7 +173,7 @@ Because the sensed variable is the *upstream* renal arterial pressure, the loop 
 negative feedback (sense high → constrict → pressure and delivery fall). This limb is disabled by
 default in the neonatal scenarios (GFR is pressure-passive over the neonatal operating range) and enabled where autoregulation is being studied; the shipped scenario-calibration constants for the limbs differ from the class defaults quoted here and are tabulated in `docs/engine/Kidneys.md`.
 
-Parameter provenance: the Starling glomerular model and the ~99 %/~1 % filtered-fraction/FE_Na partition are textbook renal physiology; the myogenic + TGF two-limb autoregulation follows the standard renal-autoregulation literature (Burke et al. 2014).
+Parameter provenance: the Starling glomerular model rests on the micropuncture determinants of glomerular filtration [1], and the ~99 %/~1 % filtered-fraction/FE_Na partition is textbook renal physiology; the myogenic + TGF two-limb autoregulation follows the standard renal-autoregulation literature [2].
 
 #### 2.2.2 Endocrine volume control — RAAS and ADH (`Hormones`)
 
@@ -210,7 +210,7 @@ renal controllers compose without collision, and it mirrors the physiology (angi
 preferentially on the efferent arteriole).
 
 Parameter provenance: the RAAS and ADH signalling structure and effector targets are standard
-endocrine physiology; the compressed aldosterone time constant is a documented modelling choice (Gilbert 2025; Bie et al. 2004).
+endocrine physiology; the compressed aldosterone time constant is a documented modelling choice [3,4].
 
 #### 2.2.3 Thermoregulation (`Thermoregulation`)
 
@@ -254,9 +254,9 @@ and the effectors are a Q10 metabolic factor, a heart-rate factor, and blood tem
 with Q10 = 2.3 and *g*_hr = 0.1 (≈10 % per °C). The core → VO₂ → heat → core limb is positive
 feedback, bounded by the dominant heat-loss term (∝ *T*_c − *T*_env) and the Q10 clamp.
 
-Parameter provenance: the Meeh surface-area law, the caloric equivalent of oxygen, and the Q10
+Parameter provenance: the Meeh surface-area law [5], the caloric equivalent of oxygen, and the Q10
 metabolic coefficient are classical; non-shivering thermogenesis as the neonatal cold-defence
-mechanism is standard neonatal physiology (Lidell 2019; Tews & Wabitsch 2011).
+mechanism is standard neonatal physiology [6,7].
 
 #### 2.2.4 Glucose homeostasis (`Glucose`)
 
@@ -287,7 +287,7 @@ mg·kg⁻¹·min⁻¹, and equal by construction so the model is neutral at rest
 not handled here but enters through the Fluids model (§2.2.6) as a glucose-bearing fluid; glucose is deliberately excluded from the renal filterable set so there is no glucosuria in this version.
 
 Parameter provenance: the ~5–6 mg·kg⁻¹·min⁻¹ neonatal glucose turnover and the insulin/
-counter-regulation antagonism are standard neonatal metabolic physiology (Bier et al. 1977).
+counter-regulation antagonism are standard neonatal metabolic physiology [8].
 
 #### 2.2.5 Pharmacology — PK/PD (`Drugs`)
 
@@ -327,7 +327,7 @@ ng·mL⁻¹; *E*_max as maximal fractional change on its channel; Hill exponent 
 | noradrenaline | 0.018 | KID 0.6, LS 1.0, INT 0.4 | 30, 0.1, 1.5 | 30, 0.35, 1.5 | 25, 0.9, 2.0 | — |
 | prostaglandin E1 | 0.08 | — | — | — | — | 0.02, 1.5, 1.0 |
 
-Parameter provenance: the Emax/Hill pharmacodynamic form and the effect-compartment (ke0) concept are standard clinical pharmacology; the catecholamine and alprostadil parameter bands are set to place clinical dose ranges on the rising limb of the sigmoid (Sheiner et al. 1979; Holford & Sheiner 1981).
+Parameter provenance: the Emax/Hill pharmacodynamic form and the effect-compartment (ke0) concept are standard clinical pharmacology; the catecholamine and alprostadil parameter bands are set to place clinical dose ranges on the rising limb of the sigmoid [9,10].
 
 #### 2.2.6 Intravenous fluid administration (`Fluids`)
 
@@ -345,7 +345,7 @@ albumin, and the dextrose solutions D5/D10 that couple to the Glucose model, §2
 
 ### 2.3 Software implementation
 
-As described in shared Methods S5: EXPLAIN is a framework-agnostic JavaScript/TypeScript engine running in a Web Worker, with scenarios defined declaratively as JSON. Each model of §2.2 is a self-contained module whose `calc_model()` implements the equations above; the models run in insertion order each step, gated on being enabled and initialised. The regulatory controllers of this paper are ordinary such modules that happen to write onto other models' effector layers rather than owning a compartment, and they participate in the same step loop, data collection and task scheduling as the plant models. The interactive model is freely available at https://explain-modeling.com; the complete, annotated engine source code is publicly available at https://github.com/Dobutamine/explain-engine and archived with a persistent identifier at https://doi.org/10.5281/zenodo.21389097.
+As described in shared Methods S5: EXPLAIN is a framework-agnostic JavaScript/TypeScript engine running in a Web Worker, with scenarios defined declaratively as JSON. Each model of §2.2 is a self-contained module whose `calc_model()` implements the equations above; the models run in insertion order each step, gated on being enabled and initialised. The regulatory controllers of this paper are ordinary such modules that happen to write onto other models' effector layers rather than owning a compartment, and they participate in the same step loop, data collection and task scheduling as the plant models. The interactive model is freely available at https://explain-modeling.com; the complete, annotated engine source code is publicly available at https://github.com/Dobutamine/explain-engine and archived with a persistent identifier at https://doi.org/10.5281/zenodo.21389097 [11].
 
 ### 2.4 AI-assisted parameterization (pointer)
 
@@ -438,14 +438,14 @@ Beyond the perturbation responses above, the resting (neutral) operating point o
 
 | Quantity | Baseline (model) | Reference (term neonate) |
 |---|---|---|
-| Glomerular filtration rate | 4.46 mL·min⁻¹ (≈ 35 mL·min⁻¹·1.73 m⁻²) | 20 (day 1) → 42 (day 7) mL·min⁻¹·1.73 m⁻² (Allegaert 2025; Gordjani 1988) |
+| Glomerular filtration rate | 4.46 mL·min⁻¹ (≈ 35 mL·min⁻¹·1.73 m⁻²) | 20 (day 1) → 42 (day 7) mL·min⁻¹·1.73 m⁻² [12,13] |
 | Urine output | 1.5 mL·kg⁻¹·h⁻¹ | 1–3 mL·kg⁻¹·h⁻¹ |
 | Fractional sodium excretion | ~1 % | < 1–2.5 % |
 | Core temperature | 37.0 °C | 36.5–37.5 °C |
 | Arterial glucose | 4.0 mmol·L⁻¹ (72 mg·dL⁻¹) | 2.6–5.5 mmol·L⁻¹ |
 | Insulin / counter-regulatory tone | 1.0 (resting) | dimensionless; 1 = rest |
 
-Glomerular filtration matures two- to three-fold over the first postnatal week (Allegaert 2025); the calibrated value (≈ 35 mL·min⁻¹·1.73 m⁻²) therefore corresponds to the mid-to-late first week rather than to the lower day-1 figure, consistent with the term-neonate baseline representing a stabilised rather than a just-born infant.
+Glomerular filtration matures two- to three-fold over the first postnatal week [12]; the calibrated value (≈ 35 mL·min⁻¹·1.73 m⁻²) therefore corresponds to the mid-to-late first week rather than to the lower day-1 figure, consistent with the term-neonate baseline representing a stabilised rather than a just-born infant.
 
 ---
 
@@ -502,30 +502,23 @@ by hand.
 
 ## References
 
-*(Vancouver, in order of model appearance; renumber to citation order at final assembly. Sources
-PubMed-verified 2026-07-12 (`thesis/_references.md`). Anchors shared with the cardiovascular paper —
-Beneken & DeWit, Suga, van Meurs — are reused verbatim and not repeated here. Pre-MEDLINE/textbook
-items (Meeh 1879 surface-area law; the Q10/van 't Hoff coefficient; the Starling principle) are cited
-as historical/textbook sources, not PubMed entries.)*
+*In order of appearance (Vancouver, matching the companion papers). PMIDs verified against PubMed
+(`thesis/_references.md`, confirmed 2026-07-12) unless marked as a historical/textbook source.
+Companion papers are cited as unnumbered [P1]–[P7] tokens. Anchors shared with the cardiovascular
+paper (Beneken & DeWit, Suga, van Meurs) are reused verbatim there and not repeated here. The
+cerebral haemodynamics / intracranial-pressure references (Alderliesten 2012, Massaro 2015,
+Mokri 2001) live in the companion paper [P3a].*
 
-*(Cerebral haemodynamics and intracranial-pressure references — Alderliesten 2012, Massaro 2015, Mokri 2001 — are in the companion paper [P3a].)*
-
-**Renal function**
-1. Maddox DA, Bennett CM, Deen WM, et al. Determinants of glomerular filtration in experimental glomerulonephritis in the rat. *J Clin Invest.* 1975;55(2):305–18. PMID 1127101. *(Starling determinants of SNGFR.)*
-2. Burke M, Pabbidi MR, Farley J, Roman RJ. Molecular mechanisms of renal blood flow autoregulation. *Curr Vasc Pharmacol.* 2014;12(6):845–58. PMID 24066938. *(myogenic + tubuloglomerular feedback.)*
-
-**Endocrine volume control (RAAS/ADH)**
+1. Maddox DA, Bennett CM, Deen WM, et al. Determinants of glomerular filtration in experimental glomerulonephritis in the rat. *J Clin Invest.* 1975;55(2):305–18. PMID 1127101. *(Micropuncture Starling determinants of single-nephron GFR.)*
+2. Burke M, Pabbidi MR, Farley J, Roman RJ. Molecular mechanisms of renal blood flow autoregulation. *Curr Vasc Pharmacol.* 2014;12(6):845–58. PMID 24066938. *(Myogenic + tubuloglomerular feedback.)*
 3. Gilbert SJ. Sodium and water disorders. *Adv Kidney Dis Health.* 2025;32(1):41–49. PMID 40175029.
 4. Bie P, Wamberg S, Kjolby M. Volume natriuresis vs. pressure natriuresis. *Acta Physiol Scand.* 2004;181(4):495–503. PMID 15283763.
-
-**Thermoregulation & non-shivering thermogenesis**
-5. Lidell ME. Brown adipose tissue in human infants. *Handb Exp Pharmacol.* 2019;251:107–123. PMID 29675580.
-6. Tews D, Wabitsch M. Renaissance of brown adipose tissue. *Horm Res Paediatr.* 2011;75(4):231–9. PMID 21372557.
-7. Meeh K. Oberflächenmessungen des menschlichen Körpers. *Z Biol.* 1879;15:425–458. *(historical; body-surface-area law — not in PubMed.)*
-
-**Glucose homeostasis**
+5. Meeh K. Oberflächenmessungen des menschlichen Körpers. *Z Biol.* 1879;15:425–458. *(Historical; body-surface-area law — not in PubMed.)*
+6. Lidell ME. Brown adipose tissue in human infants. *Handb Exp Pharmacol.* 2019;251:107–123. PMID 29675580.
+7. Tews D, Wabitsch M. Renaissance of brown adipose tissue. *Horm Res Paediatr.* 2011;75(4):231–9. PMID 21372557.
 8. Bier DM, Leake RD, Haymond MW, et al. Measurement of "true" glucose production rates in infancy and childhood with 6,6-dideuteroglucose. *Diabetes.* 1977;26(11):1016–23. PMID 913891.
-
-**Pharmacokinetics/pharmacodynamics**
 9. Sheiner LB, Stanski DR, Vozeh S, Miller RD, Ham J. Simultaneous modeling of pharmacokinetics and pharmacodynamics: application to d-tubocurarine. *Clin Pharmacol Ther.* 1979;25(3):358–71. PMID 761446.
 10. Holford NHG, Sheiner LB. Understanding the dose-effect relationship: clinical application of pharmacokinetic-pharmacodynamic models. *Clin Pharmacokinet.* 1981;6(6):429–53. PMID 7032803.
+11. Antonius T. *Explain: a whole-body physiological simulation engine* (Version v0.1.0) [Software]. Zenodo; 2026. doi:10.5281/zenodo.21389097 (concept/all-versions DOI). Source: https://github.com/Dobutamine/explain-engine (MIT). Interactive model: https://explain-modeling.com.
+12. Allegaert K, Macente J, Mekahli D, van den Anker J, Annaert P, Smits A. Progression of the estimated glomerular filtration rate in asphyxiated neonates undergoing therapeutic hypothermia during the first 10 days of life. *Pediatr Nephrol.* 2025;41(1):233–8. PMID 40968276. doi:10.1007/s00467-025-06957-1.
+13. Gordjani N, Burghard R, Leititis JU, Brandis M. Serum creatinine and creatinine clearance in healthy neonates and prematures during the first 10 days of life. *Eur J Pediatr.* 1988;148(2):143–5. PMID 3234436. doi:10.1007/BF00445923.
