@@ -101,8 +101,10 @@ temperature and 2,3-DPG. Verified provenance:
   the van 't Hoff/Arrhenius principle — no single canonical PubMed paper; cite a standard
   physiology text (e.g. Schmidt-Nielsen K. *Animal Physiology*, 5th ed. 1997) or historical
   van 't Hoff (1884).
-- **[VERIFY — textbook]** Anaerobic lactate production / O₂-debt and Cori-cycle clearance —
-  cite a standard reference for the hypoxia-driven lactate term if the source header names one.
+- **[textbook]** Hall JE, Hall ME. *Guyton and Hall Textbook of Medical Physiology.* 14th ed.
+  Philadelphia: Elsevier; 2021. — anaerobic lactate production under oxygen debt and its
+  Cori-cycle/hepatic–renal clearance (the hypoxia-driven lactate term); standard physiology-text
+  anchor, no single canonical primary paper.
 
 ---
 

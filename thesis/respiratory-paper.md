@@ -252,7 +252,7 @@ where 0.039 mmol·mL⁻¹ is the molar O₂ content at 37 °C and atmospheric pr
 
 > **Eq. 25** &nbsp; *t*O₂ ← (*t*O₂·*V* − *f*_VO₂·ΔO₂)/*V*,  &nbsp; *t*CO₂ ← (*t*CO₂·*V* + RQ·*f*_VO₂·ΔO₂)/*V*
 
-When tissue oxygenation falls below an anaerobic threshold, lactate is produced in proportion to the local oxygen debt. For each tissue an anaerobic fraction is computed relative to a threshold set at a fraction of the site's resting-minimum oxygen content *t*O₂,rest (captured over a 90 s warm-up so the model is neutral even in chronically hypoxaemic scenarios):
+When tissue oxygenation falls below an anaerobic threshold, lactate is produced in proportion to the local oxygen debt [12]. For each tissue an anaerobic fraction is computed relative to a threshold set at a fraction of the site's resting-minimum oxygen content *t*O₂,rest (captured over a 90 s warm-up so the model is neutral even in chronically hypoxaemic scenarios):
 
 > **Eq. 26** &nbsp; Θ = *τ*_frac·*t*O₂,rest,  &nbsp; *a* = clamp((Θ − *t*O₂)/Θ, 0, 1)
 
@@ -270,7 +270,7 @@ Because lactate is a strong anion (Eq. 15), a rise lowers SID and hence pH, HCO�
 
 *Source: `explain/component_models/Surfactant.js`.*
 
-Respiratory distress syndrome is modelled as a dynamic, pressure-driven balance between alveolar recruitment and derecruitment with hysteresis [12], modulated by surfactant maturity *s* ∈ [0,1] (0 = severe RDS, 1 = mature/treated). Surfactant therapy relaxes *s* toward its target with a time constant τ_surf (180 s, the acute recruitment response). The transpulmonary pressure signal is the mean alveolar recoil pressure over both lungs, low-pass-filtered to remove tidal swings:
+Respiratory distress syndrome is modelled as a dynamic, pressure-driven balance between alveolar recruitment and derecruitment with hysteresis [13], modulated by surfactant maturity *s* ∈ [0,1] (0 = severe RDS, 1 = mature/treated). Surfactant therapy relaxes *s* toward its target with a time constant τ_surf (180 s, the acute recruitment response). The transpulmonary pressure signal is the mean alveolar recoil pressure over both lungs, low-pass-filtered to remove tidal swings:
 
 > **Eq. 29** &nbsp; *P̄*_tp ← *P̄*_tp + (Δt/τ_p)·(*P*_tp − *P̄*_tp),  &nbsp; *P*_tp = mean_lungs(*p*_in)
 
@@ -297,7 +297,7 @@ disabled.
 
 ### 2.3 Software implementation and code verification
 
-See shared Methods S5 (reuse verbatim): framework-agnostic JavaScript/TypeScript engine running in a Web Worker, declarative JSON model definitions, real-time step loop, freely available at https://explain-modeling.com; the complete, annotated engine source code is publicly available at https://github.com/Dobutamine/explain-engine and archived with a persistent identifier at https://doi.org/10.5281/zenodo.21389097 [13]. The respiratory models run in the same insertion-ordered step loop as the circulation, sharing the blood compartments so that gas exchange, transport, metabolism and acid–base are solved together each step.
+See shared Methods S5 (reuse verbatim): framework-agnostic JavaScript/TypeScript engine running in a Web Worker, declarative JSON model definitions, real-time step loop, freely available at https://explain-modeling.com; the complete, annotated engine source code is publicly available at https://github.com/Dobutamine/explain-engine and archived with a persistent identifier at https://doi.org/10.5281/zenodo.21389097 [14]. The respiratory models run in the same insertion-ordered step loop as the circulation, sharing the blood compartments so that gas exchange, transport, metabolism and acid–base are solved together each step.
 
 ### 2.4 AI-assisted patient-specific parameterization (pointer)
 
@@ -450,7 +450,7 @@ baseline blood gas by `probe_vitals.mjs`, the oxygenation, ventilation and acid�
 
 ### 4.4 Limitations
 
-The model makes the simplifications characteristic of a real-time lumped-parameter approach. Gas exchange is represented by paired alveolar compartments rather than a continuous distribution of ventilation-to-perfusion ratios, so V/Q mismatch is captured only in aggregate (through intrapulmonary shunt and the two-lung split) and cannot reproduce the full shape of a shunt or dead-space curve [14]. Dead-space and alveolar ventilation are not separately partitioned. Time integration is explicit forward-Euler at a fixed step, chosen for real-time performance; the
+The model makes the simplifications characteristic of a real-time lumped-parameter approach. Gas exchange is represented by paired alveolar compartments rather than a continuous distribution of ventilation-to-perfusion ratios, so V/Q mismatch is captured only in aggregate (through intrapulmonary shunt and the two-lung split) and cannot reproduce the full shape of a shunt or dead-space curve [15]. Dead-space and alveolar ventilation are not separately partitioned. Time integration is explicit forward-Euler at a fixed step, chosen for real-time performance; the
 acid–base and oxygen equilibria are, by contrast, solved to convergence each step by a bounded Brent root-finder, but that solver has a finite operating envelope — at extreme acid loads the pH can fall outside its dynamic search window and the reported value becomes unreliable, as noted for the most severe unmeasured-anion perturbation in Section 3.4; the clinically relevant range lies well within the converging envelope. The Haldane/Bohr coupling between oxygen saturation and carbon-dioxide carriage uses the previous step's saturation to break the circular dependence, which is exact at steady state and introduces only a one-step lag during transients. Metabolism distributes a single whole-body oxygen-consumption figure across tissues by fixed fractional shares rather than deriving each organ's consumption from its own work and perfusion.
 
 ### 4.5 Future work
@@ -483,9 +483,10 @@ assembly. PMIDs verified against PubMed unless marked as a historical primary so
 9. Hill AV. The possible effects of the aggregation of the molecules of haemoglobin on its dissociation curves. *J Physiol.* 1910;40(Suppl):iv–vii. *(Historical primary source; not in PubMed. Hill coefficient n = 2.7.)*
 10. Wahlig TM, Gatto CW, Boros SJ, Mammel MC, Mills MM, Georgieff MK. Metabolic response of preterm infants to variable degrees of respiratory illness. *J Pediatr.* 1994;124(2):283–8. PMID 8301440. doi:10.1016/s0022-3476(94)70321-3.
 11. Schmidt-Nielsen K. *Animal Physiology: Adaptation and Environment.* 5th ed. Cambridge: Cambridge University Press; 1997. *(Textbook anchor for the Q₁₀ temperature coefficient / van 't Hoff principle; no single canonical PubMed paper.)*
-12. Bachofen H, Schürch S, Urbinelli M, Weibel ER. Relations among alveolar surface tension, surface area, volume, and recoil pressure. *J Appl Physiol (1985).* 1987;62(5):1878–87. PMID 3597262. doi:10.1152/jappl.1987.62.5.1878.
-13. Antonius T. *Explain: a whole-body physiological simulation engine* (Version v0.1.0) [Software]. Zenodo; 2026. doi:10.5281/zenodo.21389097 (concept/all-versions DOI). Source: https://github.com/Dobutamine/explain-engine (MIT). Interactive model: https://explain-modeling.com.
-14. Wagner PD, Saltzman HA, West JB. Measurement of continuous distributions of ventilation–perfusion ratios: theory. *J Appl Physiol.* 1974;36(5):588–99. PMID 4826323. doi:10.1152/jappl.1974.36.5.588.
+12. Hall JE, Hall ME. *Guyton and Hall Textbook of Medical Physiology.* 14th ed. Philadelphia: Elsevier; 2021. *(Textbook anchor for anaerobic lactate production under oxygen debt and its Cori-cycle/hepatic–renal clearance; no single canonical primary paper.)*
+13. Bachofen H, Schürch S, Urbinelli M, Weibel ER. Relations among alveolar surface tension, surface area, volume, and recoil pressure. *J Appl Physiol (1985).* 1987;62(5):1878–87. PMID 3597262. doi:10.1152/jappl.1987.62.5.1878.
+14. Antonius T. *Explain: a whole-body physiological simulation engine* (Version v0.1.0) [Software]. Zenodo; 2026. doi:10.5281/zenodo.21389097 (concept/all-versions DOI). Source: https://github.com/Dobutamine/explain-engine (MIT). Interactive model: https://explain-modeling.com.
+15. Wagner PD, Saltzman HA, West JB. Measurement of continuous distributions of ventilation–perfusion ratios: theory. *J Appl Physiol.* 1974;36(5):588–99. PMID 4826323. doi:10.1152/jappl.1974.36.5.588.
 
 *Full working pool and provenance notes: `thesis/_references.md`. The AI-use disclosure and the
 parameterization-method citations are carried by the companion paper [P6]; this paper's §2.4 is a
