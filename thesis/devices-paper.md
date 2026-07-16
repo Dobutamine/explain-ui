@@ -91,7 +91,7 @@ tube (`VENT_ETTUBE`) connecting the circuit to the patient's dead space. Enablin
 intubates the patient; the alveolar gas exchange downstream is unchanged (respiratory paper).
 
 **Endotracheal-tube resistance.** The tube is a resistor whose resistance rises with gas flow and
-falls with bore, following a diameter- and length-dependent law:
+falls with bore, following a diameter- and length-dependent law [1,2]:
 
 > **Eq. 2** &nbsp; *R*_ETT = max( 15,  (*a*·*f* + *b*)·(*L*/*L*_ref) ),  &nbsp; *a* = −2.375·*d* + 11.9375,  *b* = −14.375·*d* + 65.9374
 
@@ -126,7 +126,7 @@ drives the measured expiratory tidal volume to the set target *V*_T\*, within bo
 > **Eq. 7** &nbsp; PIP ← PIP ± 1 cmH₂O per breath,  clamped to [PEEP + 2, PIP_max],  toward *V*_T = *V*_T\*
 
 so PRVC delivers a targeted volume at the lowest sufficient pressure — the volume-targeting behaviour
-of the clinical mode.
+of the clinical mode [3,4].
 
 **Pressure support (PS).** A supported breath is patient-initiated and flow-cycled: once triggered,
 inspiration continues while the endotracheal-tube flow rises, and the ventilator cycles to expiration
@@ -168,7 +168,7 @@ prescribed by the device** but emerge from the alveolar gas exchange of the resp
 
 **Conceptual model.** ECMO is modelled as an extracorporeal blood circuit wired in series between two
 named patient compartments: blood is drained from a drainage site, driven by a pump through a membrane
-oxygenator, and returned to a return site. The model is a coordinator that owns a chain of
+oxygenator, and returned to a return site [5,6]. The model is a coordinator that owns a chain of
 sub-compartments — drainage cannula (a resistor) → inflow tubing → pump → oxygenator → outflow tubing
 → return cannula (a resistor) — together with a parallel sweep-gas limb (a gas source, an inlet valve,
 the oxygenator gas side, and an outlet) coupled to the blood by a membrane gas-exchanger. The
@@ -248,7 +248,7 @@ the calibration pipeline (parameterization companion paper) reads as its measure
 
 See shared Methods (respiratory paper §S5) for the engine implementation; the interactive model is
 freely available at https://explain-modeling.com and the complete, annotated engine source code is
-publicly available at https://github.com/Dobutamine/explain-engine and archived with a persistent identifier at https://doi.org/10.5281/zenodo.21389097.
+publicly available at https://github.com/Dobutamine/explain-engine and archived with a persistent identifier at https://doi.org/10.5281/zenodo.21389097 [7].
 See the parameterization companion paper [P6] for how device settings and patient parameters are set by
 the AI-assisted calibration pipeline. The devices run in the same insertion-ordered step loop as the patient models, sharing the
 gas and blood compartments so that support and physiology are solved together.
@@ -284,7 +284,7 @@ ventilation the device delivers, not device outputs.
 | 0.7 | 79.7 | 96.3 | 49.9 | 5.0 |
 | 0.9 | 99.7 | 97.9 | 50.3 | 5.0 |
 
-*Reference: the delivered tidal volume (5 mL·kg⁻¹) sits within the neonatal lung-protective target of 4–6 mL·kg⁻¹ (Keszler 2005; Schulzke 2021), and the volume-targeting servo holds it there across the FiO₂ sweep.*
+*Reference: the delivered tidal volume (5 mL·kg⁻¹) sits within the neonatal lung-protective target of 4–6 mL·kg⁻¹ [3,4], and the volume-targeting servo holds it there across the FiO₂ sweep.*
 
 **Table 1b. CO₂ clearance vs ventilator rate** (PRVC, target 5 mL, FiO₂ 0.5, PEEP 5 cmH₂O).
 
@@ -328,7 +328,7 @@ device outputs.
 | 3500 | 0.47 | 95.5 | 98.8 | 83 | 100 |
 | 4500 | 0.47 | 98.3 | 98.9 | 83 | 100 |
 
-*Reference: the plateau circuit flow (≈130 mL·kg⁻¹·min⁻¹) sits within the 100–150 mL·kg⁻¹·min⁻¹ target-flow range for neonatal respiratory ECMO (Wild et al. 2020, ELSO Guidelines for Neonatal Respiratory Failure; Fletcher et al. 2018).*
+*Reference: the plateau circuit flow (≈130 mL·kg⁻¹·min⁻¹) sits within the 100–150 mL·kg⁻¹·min⁻¹ target-flow range for neonatal respiratory ECMO (the ELSO neonatal respiratory guideline) [8,9].*
 
 **Table 2b. CO₂ removal vs sweep-gas flow** (pump 3500 rpm, sweep FiO₂ 1.0).
 
@@ -431,10 +431,17 @@ unsupported patient to full mechanical and extracorporeal support.
 
 ## References
 
-See `thesis/_references.md` (device sources verified against PubMed, 2026-07-12; renumber in citation
-order at assembly). Endotracheal-tube resistance for Eq. 2: Jarreau et al. 1999 (PMID 10409556) and
-Spaeth et al. 2015 (PMID 25491944). Ventilator modes (PC/PRVC/PS/CPAP) and volume targeting: Keszler
-2005 (PMID 15861164) and Schulzke & Stoecklin 2021 (PMID 34878697). ECMO circuit/oxygenator: Butt et
-al. 2013 (PMID 23735980) and Cortesi et al. 2022 (PMID 36090551). The ECMO membrane oxygenator reuses
-the respiratory paper's partial-pressure gas-exchange law, so its citations are shared; the series'
-shared software/AI citations apply for the engine and the parameterization pipeline.
+*In order of appearance (Vancouver, matching the companion papers). PMIDs verified against PubMed
+(`thesis/_references.md`, 2026-07-12). Companion papers are cited as unnumbered [P5]/[P6] tokens. The
+ECMO membrane oxygenator (Eq. 13) reuses the respiratory paper's partial-pressure gas-exchange law
+[P2]; that derivation and its citations live there.*
+
+1. Jarreau PH, Louis B, Dassieu G, Desfrere L, Blanchard PW, Moriette G, Isabey D, Harf A. Estimation of inspiratory pressure drop in neonatal and pediatric endotracheal tubes. *J Appl Physiol (1985).* 1999;87(1):36–46. PMID 10409556. doi:10.1152/jappl.1999.87.1.36.
+2. Spaeth J, Steinmann D, Kaltofen H, Guttmann J, Schumann S. The pressure drop across the endotracheal tube in mechanically ventilated pediatric patients. *Paediatr Anaesth.* 2015;25(4):413–20. PMID 25491944. doi:10.1111/pan.12595.
+3. Keszler M. Volume-targeted ventilation. *J Perinatol.* 2005;25 Suppl 2:S19–22. PMID 15861164. doi:10.1038/sj.jp.7211313.
+4. Schulzke SM, Stoecklin B. Update on ventilatory management of extremely preterm infants—a Neonatal Intensive Care Unit perspective. *Paediatr Anaesth.* 2021;32(2):363–371. PMID 34878697. doi:10.1111/pan.14369.
+5. Butt W, Heard M, Peek GJ. Clinical management of the extracorporeal membrane oxygenation circuit. *Pediatr Crit Care Med.* 2013;14(5 Suppl 1):S13–9. PMID 23735980. doi:10.1097/PCC.0b013e318292ddc8.
+6. Cortesi V, Raffaeli G, Amelio GS, et al. Hemostasis in neonatal ECMO. *Front Pediatr.* 2022;10:988681. PMID 36090551. doi:10.3389/fped.2022.988681.
+7. Antonius T. *Explain: a whole-body physiological simulation engine* (Version v0.1.0) [Software]. Zenodo; 2026. doi:10.5281/zenodo.21389097 (concept/all-versions DOI). Source: https://github.com/Dobutamine/explain-engine (MIT). Interactive model: https://explain-modeling.com.
+8. Wild KT, Rintoul N, Kattan J, Gray B. Extracorporeal Life Support Organization (ELSO): Guidelines for Neonatal Respiratory Failure. *ASAIO J.* 2020;66(5):463–70. PMID 32282347. doi:10.1097/MAT.0000000000001153.
+9. Fletcher K, Chapman R, Keene S. An overview of medical ECMO for neonates. *Semin Perinatol.* 2018;42(2):68–79. PMID 29336834. doi:10.1053/j.semperi.2017.12.002.
