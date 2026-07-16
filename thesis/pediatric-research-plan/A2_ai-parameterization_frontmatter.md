@@ -18,15 +18,15 @@
 
 ## Structured abstract (≤200 words)
 
-**Background:** Lumped-parameter models of neonatal physiology are prized because their parameters are interpretable, but they are underdetermined — hundreds of free parameters against a handful of bedside measurements — so fitting one to an individual patient has required slow, irreproducible expert hand-tuning. Existing in-silico neonatal circulation models are therefore typically run with generic, non–patient-specific parameters.
+**Background:** Lumped-parameter neonatal models are prized for interpretable parameters but are underdetermined — many parameters, few bedside measurements — so individual fitting has required slow, irreproducible hand-tuning, and existing in-silico neonatal models are run with generic parameters.
 
-**Methods:** We describe an AI-assisted, closed-loop parameterization pipeline for a real-time whole-body neonatal simulator. A large language model interprets the available clinical description into a validated, allowlisted specification (baseline, target values, pathophysiology). A deterministic calibrator then fits the model by assigning one physiologically interpretable lever to each measured target and driving each to a clinician-meaningful tolerance with a proportional-seed/secant root-finder, after allometric and gestational-age seeding and baroreflex set-point alignment so the model's own control loops defend the fit. The language model performs no numerical fitting.
+**Methods:** An AI-assisted closed-loop pipeline parameterizes a real-time whole-body neonatal simulator by separating two usually-conflated roles. An interpretation layer — a large language model (Claude) — reads the clinical description and emits a validated, allowlisted specification (baseline, targets, pathophysiology), never editing equations or state. A deterministic calibrator then assigns one interpretable lever per target and drives each to a clinician-meaningful tolerance with a proportional-seed/secant root-finder, after allometric and gestational-age seeding and baroreflex set-point alignment so the model's control loops defend the fit. One calibrator serves offline construction and live retuning.
 
-**Results:** For a 28-week, 1.0-kg preterm construction, five targets (heart rate, mean arterial pressure, cardiac output, SpO₂, PCO₂) converged within tolerance in two iterations, with untargeted vitals remaining within preterm reference ranges; the same calibrator retuned a running simulation in place in three iterations. A variance-based sensitivity analysis (Sobol′/PRCC, estimator-validated) validates the one-lever design for the pressure targets and identifies where target coupling or the operating point weakens it.
+**Results:** For a 28-week, 1.0-kg preterm construction, five targets (heart rate, mean arterial pressure, cardiac output, SpO₂, PCO₂) converged within tolerance in two iterations, untargeted vitals staying in preterm ranges; a running simulation retuned in three. A variance-based sensitivity analysis (Sobol′/PRCC, estimator-validated) confirms the one-lever design for the pressure targets and flags where coupling or operating point weakens it.
 
-**Conclusion:** Separating interpretation from fitting, and bounding every automated adjustment, makes patient-specific instantiation of a mechanistic neonatal model rapid, auditable and reproducible.
+**Conclusion:** Separating interpretation from fitting, and bounding every automated adjustment, makes patient-specific instantiation rapid, auditable and reproducible.
 
-*(~215 words with the sensitivity-analysis clause — trim to ≤200 at final assembly, e.g. by shortening Background.)*
+*(~195 words — within PR's ≤200 structured-abstract cap.)*
 
 ---
 

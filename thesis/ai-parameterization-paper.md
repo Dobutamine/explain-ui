@@ -13,38 +13,15 @@ against the implementation: `explain/helpers/Calibrator.js` (the shared closed-l
 
 ## Abstract
 
-*(Draft — tighten to journal word limit.)*
+*(Structured abstract — Pediatric Research Basic Science format. The prior long-form draft is superseded.)*
 
-Lumped-parameter models of physiology expose many free parameters but are constrained by only a
-handful of directly measured clinical quantities, so fitting such a model to an individual patient
-has traditionally required slow, irreproducible expert hand-tuning — a central obstacle to their
-clinical use. We describe the method by which EXPLAIN, a real-time whole-body neonatal physiology
-simulator, is parameterized for an individual patient. The method separates two roles that are
-usually conflated. An interpretation layer — a large language model (Claude, driven through the
-Claude Agent SDK) — reads the available clinical description (free text, monitor values or an
-attached report) and emits a validated, machine-checkable specification of a baseline scenario, a
-set of target values and named pathophysiological modifiers, expressed entirely as commands drawn
-from a fixed allowlist and checked against the same parameter schema, unit conversions and
-physiological bounds as the interactive editor; it never edits equations or state directly. A
-deterministic calibration layer then fits the mechanistic model to those targets by assigning one
-physiologically interpretable lever to each measured quantity and driving that quantity to its
-target with a per-target one-dimensional root-finder — a proportional seed followed by the secant
-method — run together in a relaxation loop that advances the model to steady state, measures each
-quantity as a beat-averaged mean, nudges every lever and repeats until all residuals fall within
-clinician-meaningful tolerances. Body size is handled first by allometric scaling, gestational-age
-seeds place the model near the target before iteration, and the baroreflex set-point is aligned to
-the target mean arterial pressure so the model's own control loops defend rather than oppose the
-calibrated operating point. The same calibrator serves both offline construction of a new,
-fully calibrated patient and live in-place retuning of a running simulation. We show that the
-method converges to within tolerance for representative neonatal and preterm targets, and we discuss
-the conditions under which convergence of strongly coupled targets is and is not guaranteed. A formal,
-variance-based sensitivity analysis confirms that the one-lever design is well-posed for the pressure
-targets, identifies where target coupling or the operating point weakens it, and yields a concrete
-refinement of the oxygenation lever. By
-turning an ill-posed high-dimensional inverse problem into a set of well-posed one-dimensional
-root-finds chosen to respect the model's active regulation, and by delegating only interpretation —
-never numerical adjustment — to the language model, the method makes patient-specific instantiation
-both rapid and reproducible.
+**Background:** Lumped-parameter neonatal models are prized for interpretable parameters but are underdetermined — many parameters, few bedside measurements — so individual fitting has required slow, irreproducible hand-tuning, and existing in-silico neonatal models are run with generic parameters.
+
+**Methods:** An AI-assisted closed-loop pipeline parameterizes a real-time whole-body neonatal simulator by separating two usually-conflated roles. An interpretation layer — a large language model (Claude) — reads the clinical description and emits a validated, allowlisted specification (baseline, targets, pathophysiology), never editing equations or state. A deterministic calibrator then assigns one interpretable lever per target and drives each to a clinician-meaningful tolerance with a proportional-seed/secant root-finder, after allometric and gestational-age seeding and baroreflex set-point alignment so the model's control loops defend the fit. One calibrator serves offline construction and live retuning.
+
+**Results:** For a 28-week, 1.0-kg preterm construction, five targets (heart rate, mean arterial pressure, cardiac output, SpO₂, PCO₂) converged within tolerance in two iterations, untargeted vitals staying in preterm ranges; a running simulation retuned in three. A variance-based sensitivity analysis (Sobol′/PRCC, estimator-validated) confirms the one-lever design for the pressure targets and flags where coupling or operating point weakens it.
+
+**Conclusion:** Separating interpretation from fitting, and bounding every automated adjustment, makes patient-specific instantiation rapid, auditable and reproducible.
 
 ---
 
