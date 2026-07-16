@@ -89,7 +89,7 @@ Formula (see `Capacitance.calc_elastances`, `Resistor.calc_resistance`): `p_eff 
 
 Files in `model_definitions/*.json` are full scenarios. Top level: `name`, `user`, `description`, `diagram_definition`, `animation_definition`, `configuration`, and **`model_definition`** (the part the engine consumes). `Model.load()` fetches `/model_definitions/<name>.json` and unwraps `jsonData.model_definition || jsonData` before `build()`.
 
-Inside `model_definition`: engine-level settings (`weight`, `height`, `gestational_age`, `age`, `modeling_stepsize`, `model_time_total`, `scaler_config`, `_baseline_weight`) plus **`models`** — a map of `name → { name, model_type, …params }`. A typical neonate scenario has ~60 components (one each of the high-level systems: `Heart`, `Breathing`, `Ans`, `Circulation`, `Respiration`, `Blood`, `Gas`, `Metabolism`, `Pda`, `Shunts`, devices `Ventilator`/`Ecls`/`Monitor`/`Resuscitation`, …) wired together by ~40 `Resistor` entries via their `comp_from`/`comp_to` names. Available scenarios are listed in `model_definitions/index.json`. Note: `explain-engine/model_definitions/` holds a separate dev copy; the canonical set is the top-level `model_definitions/`.
+Inside `model_definition`: engine-level settings (`weight`, `height`, `gestational_age`, `age`, `modeling_stepsize`, `model_time_total`, `scaler_config`, `_baseline_weight`) plus **`models`** — a map of `name → { name, model_type, …params }`. A typical neonate scenario has ~60 components (one each of the high-level systems: `Heart`, `Breathing`, `Ans`, `Circulation`, `Respiration`, `Blood`, `Gas`, `Metabolism`, `Pda`, `Shunts`, devices `Ventilator`/`Ecls`/`Monitor`/`Resuscitation`, …) wired together by ~40 `Resistor` entries via their `comp_from`/`comp_to` names. Available scenarios are listed in `index.json` alongside them. **The canonical set is `explain-engine/model_definitions/`** (in the engine submodule) — edit scenarios there. `scripts/sync-scenarios.mjs` copies them into `public/model_definitions/` on every `predev`/`prebuild`, so that directory is generated, gitignored, and **overwritten**: editing a canonical scenario there loses the change on the next `npm run dev`. The sync is additive, so new files written alongside (user/developer snapshots) persist, and `index.json` is rebuilt as the union of both.
 
 ## `model_interface` schema (UI layer — `src/model-interface/`)
 
@@ -511,7 +511,7 @@ Two ways to drive it:
 
 Every model lives in `base_models/`, `component_models/`, or `device_models/` and extends [`BaseModelClass`](./BaseModelClass.md) (directly or through an intermediate like `Capacitance`/`Resistor`/`TimeVaryingElastance`).
 
-- **`static model_type`** — the string key used in `available_model_map` and in definition JSON. Model classes carry **no UI metadata**; the edit schema lives in `src/model-interface/registry.ts`.
+- **`static model_type`** — the string key used in `available_model_map` and in definition JSON. Model classes carry **no UI metadata**; the edit schema is a consumer concern (in explain-ui it lives at `src/model-interface/registry.ts`).
 - **`constructor(model_ref, name = "")`** — `model_ref` is the whole engine `model` object; the base stores it as `this._model_engine` and caches `this._t = model_ref.modeling_stepsize`. Initialize independent props (config), dependent props (computed outputs), and `_`-prefixed local refs here. (`build()` passes a 3rd `model_type` arg the base ignores.)
 - **`init_model(args)`** — base impl maps each `{key, value}` in `args` onto `this[key]`, then instantiates and inits anything declared in `this.components` (registering each on `model.models`), and finally sets `this._is_initialized = true`. Override to resolve cross-model references, then call/replicate the base behaviour.
 - **`step_model()`** — base impl runs `calc_model()` only when `is_enabled && _is_initialized`. Don't override unless you need custom gating.
@@ -576,7 +576,7 @@ applied to `to2`, `tco2`, every entry in `solutes` and `drugs`, plus `temp` and 
 4. **Follow the factor convention** (§7a) for any tunable param so it composes with interventions and scaling — and use the **correct scaling suffix** for the family you're modelling.
 5. **Export it from [`ModelIndex.js`](../ModelIndex.js).** The engine builds `available_model_map` from everything `ModelIndex` exports. **Forgetting this export is the usual cause of "model type not found" at build.**
 6. **Reference the `model_type`** in your `model_definitions/*.json` `models` map.
-7. **Add a `model_type` entry to `src/model-interface/registry.ts`** so the parameters become editable in the app (the engine ships no UI metadata).
+7. **Add a `model_type` entry to the consumer's edit schema** (in explain-ui: `src/model-interface/registry.ts`) so the parameters become editable in the app (the engine ships no UI metadata).
 8. **Write a doc** in `docs/engine/` following the template in §10.
 
 ---
@@ -5532,9 +5532,15 @@ From `term_neonate.json`:
 ````markdown
 # Model definitions (scenario files)
 
-A scenario file is a single JSON document that describes one complete patient/experiment: the engine settings, every model instance with its parameters and current state, plus the UI metadata (diagram, animation, saved tabs/presets). They live in `public/model_definitions/*.json` and are served statically. `Model.load(name)` fetches `/model_definitions/<name>.json`, unwraps it, and hands the result to `build()`. The set of available scenarios is `public/model_definitions/index.json` — a flat JSON array of filename **stems** (no `.json`), each of which is a valid argument to `Model.load(name)`.
+A scenario file is a single JSON document that describes one complete patient/experiment: the engine settings, every model instance with its parameters and current state, plus the UI metadata (diagram, animation, saved tabs/presets) that consumers may attach. The canonical library lives in this repo at `model_definitions/*.json`, with `model_definitions/index.json` listing the available scenarios — a flat JSON array of filename **stems** (no `.json`), each a valid argument to `Model.load(name)`. `Model.load(name)` fetches `<name>.json`, unwraps it, and hands the result to `build()`; how the file is served is the consumer's business.
 
-> The canonical, served copies are under `public/model_definitions/`. `explain/model_definitions/` holds a separate dev copy; edit the served set unless you know you want the dev mirror.
+> **This repo is the source of truth for scenarios — edit `model_definitions/` here.**
+>
+> Consumers generate their own copy from it. In the [explain-ui](https://github.com/Dobutamine/explain-ui)
+> web app, `scripts/sync-scenarios.mjs` copies this directory into its `public/model_definitions/`
+> on every `predev`/`prebuild` and serves it statically. **That copy is generated, gitignored, and
+> overwritten** — editing a canonical scenario there loses your work on the next `npm run dev`. (The
+> sync is additive, so *new* files written alongside — user/developer snapshots — do persist.)
 
 ## Top-level keys
 
@@ -5712,7 +5718,7 @@ Each group lists the component names that a given `scale_*` method touches, and 
 
 `configuration` is **UI/store-only state** — the engine never reads it in `build()`. In `term_neonate.json` it holds `diagram_speed`, `diagram_scale`, `chart_hires`, `default_tabs`, `tabs`, `presets`, `monitors`, `controllers`.
 
-It may also carry an optional `configuration.events` array (absent in `term_neonate.json`). Events are named, reusable bundles of timed property changes. They reach the engine **only** indirectly: the events store mirrors `configuration.events` in memory and, when an event fires, pushes each change through `Model.setPropValue` / `callModelFunction`, which the engine's [TaskScheduler](./TaskScheduler.md) applies. The shapes (`src/stores/events.ts`):
+It may also carry an optional `configuration.events` array (absent in `term_neonate.json`). Events are named, reusable bundles of timed property changes. They reach the engine **only** indirectly: the events store mirrors `configuration.events` in memory and, when an event fires, pushes each change through `Model.setPropValue` / `callModelFunction`, which the engine's [TaskScheduler](./TaskScheduler.md) applies. The shapes (explain-ui's `src/stores/events.ts`):
 
 ```ts
 interface ScheduledEvent {
@@ -5745,7 +5751,7 @@ A flat JSON array of scenario filename stems, e.g.:
 ["adult_female", "term_neonate", "term_fetus", "preterm_28wk", "..."]
 ```
 
-Each entry `X` maps to `public/model_definitions/X.json` and is a valid argument to `Model.load("X")`. Add a scenario here to make it selectable in the app.
+Each entry `X` maps to `model_definitions/X.json` and is a valid argument to `Model.load("X")`. Add a scenario here to make it selectable in consuming apps. (In explain-ui, `sync-scenarios.mjs` rebuilds its served `index.json` as the union of the canonical set and any local snapshots.)
 
 ````
 
@@ -5956,7 +5962,7 @@ controller that **writes** other models' factor layers:
 
 ## Example definition (JSON)
 
-From `public/model_definitions/adult_female_uterus.json`:
+From `model_definitions/adult_female_uterus.json`:
 
 ```json
 {
@@ -7096,9 +7102,9 @@ From `term_fetus.json` (placenta running, cord unclamped):
 ```markdown
 # Explain Engine — Model Documentation Index
 
-This directory documents the **Explain physiological simulation engine** (the framework-agnostic
-ES modules under `explain/`, not the Vue/UI layer). Each model class and engine helper has its own
-reference doc; this page is the map.
+This directory documents the **Explain physiological simulation engine** — the framework-agnostic
+ES modules in this repository, not any consuming UI layer. Each model class and engine helper has
+its own reference doc; this page is the map.
 
 **New here?** Start with **[ARCHITECTURE](./ARCHITECTURE.md)** — the whole-model developer overview
 (two-thread design, message protocol, build/step loop, the cross-cutting patterns every model uses,
@@ -8329,7 +8335,18 @@ idles. This is the clean "off" switch that returns the lung to its underlying (s
 
 How to exercise and verify the Explain engine **headlessly** — build a scenario, drive the step loop, and read model state directly from Node, without a browser, a Web Worker, or the Vue layer. This is the workflow used for physiological calibration and model-development verification. The tools here are the `scripts/*.mjs` files; this doc explains the shared harness they sit on, the canonical probe pattern, and the full inventory. See [ARCHITECTURE](./ARCHITECTURE.md) for the two-thread picture and the `{type, message, payload}` wire protocol these scripts reuse.
 
-> **The scripts live OUTSIDE `explain/`.** Everything documented here is in `scripts/` at the **repo root** (`/scripts/`), not under `explain/`. They `import` the engine **read-only** — they never modify engine source — and they run with **`node` directly** (`node scripts/probe_vitals.mjs term_neonate`). There is **no `npm test`**: the root `package.json` `scripts` block has only `dev`/`build`/`preview`/`typecheck`/`start`/`serve` — no test runner is wired up. These are interactive verification tools you run by hand, not a CI suite.
+> **Everything you need is in this repo, with no install step.** The tools are the `scripts/*.mjs`
+> files at this repo's root, beside the engine source they drive. They `import` the engine
+> **read-only** — they never modify engine source — and run with **`node` directly**:
+>
+> ```bash
+> git clone git@github.com:Dobutamine/explain-engine.git && cd explain-engine
+> node scripts/probe_vitals.mjs term_neonate   # no npm install needed
+> ```
+>
+> This repo has **zero dependencies and zero devDependencies**, so a bare clone runs a full
+> calibrated simulation immediately. There is **no `npm test`** and no CI suite — `package.json`
+> wires one convenience script (`probe`). These are interactive verification tools you run by hand.
 
 ## The headless harness
 
@@ -8371,14 +8388,14 @@ Because `calc` runs the step loop **fully synchronously** (no `setInterval`, no 
 node scripts/headless.mjs <scenario> [--seconds N] [--window W] [--no-ans] [--no-autoreg] [--verbose]
 ```
 
-`<scenario>` is a filename in `public/model_definitions/` without `.json`. It supports live-tuning overrides on the Kidneys/Hormones models (`--kf`, `--water`, `--frac na=…,k=…`, `--hset key=val,…`) and a perturbation phase (`--bleed FRAC`, `--naload DELTA`, `--phase2 S`), printing a JSON report to stdout (diagnostics to stderr).
+`<scenario>` is a filename in `model_definitions/` without `.json`. It supports live-tuning overrides on the Kidneys/Hormones models (`--kf`, `--water`, `--frac na=…,k=…`, `--hset key=val,…`) and a perturbation phase (`--bleed FRAC`, `--naload DELTA`, `--phase2 S`), printing a JSON report to stdout (diagnostics to stderr).
 
 ## Writing/running a probe
 
 A probe is a self-contained `.mjs` that boots the engine, runs a scripted physiological scenario, and prints a human-readable verdict. The shared shape (canonically in `scripts/probe_vitals.mjs`):
 
 1. **Boot** — register the resolve hook, install the `self`/`postMessage` shims, `await import("../explain/ModelEngine.js")`, define `send`. (Probes predating `_harness.mjs` inline this; newer ones import `createEngine`.)
-2. **Build** — read `public/model_definitions/<scenario>.json`, unwrap `json.model_definition || json`, `send("POST","build",def)`, `send("GET","state",[])`, capture `model`. A build failure exits `1`.
+2. **Build** — read `model_definitions/<scenario>.json`, unwrap `json.model_definition || json`, `send("POST","build",def)`, `send("GET","state",[])`, capture `model`. A build failure exits `1`.
 3. **Isolate (optional)** — disable the system that would mask the one under test, typically the baroreflex: `if (model.models.Ans) model.models.Ans.is_enabled = false`. (`probe_vitals.mjs` keeps the ANS **on** — its target is the *regulated* operating point — and exposes `--no-ans` to turn it off.)
 4. **Warm to steady state** — one big synchronous `send("POST","calc",SECONDS)` (default 60–120 s) to clear startup transients.
 5. **Measure** — a slice-loop that advances the sim in small steps and cycle-averages the pulsatile signals so beat-to-beat ripple cancels:
