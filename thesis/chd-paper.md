@@ -158,28 +158,30 @@ The duct- and foramen-ovale-dependent congenital heart lesions are unified by a 
 
 ## References
 
-*In order of appearance; PMIDs retrieved and confirmed via PubMed (carried over from the engine monograph's verified bibliography). Companion-paper citations [P1]–[P6] to be replaced with the series references/DOIs at assembly; cite [P6] as its bioRxiv preprint.*
+*In order of appearance. All entries PubMed-verified 2026-07-16 — PMIDs confirmed against the live
+record and titles/volumes/pages/DOIs completed to the published citation. Companion-paper citations
+[P1]–[P6] to be replaced with the series references/DOIs at assembly; cite [P6] as its bioRxiv preprint.*
 
-1. Khalil M, … Schranz D. Ductal-dependent congenital heart disease: classification and balanced parallel circulation. *Transl Pediatr.* 2019. PMID 31161078.
-2. Strobel AM, Lu le N. The critically ill infant with congenital heart disease. *Emerg Med Clin North Am.* 2015. PMID 26226862.
-3. Barata IA. Cardiac emergencies in the neonate. *Emerg Med Clin North Am.* 2013. PMID 23915599.
-4. Mahle WT, et al. Role of pulse oximetry in examining newborns for critical congenital heart disease (AHA/AAP statement). *Pediatrics.* 2009. PMID 19581259.
-5. Akkinapally S, et al. Prostaglandin E1 for maintaining ductal patency in neonates with ductal-dependent cardiac lesions. *Cochrane Database Syst Rev.* 2018. PMID 29486048.
-6. Martins P, Castela E. Transposition of the great arteries: parallel circulations and mixing. *Orphanet J Rare Dis.* 2008. PMID 18851735.
+1. Khalil M, Jux C, Rueblinger L, Behrje J, Esmaeili A, Schranz D. Acute therapy of newborns with critical congenital heart disease. *Transl Pediatr.* 2019;8(2):114–126. PMID 31161078. doi:10.21037/tp.2019.04.06.
+2. Strobel AM, Lu le N. The critically ill infant with congenital heart disease. *Emerg Med Clin North Am.* 2015;33(3):501–18. PMID 26226862. doi:10.1016/j.emc.2015.04.002.
+3. Barata IA. Cardiac emergencies. *Emerg Med Clin North Am.* 2013;31(3):677–704. PMID 23915599. doi:10.1016/j.emc.2013.04.007.
+4. Mahle WT, Newburger JW, Matherne GP, et al. Role of pulse oximetry in examining newborns for congenital heart disease: a scientific statement from the AHA and AAP. *Pediatrics.* 2009;124(2):823–36. PMID 19581259. doi:10.1542/peds.2009-1397.
+5. Akkinapally S, Hundalani SG, Kulkarni M, et al. Prostaglandin E1 for maintaining ductal patency in neonates with ductal-dependent cardiac lesions. *Cochrane Database Syst Rev.* 2018;2(2):CD011417. PMID 29486048. doi:10.1002/14651858.CD011417.pub2.
+6. Martins P, Castela E. Transposition of the great arteries. *Orphanet J Rare Dis.* 2008;3:27. PMID 18851735. doi:10.1186/1750-1172-3-27.
 7. Sá-Couto CD, Andriessen P, van Meurs WL, Ayres-de-Campos D, Sá-Couto PM. A model for educational simulation of hemodynamic transitions at birth. *Pediatr Res.* 2010;67(2):158–165.
 8. Munneke AG, Lumens J, Delhaas T. Cardiovascular fetal-to-neonatal transition: an in silico model. *Pediatr Res.* 2021;91(1):116–128. doi:10.1038/s41390-021-01401-0.
 9. van Willigen BG, Krabben BC, van der Hout-van der Jagt MB, Huberts W, van de Vosse FN. The hemodynamic impact of congenital heart diseases during fetal-to-neonatal transition: an in-silico investigation. *Pediatr Res.* 2026 (advance online). doi:10.1038/s41390-025-04565-1.
 10. May RW, Gentles TL, Bloomfield FH, Maso Talou G, Safaei S, Argus F. Newborn cardiovascular digital twins. *Maternal and Children's Health* (Karger). 2025;1(1):26–36. doi:10.1159/000546724.
-11. Rashkind WJ, Miller WW. Creation of an atrial septal defect without thoracotomy (balloon atrial septostomy). *JAMA.* 1966;196(11):991–2. PMID 4160716.
-12. Chikkabyrappa SM, et al. Pulmonary atresia with intact ventricular septum: physiology and management. *Semin Cardiothorac Vasc Anesth.* 2018. PMID 29411679.
-13. Latson LA. Critical pulmonary stenosis. *J Interv Cardiol.* 2001. PMID 12053395.
-14. Sumal AS, et al. Tricuspid atresia: a review. *J Card Surg.* 2020. PMID 32484582.
-15. Connor JA, Thiagarajan R. Hypoplastic left heart syndrome. *Orphanet J Rare Dis.* 2007. PMID 17498282.
-16. Vlahos AP, et al. Hypoplastic left heart syndrome with intact or restrictive atrial septum. *Circulation.* 2004. PMID 15136496.
-17. Generali T, et al. HLHS with restrictive/intact atrial septum: left-atrial decompression. *World J Pediatr Congenit Heart Surg.* 2022. PMID 35446214.
-18. Affolter JT, Ghanayem NS. Preoperative management of critical aortic stenosis. *Cardiol Young.* 2014. PMID 25647388.
-19. Ganigara M, et al. Preoperative physiology of coarctation of the aorta. *Semin Cardiothorac Vasc Anesth.* 2019. PMID 31535945.
-20. Jonas RA. Management of interrupted aortic arch. *Semin Thorac Cardiovasc Surg.* 2015. PMID 26686446.
-21. Ross FJ, et al. Total anomalous pulmonary venous connection: physiology and the obstructed emergency. *Semin Cardiothorac Vasc Anesth.* 2017. PMID 27694572.
+11. Rashkind WJ, Miller WW. Creation of an atrial septal defect without thoracotomy. A palliative approach to complete transposition of the great arteries. *JAMA.* 1966;196(11):991–2. PMID 4160716.
+12. Chikkabyrappa SM, Loomba RS, Tretter JT. Pulmonary atresia with an intact ventricular septum: preoperative physiology, imaging, and management. *Semin Cardiothorac Vasc Anesth.* 2018;22(3):245–255. PMID 29411679. doi:10.1177/1089253218756757.
+13. Latson LA. Critical pulmonary stenosis. *J Interv Cardiol.* 2001;14(3):345–50. PMID 12053395. doi:10.1111/j.1540-8183.2001.tb00343.x.
+14. Sumal AS, Kyriacou H, Mostafa AMHAM. Tricuspid atresia: where are we now? *J Card Surg.* 2020;35(7):1609–1617. PMID 32484582. doi:10.1111/jocs.14673.
+15. Connor JA, Thiagarajan R. Hypoplastic left heart syndrome. *Orphanet J Rare Dis.* 2007;2:23. PMID 17498282. doi:10.1186/1750-1172-2-23.
+16. Vlahos AP, Lock JE, McElhinney DB, van der Velde ME. Hypoplastic left heart syndrome with intact or highly restrictive atrial septum: outcome after neonatal transcatheter atrial septostomy. *Circulation.* 2004;109(19):2326–30. PMID 15136496. doi:10.1161/01.CIR.0000128690.35860.C5.
+17. Generali T, Hermuzi A, Sajnach-Menke M, et al. Evolving approach in hypoplastic left heart syndrome with restrictive and intact septum. *World J Pediatr Congenit Heart Surg.* 2022;13(3):311–320. PMID 35446214. doi:10.1177/21501351211073614.
+18. Affolter JT, Ghanayem NS. Preoperative management of the neonate with critical aortic valvar stenosis. *Cardiol Young.* 2014;24(6):1111–6. PMID 25647388. doi:10.1017/S1047951114002029.
+19. Ganigara M, Doshi A, Naimi I, Mahadevaiah GP, Buddhe S, Chikkabyrappa SM. Preoperative physiology, imaging, and management of coarctation of aorta in children. *Semin Cardiothorac Vasc Anesth.* 2019;23(4):379–386. PMID 31535945. doi:10.1177/1089253219873004.
+20. Jonas RA. Management of interrupted aortic arch. *Semin Thorac Cardiovasc Surg.* 2015;27(2):177–88. PMID 26686446. doi:10.1053/j.semtcvs.2015.04.003.
+21. Ross FJ, Joffe D, Latham GJ. Perioperative and anesthetic considerations in total anomalous pulmonary venous connection. *Semin Cardiothorac Vasc Anesth.* 2017;21(2):138–144. PMID 27694572. doi:10.1177/1089253216672012.
 
 *Companion papers (series): [P1] Cardiovascular; [P2] Respiratory, gas exchange and metabolism; [P3a] Cerebral haemodynamics and intracranial pressure; [P3b] Homeostatic regulation; [P4] Mechanical support devices; [P5] Integrated model and virtual-patient library; [P6] AI-assisted parameterization method. Full citations/DOIs at assembly.*
