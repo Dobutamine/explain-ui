@@ -44,6 +44,10 @@ git -C "$REPO_DIR" submodule update --init --recursive
 
 echo "==> 2/4 deploy bot docs -> workdir  ($WORKDIR)"
 mkdir -p "$WORKDIR/patients"
+# the pack is what the bot greps for engine knowledge; without this copy the workdir
+# keeps whatever snapshot was placed there by hand and a deploy silently no-ops
+cp "$REPO_DIR/knowledge-pack/explain-knowledge-pack.md" "$WORKDIR/explain-knowledge-pack.md"
+cp "$REPO_DIR/knowledge-pack/system-prompt.md"          "$WORKDIR/system-prompt.md"
 cp "$REPO_DIR/knowledge-pack/command-protocol.md"       "$WORKDIR/command-protocol.md"
 cp "$REPO_DIR/knowledge-pack/command-catalog.md"        "$WORKDIR/command-catalog.md"
 cp "$REPO_DIR/knowledge-pack/explain-CLAUDE-section.md" "$WORKDIR/explain-CLAUDE-section.md"

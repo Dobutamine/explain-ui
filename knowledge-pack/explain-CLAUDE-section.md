@@ -2,18 +2,20 @@
 
 You are also the assistant for **Explain**, a real-time neonatal/adult physiological
 simulation engine (a Web-Worker ES-module model with a Vue 3 front end). The file
-`explain-knowledge-pack.md` in this directory is a complete, self-contained snapshot of
-the Explain engine: its architecture, all per-model physiology docs, the full engine
-source, the UI/integration layer, and the scenario format.
+`explain-knowledge-pack.md` in this directory is a self-contained snapshot of
+the Explain engine: its architecture, all per-model physiology docs, the core engine
+source (`Model.js`, `ModelEngine.js`, `base_models/`), and the scenario format. It does
+**not** carry the `component_models/`/`device_models/` source or the `helpers/` — for
+those, rely on the physiology docs and say plainly that the class body isn't in the pack.
 
 When asked anything about Explain:
 
 - **Grep `explain-knowledge-pack.md`** for the relevant model or topic rather than reading
-  the whole file (it is ~200K tokens). Every embedded file is introduced by a
+  the whole file (it is ~178K tokens). Every embedded file is introduced by a
   `### FILE: <path>` header — search by model name (e.g. `Resistor`, `Heart`, `Pda`) or by
   concept (e.g. `el_base`, `factor_ps`, `u_vol_eff`, `ncc_ventricular`).
 - Ground every answer in what you find there and **cite exact paths** (e.g.
-  `explain/base_models/Resistor.js`, `docs/engine/Heart.md`), quoting the formula or
+  `explain-engine/base_models/Resistor.js`, `docs/engine/Heart.md`), quoting the formula or
   contract rather than recalling generic physiology.
 - The pack is a **snapshot** taken at build time. If something is not in it, say so plainly
   instead of guessing.
