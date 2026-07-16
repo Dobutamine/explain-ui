@@ -169,7 +169,7 @@ record and titles/volumes/pages/DOIs completed to the published citation. Compan
 5. Akkinapally S, Hundalani SG, Kulkarni M, et al. Prostaglandin E1 for maintaining ductal patency in neonates with ductal-dependent cardiac lesions. *Cochrane Database Syst Rev.* 2018;2(2):CD011417. PMID 29486048. doi:10.1002/14651858.CD011417.pub2.
 6. Martins P, Castela E. Transposition of the great arteries. *Orphanet J Rare Dis.* 2008;3:27. PMID 18851735. doi:10.1186/1750-1172-3-27.
 7. Sá-Couto CD, Andriessen P, van Meurs WL, Ayres-de-Campos D, Sá-Couto PM. A model for educational simulation of hemodynamic transitions at birth. *Pediatr Res.* 2010;67(2):158–165.
-8. Munneke AG, Lumens J, Delhaas T. Cardiovascular fetal-to-neonatal transition: an in silico model. *Pediatr Res.* 2021;91(1):116–128. doi:10.1038/s41390-021-01401-0.
+8. Munneke AG, Lumens J, Delhaas T. Cardiovascular fetal-to-neonatal transition: an in silico model. *Pediatr Res.* 2021;91(1):116–128. PMID 33731808. doi:10.1038/s41390-021-01401-0.
 9. van Willigen BG, Krabben BC, van der Hout-van der Jagt MB, Huberts W, van de Vosse FN. The hemodynamic impact of congenital heart diseases during fetal-to-neonatal transition: an in-silico investigation. *Pediatr Res.* 2026 (advance online). doi:10.1038/s41390-025-04565-1.
 10. May RW, Gentles TL, Bloomfield FH, Maso Talou G, Safaei S, Argus F. Newborn cardiovascular digital twins. *Maternal and Children's Health* (Karger). 2025;1(1):26–36. doi:10.1159/000546724.
 11. Rashkind WJ, Miller WW. Creation of an atrial septal defect without thoracotomy. A palliative approach to complete transposition of the great arteries. *JAMA.* 1966;196(11):991–2. PMID 4160716.

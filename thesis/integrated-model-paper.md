@@ -166,7 +166,7 @@ refs/DOIs at assembly; cite [P6] as its bioRxiv preprint). All journal entries c
 PMIDs/DOIs (confirmed 2026-07-16); ref 5 (Rudolph) is a textbook and is cited by edition.*
 
 1. Sá-Couto CD, Andriessen P, van Meurs WL, Ayres-de-Campos D, Sá-Couto PM. A model for educational simulation of hemodynamic transitions at birth. *Pediatr Res.* 2010;67(2):158–165.
-2. Munneke AG, Lumens J, Delhaas T. Cardiovascular fetal-to-neonatal transition: an in silico model. *Pediatr Res.* 2021;91(1):116–128. doi:10.1038/s41390-021-01401-0.
+2. Munneke AG, Lumens J, Delhaas T. Cardiovascular fetal-to-neonatal transition: an in silico model. *Pediatr Res.* 2021;91(1):116–128. PMID 33731808. doi:10.1038/s41390-021-01401-0.
 3. van Willigen BG, Krabben BC, van der Hout-van der Jagt MB, Huberts W, van de Vosse FN. The hemodynamic impact of congenital heart diseases during fetal-to-neonatal transition: an in-silico investigation. *Pediatr Res.* 2026 (advance online). doi:10.1038/s41390-025-04565-1.
 4. May RW, Gentles TL, Bloomfield FH, Maso Talou G, Safaei S, Argus F. Newborn cardiovascular digital twins. *Maternal and Children's Health* (Karger). 2025;1(1):26–36. doi:10.1159/000546724.
 5. Rudolph AM. *Congenital Diseases of the Heart: Clinical–Physiological Considerations.* 3rd ed. Chichester: Wiley-Blackwell; 2009. *(Textbook — fetal-circulation reference values; not in PubMed.)*

@@ -124,7 +124,7 @@ Cerebral autoregulation and its failure underlie much of the neurological morbid
 2. Massaro AN, Govindan RB, Vezina G, Chang T, Andescavage NN, Wang Y, et al. Impaired cerebral autoregulation and brain injury in newborns with hypoxic-ischemic encephalopathy treated with hypothermia. *J Neurophysiol.* 2015;114(2):818–24. PMID 26063779.
 3. Mokri B. The Monro-Kellie hypothesis: applications in CSF volume depletion. *Neurology.* 2001;56(12):1746–8. PMID 11425944.
 4. Antonius T. *Explain: a whole-body physiological simulation engine* (Version v0.1.0) [Software]. Zenodo; 2026. doi:10.5281/zenodo.21389097 (concept/all-versions DOI). Source: https://github.com/Dobutamine/explain-engine (MIT). Interactive model: https://explain-modeling.com.
-5. Munneke AG, Lumens J, Delhaas T. Cardiovascular fetal-to-neonatal transition: an in silico model. *Pediatr Res.* 2021;91(1):116–128. doi:10.1038/s41390-021-01401-0.
+5. Munneke AG, Lumens J, Delhaas T. Cardiovascular fetal-to-neonatal transition: an in silico model. *Pediatr Res.* 2021;91(1):116–128. PMID 33731808. doi:10.1038/s41390-021-01401-0.
 6. van Willigen BG, Krabben BC, van der Hout-van der Jagt MB, Huberts W, van de Vosse FN. The hemodynamic impact of congenital heart diseases during fetal-to-neonatal transition: an in-silico investigation. *Pediatr Res.* 2026 (advance online). doi:10.1038/s41390-025-04565-1.
 
 *Companion papers (series): [P1] Cardiovascular · [P2] Respiratory, gas exchange and metabolism · [P3b] Homeostatic regulation · [P4] Mechanical support devices · [P5] Integrated model and virtual-patient library · [P6] AI-assisted parameterization method · [P7] duct-/foramen-ovale-dependent congenital heart disease. Full citations/DOIs at assembly.*
