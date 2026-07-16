@@ -55,7 +55,7 @@ with
 
 ### 9. New references — APPEND after [23]
 
-> **[24]** Antonius TAJ, ‹co-authors›. ‹AI-parameterization paper title — see `A2_ai-parameterization_frontmatter.md`›. Pediatr Res. ‹year; in press / bioRxiv preprint DOI›. *(the P6 companion paper — preprint it early so P1 can cite it)*
+> **[24]** Antonius TAJ, van Meurs WL, Westerhof BE, de Boode WP. ‹AI-parameterization paper title — see `A2_ai-parameterization_frontmatter.md`›. Pediatr Res. ‹year; in press / bioRxiv preprint DOI›. *(the P6 companion paper — preprint it early so P1 can cite it)*
 > **[25]** Anthropic. Claude [large language model]. Anthropic PBC; 2025. Available from: https://claude.com.
 > **[26]** Anthropic. Claude Agent SDK [software]; 2025. Available from: https://platform.claude.com/docs/en/api/agent-sdk.
 

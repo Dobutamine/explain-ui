@@ -1,6 +1,6 @@
 # P6 (AI-parameterization method) — cover letter for Pediatric Research
 
-*Wave-3 paper; the **headline method** (slate labels A2 / B4). Manuscript: "An AI-assisted closed-loop method for patient-specific parameterization of a whole-body neonatal physiology model" (Antonius TAJ, ‹co-authors — see slot 1›). Article type: **Basic Science Article**. Cover letter drafted 2026-07-12 from `thesis/ai-parameterization-paper.md`. The **title, structured abstract (≈195 w) and Impact Statement already live in `A2_ai-parameterization_frontmatter.md`** — this file adds the cover letter and the P6-specific submission notes; keep the two files together. Series decisions applied: Antonius corresponding; public code deposit; no ECI. Unlike P1–P5, this paper carries **no compact AI-param Box** — it *is* the method in full.*
+*Wave-3 paper; the **headline method** (slate labels A2 / B4). Manuscript: "An AI-assisted closed-loop method for patient-specific parameterization of a whole-body neonatal physiology model" (Antonius TAJ, van Meurs WL, Westerhof BE, de Boode WP). Article type: **Basic Science Article**. Cover letter drafted 2026-07-12 from `thesis/ai-parameterization-paper.md`. The **title, structured abstract (≈195 w) and Impact Statement already live in `A2_ai-parameterization_frontmatter.md`** — this file adds the cover letter and the P6-specific submission notes; keep the two files together. Series decisions applied: Antonius corresponding; public code deposit; no ECI. Unlike P1–P5, this paper carries **no compact AI-param Box** — it *is* the method in full.*
 
 > **Role in the series (read first).** P6 is the dedicated, full treatment of the method that P1–P5 each carry only as a compact Box 1 highlight, and that P5 and P7 showcase (library-wide / per-lesion). The anti-redundancy rule is strict here: **the method is derived in full only in this paper**; the earlier papers cite it and never restate it. **Preprint P6 early on bioRxiv** (PR does not count a preprint as prior publication) so the Wave-1/2 papers can cite it as a real DOI while it is under review — this is the device that keeps the "patient-specific parameterization" differentiator visible before the method paper formally lands.
 
@@ -48,14 +48,14 @@ Thank you for considering our work. We look forward to your response.
 Yours sincerely,
 
 T.A.J. Antonius, ‹degrees› (corresponding author)
-on behalf of the co-authors ‹P6 author list — confirm; see slot 1›
+on behalf of the co-authors (W.L. van Meurs, B.E. Westerhof, W.P. de Boode)
 ‹Affiliation, full postal address, phone, email›
 
 ---
 
 ## Slots / decisions to close before sending
 
-1. **P6 author list** — confirm the co-authors for the method paper (may differ from the physiology papers' Antonius/van Meurs/Westerhof/de Boode if engineering/AI contributors meet ICMJE criteria). **This gates the bioRxiv preprint** (the preprint author list must match). Currently BLOCKED pending your decision.
+1. ~~**P6 author list**~~ ✅ **SETTLED 2026-07-16 — same four as the physiology papers: T.A.J. Antonius, W.L. van Meurs, B.E. Westerhof, W.P. de Boode** (Antonius first/corresponding). No additional engineering/AI human contributor met ICMJE criteria for the method paper (the calibrator/pipeline is Antonius's own work; the language model is a disclosed non-author component). The bioRxiv preprint byline is therefore this same four — no longer blocked.
 2. **bioRxiv preprint** — post it to obtain the `‹bioRxiv preprint DOI›` (distinct from the Zenodo software DOI) used both here and in the P1–P5 reference lists (ref «P6»); this is what lets the earlier papers cite the method as published.
 3. **Corresponding author** — T.A.J. Antonius (series-wide). Fill degrees + address.
 4. **Manuscript consistency edits** (see banner): remap "Fourth paper" → P6 and the "§2.4 / Eqs. 13–15 / Table X" self-reference (P1 §2.4 is now the compact Box; the full derivation is here); re-key equations as Word OMML; add the public-deposit availability statement.
