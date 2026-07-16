@@ -78,7 +78,7 @@ Some component models build sub-models inside `init_model` via the `this.compone
 
 All prose documentation now lives under the top-level [`docs/`](docs/README.md), split into two clearly separated sets: [`docs/engine/`](docs/engine/README.md) (the physics engine) and [`docs/ui/`](docs/ui/README.md) (the Vue app). The engine *code* still lives under `explain-engine/`.
 
-[`docs/engine/*.md`](docs/engine/README.md) and `explain-engine/papers/` contain the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain-engine/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
+[`docs/engine/*.md`](docs/engine/README.md) contains the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain-engine/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
 
 ## UI documentation
 
