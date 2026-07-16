@@ -1,6 +1,6 @@
 # Stores
 
-The Pinia stores in `src/stores/` hold the app's **control-plane** state: the authenticated session, the scenario catalog and selection, server-persisted saved states, and the editable scenario sub-objects (monitors, events) plus the chat/diagram bridges. None of them carry per-frame telemetry. This is the app's **two-plane split**: the control plane — engine status, `model_ready`, errors, whole-model state, and the ~1 Hz slow stream — reaches these stores through `src/composables/useExplain.ts` (the singleton wrapping `@explain/Model`); the ~60 Hz **data plane** is owned by `src/composables/useRealtimeBus.ts` → [RealtimeBus](../engine/RealtimeBus.md) and **never** touches a store. Everything visible lives inside `src/pages/MainPage.vue`. See [Composables](./Composables.md) for the engine-facing layer.
+The Pinia stores in `src/stores/` hold the app's **control-plane** state: the authenticated session, the scenario catalog and selection, server-persisted saved states, and the editable scenario sub-objects (monitors, events) plus the chat/diagram bridges. None of them carry per-frame telemetry. This is the app's **two-plane split**: the control plane — engine status, `model_ready`, errors, whole-model state, and the ~1 Hz slow stream — reaches these stores through `src/composables/useExplain.ts` (the singleton wrapping `@explain/Model`); the ~60 Hz **data plane** is owned by `src/composables/useRealtimeBus.ts` → [RealtimeBus](../../explain-engine/docs/RealtimeBus.md) and **never** touches a store. Everything visible lives inside `src/pages/MainPage.vue`. See [Composables](./Composables.md) for the engine-facing layer.
 
 ## What lives here
 
@@ -86,7 +86,7 @@ Key methods: `syncFromScenario()` (reload from the loaded file), dashboard CRUD 
 
 ## `events`
 
-Named, reusable bundles of timed property changes, stored in `loadedFileData.configuration.events`. Driven by the engine [TaskScheduler](../engine/TaskScheduler.md) when fired.
+Named, reusable bundles of timed property changes, stored in `loadedFileData.configuration.events`. Driven by the engine [TaskScheduler](../../explain-engine/docs/TaskScheduler.md) when fired.
 
 | State | Type | Description |
 |---|---|---|
@@ -138,9 +138,9 @@ A bridge so the chat command pipeline can drive diagram edits without the render
 ## Wiring
 
 - `monitors`, `events`, and `chat` read the loaded scenario via `useExplain().model.loadedFileData` — the untouched originally-loaded object — and write their sub-objects (`configuration.monitor_dashboards`/`.monitors`, `.events`) back through the dev `POST /api/save-snapshot` endpoint, preserving the original `model_definition` (never snapshotting the live running sim).
-- `chat` consumes the control-plane refs from `useExplain` (`modelState`, `slowValues`, `tuneResult`) — the slow stream originates from the worker's [DataCollector](../engine/DataCollector.md) slow watchlist via `watchSlow` — and issues engine mutations (`setProp`/`scale`/`tune`/`loadFromObject`) through the same composable. It bridges to the diagram through `diagram.activeRenderer` + `Model.updateDiagram`.
+- `chat` consumes the control-plane refs from `useExplain` (`modelState`, `slowValues`, `tuneResult`) — the slow stream originates from the worker's [DataCollector](../../explain-engine/docs/DataCollector.md) slow watchlist via `watchSlow` — and issues engine mutations (`setProp`/`scale`/`tune`/`loadFromObject`) through the same composable. It bridges to the diagram through `diagram.activeRenderer` + `Model.updateDiagram`.
 - `states.setDefault`/`setDefaultLocal` mirror their result into `auth.user`; `auth`/`states`/`model` are pure HTTP control-plane stores with no engine coupling beyond the scenario name.
-- No store ever holds renderer adapters or per-frame frames — those belong to `useRealtimeBus` → [RealtimeBus](../engine/RealtimeBus.md).
+- No store ever holds renderer adapters or per-frame frames — those belong to `useRealtimeBus` → [RealtimeBus](../../explain-engine/docs/RealtimeBus.md).
 
 ## Gotchas
 

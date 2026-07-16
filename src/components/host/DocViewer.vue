@@ -5,17 +5,28 @@ import Tree from "primevue/tree";
 import Button from "primevue/button";
 import type { TreeNode } from "primevue/treenode";
 
-// In-app documentation viewer (center-pane "docs" tab). Reads the repo's
-// top-level docs/ tree at build time via import.meta.glob — keys give us the
-// nav up front, values lazily load each file's raw markdown only when opened.
-// Rendered with the same markdown-it approach as ChatPanel (html:false is the
-// XSS guard), minus the chat-only `breaks:true`. docs/ stays the single source
-// of truth — no copy step, and Vite bundles each .md as a lazy chunk so this
-// works in dev and prod alike.
-const docModules = import.meta.glob("/docs/**/*.md", {
-  query: "?raw",
-  import: "default",
-}) as Record<string, () => Promise<string>>;
+// In-app documentation viewer (center-pane "docs" tab). Reads two trees at
+// build time via import.meta.glob — keys give us the nav up front, values
+// lazily load each file's raw markdown only when opened. Rendered with the
+// same markdown-it approach as ChatPanel (html:false is the XSS guard), minus
+// the chat-only `breaks:true`. Both trees stay the single source of truth —
+// no copy step, and Vite bundles each .md as a lazy chunk so this works in
+// dev and prod alike.
+//
+// The engine's physiological reference lives in the explain-engine submodule,
+// beside the code it documents, so it resolves for anyone who clones that repo
+// on its own. Consequence: a checkout without `git submodule update --init`
+// leaves explain-engine/ empty and the Engine group simply won't appear.
+const docModules = import.meta.glob(
+  ["/docs/**/*.md", "/explain-engine/docs/**/*.md"],
+  {
+    query: "?raw",
+    import: "default",
+  }
+) as Record<string, () => Promise<string>>;
+
+// Engine docs are keyed by their real submodule path; present them as "engine/".
+const ENGINE_DOCS = "/explain-engine/docs/";
 
 const md = new MarkdownIt({ html: false, linkify: true });
 
@@ -49,7 +60,7 @@ function labelFor(key: string): string {
 const GROUPS = [
   { key: "g-overview", label: "Overview", match: (k: string) => k === "/docs/README.md" },
   { key: "g-ui", label: "UI", match: (k: string) => k.startsWith("/docs/ui/") },
-  { key: "g-engine", label: "Engine", match: (k: string) => k.startsWith("/docs/engine/") },
+  { key: "g-engine", label: "Engine", match: (k: string) => k.startsWith(ENGINE_DOCS) },
 ];
 
 const allKeys = Object.keys(docModules);
@@ -80,6 +91,7 @@ const contentEl = ref<HTMLDivElement | null>(null);
 // "engine / Heart" style breadcrumb for the current doc.
 function crumbFor(key: string): string {
   return key
+    .replace(ENGINE_DOCS, "engine/")
     .replace(/^\/docs\//, "")
     .replace(/\.md$/, "")
     .split("/")

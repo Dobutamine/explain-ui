@@ -1,6 +1,6 @@
 # Composables
 
-The composables in `src/composables/` are the Vue layer's bridge to the simulation engine. They enforce the app's **two-plane split**: the **control plane** — engine status, `model_ready`, errors, whole-model state, and the ~1 Hz slow stream (`rts`) — flows through `useExplain.ts` (a singleton wrapping `@explain/Model`) into Vue reactivity and Pinia; the **data plane** — the ~60 Hz per-frame stream — is owned by `useRealtimeBus.ts` → [RealtimeBus](../engine/RealtimeBus.md), which runs one `requestAnimationFrame` loop, drains a [ChannelReader](../engine/ChannelReader.md), and pushes frames to renderer adapters, **never through Vue reactivity**. Everything visible lives inside `src/pages/MainPage.vue`.
+The composables in `src/composables/` are the Vue layer's bridge to the simulation engine. They enforce the app's **two-plane split**: the **control plane** — engine status, `model_ready`, errors, whole-model state, and the ~1 Hz slow stream (`rts`) — flows through `useExplain.ts` (a singleton wrapping `@explain/Model`) into Vue reactivity and Pinia; the **data plane** — the ~60 Hz per-frame stream — is owned by `useRealtimeBus.ts` → [RealtimeBus](../../explain-engine/docs/RealtimeBus.md), which runs one `requestAnimationFrame` loop, drains a [ChannelReader](../../explain-engine/docs/ChannelReader.md), and pushes frames to renderer adapters, **never through Vue reactivity**. Everything visible lives inside `src/pages/MainPage.vue`.
 
 ## What lives here
 
@@ -41,9 +41,9 @@ The control-plane facade. A module-level `_model` (one `@explain/Model` for the 
 | `revert` | `() => void` | Rebuild from the untouched `loadedFileData` — a clean "undo all live changes" |
 | `start` / `stop` | `() => void` | Start/stop the realtime loop |
 | `calculate` | `(seconds: number) => void` | Run `seconds` of simulation synchronously (fast-forward) |
-| `setProp` | `(prop, value, it=1, at=0) => void` | `model.setPropValue` — tween/swap a model prop via the engine [TaskScheduler](../engine/TaskScheduler.md) |
+| `setProp` | `(prop, value, it=1, at=0) => void` | `model.setPropValue` — tween/swap a model prop via the engine [TaskScheduler](../../explain-engine/docs/TaskScheduler.md) |
 | `call` | `(fn, args=[], at=0) => void` | Schedule a model method call (`model.callModelFunction`) |
-| `scale` | `(group, factor=1.0) => void` | Allometric/group scaling via `model.scaleModel` → [ModelScaler](../engine/ModelScaler.md) |
+| `scale` | `(group, factor=1.0) => void` | Allometric/group scaling via `model.scaleModel` → [ModelScaler](../../explain-engine/docs/ModelScaler.md) |
 | `tune` | `(targets, opts={}) => void` | Closed-loop live tune; sets `tuning=true`, resolved by `tuned` |
 | `refreshState` | `() => void` | Request a fresh whole-model `state` snapshot (`model.getModelState`) |
 | `watchSlow` | `(paths) => void` | Add dot-paths to the slow ~1 Hz watchlist (`model.watchModelPropsSlow`) |
@@ -102,9 +102,9 @@ Resolves a model instance's editable schema. `getInterface(name)` reads the inst
 
 ## Wiring
 
-- `useExplain.ensure()` does `new Model()` (`@explain/Model`) and subscribes refs to the `Model`/`ModelEmitter` event set: `status`, `model_ready` (→ `getModelState()`), `error`, `state`, `rts`, `rt_start`, `rt_stop`, `state_saved`, `tuned`. The control-plane events are the ones described in [RealtimeBus](../engine/RealtimeBus.md) as handled by `Model.receive()`; the fast `rtf`/`data` plane is deliberately **not** subscribed here.
-- `useRealtimeBus` constructs `RealtimeBus(model)` over the same `Model`; the bus attaches its own worker `"message"` listener for `RT_MSG.*` only and feeds its [ChannelReader](../engine/ChannelReader.md) — independent of `useExplain`'s reactivity.
-- `useSlowHistory` and `useChartParams` consume `useExplain.slowValues` / `modelState`; the slow stream originates from the worker's [DataCollector](../engine/DataCollector.md) slow watchlist (`watchSlow` → `watchModelPropsSlow`).
+- `useExplain.ensure()` does `new Model()` (`@explain/Model`) and subscribes refs to the `Model`/`ModelEmitter` event set: `status`, `model_ready` (→ `getModelState()`), `error`, `state`, `rts`, `rt_start`, `rt_stop`, `state_saved`, `tuned`. The control-plane events are the ones described in [RealtimeBus](../../explain-engine/docs/RealtimeBus.md) as handled by `Model.receive()`; the fast `rtf`/`data` plane is deliberately **not** subscribed here.
+- `useRealtimeBus` constructs `RealtimeBus(model)` over the same `Model`; the bus attaches its own worker `"message"` listener for `RT_MSG.*` only and feeds its [ChannelReader](../../explain-engine/docs/ChannelReader.md) — independent of `useExplain`'s reactivity.
+- `useSlowHistory` and `useChartParams` consume `useExplain.slowValues` / `modelState`; the slow stream originates from the worker's [DataCollector](../../explain-engine/docs/DataCollector.md) slow watchlist (`watchSlow` → `watchModelPropsSlow`).
 - `useModelInterface` joins the engine state (`model_type` per instance) to the UI-owned schema in `src/model-interface/`.
 - Pinia stores (`src/stores/`) consume `useExplain` for control-plane reads/commands; see [Stores](./Stores.md).
 

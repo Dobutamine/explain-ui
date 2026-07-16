@@ -1,6 +1,6 @@
 # Render Layer
 
-`src/render/` is the **data-plane render layer**: the plain-TypeScript renderer adapters that the [RealtimeBus](../engine/RealtimeBus.md) drives at ~60 Hz. Each adapter owns a canvas / WebGL surface (uPlot, raw 2D canvas, or PixiJS) and implements the `RendererAdapter` contract so the bus can hand it `onFrame(chart, anim)` every `requestAnimationFrame` tick. Nothing here is Vue-reactive: adapters read typed buffers directly and redraw, so per-frame telemetry never triggers a component re-render. The [host components](./HostComponents.md) construct these adapters, register them with the bus, and feed them control-plane settings imperatively.
+`src/render/` is the **data-plane render layer**: the plain-TypeScript renderer adapters that the [RealtimeBus](../../explain-engine/docs/RealtimeBus.md) drives at ~60 Hz. Each adapter owns a canvas / WebGL surface (uPlot, raw 2D canvas, or PixiJS) and implements the `RendererAdapter` contract so the bus can hand it `onFrame(chart, anim)` every `requestAnimationFrame` tick. Nothing here is Vue-reactive: adapters read typed buffers directly and redraw, so per-frame telemetry never triggers a component re-render. The [host components](./HostComponents.md) construct these adapters, register them with the bus, and feed them control-plane settings imperatively.
 
 ## What lives here
 
@@ -120,8 +120,8 @@ Viewer **and** editor for the circulation diagram. Lazily imported by `Diagram.v
 
 ## Wiring
 
-- Engine producer + buffer contract: [RealtimeBus](../engine/RealtimeBus.md), [ChannelReader](../engine/ChannelReader.md), [RealtimeChannels](../engine/RealtimeChannels.md).
-- The anim frame layout (`[time, (mag, tint)*N]`) and the `AnimComponent` registry are produced by [AnimationPacker](../engine/AnimationPacker.md).
+- Engine producer + buffer contract: [RealtimeBus](../../explain-engine/docs/RealtimeBus.md), [ChannelReader](../../explain-engine/docs/ChannelReader.md), [RealtimeChannels](../../explain-engine/docs/RealtimeChannels.md).
+- The anim frame layout (`[time, (mag, tint)*N]`) and the `AnimComponent` registry are produced by [AnimationPacker](../../explain-engine/docs/AnimationPacker.md).
 - The bus singleton + start/stop gating: `src/composables/useRealtimeBus.ts`.
 - Hosts that construct and drive these adapters: [HostComponents](./HostComponents.md).
 

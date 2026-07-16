@@ -1,7 +1,7 @@
 # UI Architecture — the Vue layer
 
 The whole-UI developer overview. This directory documents the **Vue 3 + Vite + TypeScript app**
-that wraps the framework-agnostic [Explain engine](../engine/ARCHITECTURE.md). The engine runs
+that wraps the framework-agnostic [Explain engine](../../explain-engine/docs/ARCHITECTURE.md). The engine runs
 in a Web Worker and speaks a typed wire protocol; the UI's single job is to drive that engine and
 render what comes back. The cross-cutting idea that explains every file under `src/` is the
 **two-plane split**: a slow, reactive *control plane* and a fast, non-reactive *data plane*. Read
@@ -20,8 +20,8 @@ The app never lets the ~60 Hz simulation stream touch Vue reactivity — re-rend
 | | **Control plane** | **Data plane** |
 |---|---|---|
 | Carries | status, `model_ready`, errors, whole-model state, the ~1 Hz **slow** stream (`rts`) | the ~60 Hz per-frame **fast** stream (chart rows + animation frame) |
-| Owner | [`useExplain.ts`](./Composables.md) singleton wrapping [`@explain/Model`](../engine/ARCHITECTURE.md) | [`useRealtimeBus.ts`](./Composables.md) → [`@explain/realtime/RealtimeBus`](../engine/RealtimeBus.md) |
-| Mechanism | engine events → Vue `ref`/`shallowRef` → Pinia stores → components | a single `requestAnimationFrame` loop drains a [`ChannelReader`](../engine/ChannelReader.md) and calls each renderer adapter's `onFrame(chart, anim)` |
+| Owner | [`useExplain.ts`](./Composables.md) singleton wrapping [`@explain/Model`](../../explain-engine/docs/ARCHITECTURE.md) | [`useRealtimeBus.ts`](./Composables.md) → [`@explain/realtime/RealtimeBus`](../../explain-engine/docs/RealtimeBus.md) |
+| Mechanism | engine events → Vue `ref`/`shallowRef` → Pinia stores → components | a single `requestAnimationFrame` loop drains a [`ChannelReader`](../../explain-engine/docs/ChannelReader.md) and calls each renderer adapter's `onFrame(chart, anim)` |
 | Reactive? | **Yes** (this is the only path into Vue refs) | **No** — renderers hold plain typed arrays and paint canvas/WebGL directly |
 | Consumers | numeric readouts, control panels, the editor, chat | [host components](./HostComponents.md) + their [render-layer](./RenderLayer.md) adapters |
 
@@ -44,8 +44,8 @@ Transport for the data plane is **SharedArrayBuffer** when the page is cross-ori
 otherwise transferable `postMessage`. The choice is invisible to the UI; the bus handles both.
 
 See [RenderLayer](./RenderLayer.md) for the typed-buffer formats and the channels handshake, and the
-engine-side write docs: [ChannelWriter](../engine/ChannelWriter.md),
-[RealtimeChannels](../engine/RealtimeChannels.md), [AnimationPacker](../engine/AnimationPacker.md).
+engine-side write docs: [ChannelWriter](../../explain-engine/docs/ChannelWriter.md),
+[RealtimeChannels](../../explain-engine/docs/RealtimeChannels.md), [AnimationPacker](../../explain-engine/docs/AnimationPacker.md).
 
 ---
 
@@ -174,13 +174,13 @@ Scripts: `npm run dev` (Vite), `npm run build` (`vue-tsc --noEmit && vite build`
 ## 6. The UI house-doc template
 
 Each per-area doc in this folder follows the same shape (the UI analogue of the engine template in
-[ARCHITECTURE §9](../engine/ARCHITECTURE.md)):
+[ARCHITECTURE §9](../../explain-engine/docs/ARCHITECTURE.md)):
 
 1. **Title + one-paragraph summary** — what this layer is, in plain terms.
 2. **What lives here** — a `File | Responsibility` table for the files the doc covers.
 3. **Per-unit sections** — for each composable/store/component/renderer: its reactive state +
    exported API (or props/emits), in pipe tables.
 4. **Wiring** — how it connects to the engine, the other plane, and sibling layers, using real symbol
-   names and relative cross-links (`[RealtimeBus](../engine/RealtimeBus.md)`, `[Stores](./Stores.md)`).
+   names and relative cross-links (`[RealtimeBus](../../explain-engine/docs/RealtimeBus.md)`, `[Stores](./Stores.md)`).
 5. **Gotchas** — the non-obvious constraints (`shallowRef`, singleton lifecycles, additive watchlists,
    the server-cookie auth boundary, lazy Pixi import, …).

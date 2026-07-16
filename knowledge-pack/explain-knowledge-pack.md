@@ -14,7 +14,7 @@ and docs below as the ground truth; prefer quoting them over recalling general k
 
 1. **Architecture** — the repo's CLAUDE.md (build flow, message envelope, model contract, the factor/effective-value pattern).
 2. **Engine onboarding** — explain-engine/README.md.
-3. **Physiology docs** — docs/engine/*.md, the per-model derivations and math.
+3. **Physiology docs** — explain-engine/docs/*.md, the per-model derivations and math.
 4. **Engine source** — the live ES-module classes that run in the Web Worker.
 5. **Scenario format** — the model-definition JSON the engine consumes.
 
@@ -103,9 +103,11 @@ Some component models build sub-models inside `init_model` via the `this.compone
 
 ## Docs
 
-All prose documentation now lives under the top-level [`docs/`](docs/README.md), split into two clearly separated sets: [`docs/engine/`](docs/engine/README.md) (the physics engine) and [`docs/ui/`](docs/ui/README.md) (the Vue app). The engine *code* still lives under `explain-engine/`.
+Prose documentation is split into two sets in **two repositories**: [`docs/ui/`](docs/ui/README.md) (the Vue app) lives here, and [`explain-engine/docs/`](explain-engine/docs/README.md) (the physics engine) lives in the engine repo beside the code it documents — it reaches this tree through the submodule. [`docs/README.md`](docs/README.md) is the index for both.
 
-[`docs/engine/*.md`](docs/engine/README.md) contains the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain-engine/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
+[`explain-engine/docs/*.md`](explain-engine/docs/README.md) contains the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain-engine/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
+
+Note: a checkout without `git submodule update --init` has no engine docs at all.
 
 ## UI documentation
 
@@ -119,24 +121,30 @@ The **Vue UI layer** (everything under `src/`) is documented in [`docs/ui/`](doc
 ### FILE: explain-engine/README.md
 
 ````markdown
-# Explain Model (`src/explain`)
+# Explain Engine
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21389097.svg)](https://doi.org/10.5281/zenodo.21389097)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-This folder contains the in-browser physiological simulation engine used by the web app.
-The model runs in a dedicated Web Worker (`ModelEngine.js`) and is controlled from the main thread through the `Model` wrapper (`Model.js`).
+A framework-agnostic, dependency-free physiological simulation engine (whole-body neonatal
+and adult cardiorespiratory model). It runs in a dedicated Web Worker (`ModelEngine.js`) and
+is controlled from the main thread through the `Model` wrapper (`Model.js`).
+
+This repository is self-contained: it has no runtime or build dependencies, and the tooling
+under `scripts/` (headless harness, probes, sensitivity-analysis campaign) runs on plain Node
+with no install step. Consumers mount it as a git submodule — see
+[`explain-ui`](https://github.com/Dobutamine/explain-ui) for the web app built on it.
 
 > **Where to read next**
-> - [`../docs/engine/ARCHITECTURE.md`](../docs/engine/ARCHITECTURE.md) — the full engine architecture (two-thread design, build/step loop, wire protocol, scaling/tuning, realtime data plane). Start there for deep detail.
-> - [`../docs/engine/`](../docs/engine/) — per-class physiological reference (one Markdown file per model, e.g. `Heart.md`, `BloodCapacitance.md`, `Pda.md`), plus helper docs (`DataCollector.md`, `TaskScheduler.md`, `ModelScaler.md`, …).
-> - [`../docs/engine/README.md`](../docs/engine/README.md) — index of the per-class docs.
+> - [`./docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — the full engine architecture (two-thread design, build/step loop, wire protocol, scaling/tuning, realtime data plane). Start there for deep detail.
+> - [`./docs/`](./docs/) — per-class physiological reference (one Markdown file per model, e.g. `Heart.md`, `BloodCapacitance.md`, `Pda.md`), plus helper docs (`DataCollector.md`, `TaskScheduler.md`, `ModelScaler.md`, …).
+> - [`./docs/README.md`](./docs/README.md) — index of the per-class docs.
 >
 > This README is the **start-here / onboarding** guide. It keeps the lifecycle, a minimal usage example, and the student manual; the deep architecture lives in `ARCHITECTURE.md`.
 
 ## High-level architecture
 
-Two threads, one wire protocol. `Model.js` runs on the main thread: it spawns the worker, exposes the public API, and re-emits worker responses as events you subscribe to with `explain.on(event, handler)`. `ModelEngine.js` is the Web Worker: it owns the live `model` object, the build/step loop, and the GET/PUT/POST/DELETE message router. See [`../docs/engine/ARCHITECTURE.md`](../docs/engine/ARCHITECTURE.md) for the complete picture.
+Two threads, one wire protocol. `Model.js` runs on the main thread: it spawns the worker, exposes the public API, and re-emits worker responses as events you subscribe to with `explain.on(event, handler)`. `ModelEngine.js` is the Web Worker: it owns the live `model` object, the build/step loop, and the GET/PUT/POST/DELETE message router. See [`./docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the complete picture.
 
 
 ## Runtime lifecycle
@@ -168,25 +176,25 @@ Two threads, one wire protocol. `Model.js` runs on the main thread: it spawns th
 
 ### Inbound commands to worker (`ModelEngine`)
 
-Commands are routed by the worker's `self.onmessage` switch on `type` then `message` — e.g. `POST build`/`start`/`stop`/`calc`/`call`/`scale`/`calibrate`/`watch`, `PUT property_value`/`diagram_definition`/`sample_interval`, `GET state`/`data`/`model_props`/`model_types`, `DELETE watchlist`. See the full command table in [`../docs/engine/ARCHITECTURE.md`](../docs/engine/ARCHITECTURE.md).
+Commands are routed by the worker's `self.onmessage` switch on `type` then `message` — e.g. `POST build`/`start`/`stop`/`calc`/`call`/`scale`/`calibrate`/`watch`, `PUT property_value`/`diagram_definition`/`sample_interval`, `GET state`/`data`/`model_props`/`model_types`, `DELETE watchlist`. See the full command table in [`./docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ### Outbound events from worker
 
-The worker posts back messages whose `type` is mapped to emitter events in `Model.receive()` — including `state`, `status`, `model_ready`, `rt_start`/`rt_stop`, `data`/`data_slow`, `rtf`/`rts` (realtime fast/slow), `prop_value`, `model_props`, `model_types`, `state_saved`, `tuned`, and `error`. Subscribe with `explain.on(event, handler)` (the `Model` is a `ModelEmitter`; these are **not** DOM `CustomEvent`s). The realtime data-plane messages (`RT_MSG.*`) bypass this and are consumed by `RealtimeBus`. See [`../docs/engine/ARCHITECTURE.md`](../docs/engine/ARCHITECTURE.md) for the full event reference.
+The worker posts back messages whose `type` is mapped to emitter events in `Model.receive()` — including `state`, `status`, `model_ready`, `rt_start`/`rt_stop`, `data`/`data_slow`, `rtf`/`rts` (realtime fast/slow), `prop_value`, `model_props`, `model_types`, `state_saved`, `tuned`, and `error`. Subscribe with `explain.on(event, handler)` (the `Model` is a `ModelEmitter`; these are **not** DOM `CustomEvent`s). The realtime data-plane messages (`RT_MSG.*`) bypass this and are consumed by `RealtimeBus`. See [`./docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full event reference.
 
 ## Public API (`Model.js`)
 
-The main-thread methods UI code calls — `load`/`build`/`restart`, `calculate(seconds)`, `start`/`stop`/`dispose`, `watchModelProps`/`watchModelPropsSlow` and their `clear*` counterparts, `getModelData`/`getModelDataSlow`/`getModelState`/`saveModelState`/`getModelTypes`/`getPropValue`, `setPropValue`/`callModelFunction`, `scaleModel(group, factor)`, `tune(targets, opts)`, and `updateDiagram`. Each is documented inline in `Model.js`; see [`../docs/engine/ARCHITECTURE.md`](../docs/engine/ARCHITECTURE.md) for the annotated public-API reference.
+The main-thread methods UI code calls — `load`/`build`/`restart`, `calculate(seconds)`, `start`/`stop`/`dispose`, `watchModelProps`/`watchModelPropsSlow` and their `clear*` counterparts, `getModelData`/`getModelDataSlow`/`getModelState`/`saveModelState`/`getModelTypes`/`getPropValue`, `setPropValue`/`callModelFunction`, `scaleModel(group, factor)`, `tune(targets, opts)`, and `updateDiagram`. Each is documented inline in `Model.js`; see [`./docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the annotated public-API reference.
 
 ## Data collection and scheduling
 
 ### `DataCollector`
 
-Keeps two watchlists — `watch_list` (fast stream, ~0.005 s) and `watch_list_slow` (slow stream, 1.0 s) — of dot-path props resolved against `model.models`, drained each collect cycle. Full behavior in [`../docs/engine/DataCollector.md`](../docs/engine/DataCollector.md).
+Keeps two watchlists — `watch_list` (fast stream, ~0.005 s) and `watch_list_slow` (slow stream, 1.0 s) — of dot-path props resolved against `model.models`, drained each collect cycle. Full behavior in [`./docs/DataCollector.md`](./docs/DataCollector.md).
 
 ### `TaskScheduler`
 
-Runs deferred mutations on a fixed interval: `setPropValue(prop, value, it, at)` tweens numeric targets over `it` seconds after an `at`-second delay (booleans/strings swap instantly), and `callModelFunction` schedules a method call. See [`../docs/engine/TaskScheduler.md`](../docs/engine/TaskScheduler.md).
+Runs deferred mutations on a fixed interval: `setPropValue(prop, value, it, at)` tweens numeric targets over `it` seconds after an `at`-second delay (booleans/strings swap instantly), and `callModelFunction` schedules a method call. See [`./docs/TaskScheduler.md`](./docs/TaskScheduler.md).
 
 ## Model class contract
 
@@ -246,7 +254,7 @@ explain.stop();
 
 ## Notes and caveats
 
-A few things that bite newcomers: payloads crossing the worker boundary are JSON-stringified for `build`/`property_value`/`call`; UI metadata is **not** on the model classes (it lives in `src/model-interface/registry.ts`); cardiac/breathing timing counters live on the engine `model` object (`ncc_*`), not on the components; and the factor / `*_factor_ps` / `*_factor_scaling_ps` effective-value pattern means core physics params are never used raw. These and other gotchas are covered in [`../docs/engine/ARCHITECTURE.md`](../docs/engine/ARCHITECTURE.md).
+A few things that bite newcomers: payloads crossing the worker boundary are JSON-stringified for `build`/`property_value`/`call`; UI metadata is **not** on the model classes (it lives in `src/model-interface/registry.ts`); cardiac/breathing timing counters live on the engine `model` object (`ncc_*`), not on the components; and the factor / `*_factor_ps` / `*_factor_scaling_ps` effective-value pattern means core physics params are never used raw. These and other gotchas are covered in [`./docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ## Student onboarding manual
 
@@ -255,7 +263,7 @@ A few things that bite newcomers: payloads crossing the worker boundary are JSON
 1. Start the Vite dev server (`npm run dev`) from this directory (Vue 3 + Vite + TypeScript app; production build via `npm run build`).
 2. The explain engine bootstraps via `src/composables/useExplain.ts`, a singleton that instantiates `Model` (imported as `@explain/Model`) and loads the default definition.
 3. Use UI buttons or call the engine wrapper returned by `useExplain()` (`model`) to `build`, `load`, `start`, `stop`, or `calculate(seconds)`.
-4. Place custom definitions under `public/model_definitions` and run `explain.load("definition_name")` (omit `.json`).
+4. Place custom definitions under `model_definitions` and run `explain.load("definition_name")` (omit `.json`).
 
 ### 2. Observing & tweaking data
 
@@ -265,24 +273,24 @@ A few things that bite newcomers: payloads crossing the worker boundary are JSON
 
 ### 3. Adding models
 
-**Base models** (`src/explain/base_models`)
+**Base models** (`base_models`)
 - Extend `BaseModelClass` and define a static `model_type`. (UI/parameter metadata is **not** on the class — add a `model_type` entry to the UI schema at `src/model-interface/registry.ts` to make parameters editable.)
 - Implement `init_model(config)` and `calc_model()`/`step_model()`.
 - Import/export the class in `ModelIndex.js`.
 
-**Component models** (`src/explain/component_models`)
+**Component models** (`component_models`)
 - Compose multiple base models or encapsulate subsystems.
 - Register internally created models on the engine `models` map so schedulers and collectors can target them.
 
-**Device models** (`src/explain/device_models`)
+**Device models** (`device_models`)
 - Represent external hardware; validate dependencies (e.g., lungs) in `init_model` and emit clear errors if missing.
 
-**Helpers** (`src/explain/helpers`)
+**Helpers** (`helpers`)
 - Instantiate new helpers inside `ModelEngine` and keep their state serializable (strip private fields in `_processModelState`).
 
 ### 4. Editing definitions
 
-1. Definitions live in `public/model_definitions/*.json`.
+1. Definitions live in `model_definitions/*.json`.
 2. Each entry contains `{ name, model_type, settings, inputs }`.
 3. Example block:
 
@@ -323,7 +331,7 @@ Machine-readable metadata lives in [`CITATION.cff`](./CITATION.cff); GitHub's "C
 
 ## 3. Physiology docs
 
-### FILE: docs/engine/ARCHITECTURE.md
+### FILE: explain-engine/docs/ARCHITECTURE.md
 
 ````markdown
 # Explain Engine — Architecture
@@ -342,8 +350,8 @@ Two files, two threads, one wire protocol:
 
 | File | Thread | Owns |
 |---|---|---|
-| [`Model.js`](../../explain/Model.js) | main thread | Public API surface, message send/receive, event re-emit. Extends `ModelEmitter` (pub/sub). |
-| [`ModelEngine.js`](../../explain/ModelEngine.js) | Web Worker | The live `model` object, the build flow, the step loop, the message router. |
+| [`Model.js`](../Model.js) | main thread | Public API surface, message send/receive, event re-emit. Extends `ModelEmitter` (pub/sub). |
+| [`ModelEngine.js`](../ModelEngine.js) | Web Worker | The live `model` object, the build flow, the step loop, the message router. |
 
 `Model.js`'s constructor spawns the worker with
 
@@ -424,7 +432,7 @@ The worker's outbound `type` strings are translated to `ModelEmitter` events you
 
 ### Event emitter (`ModelEmitter`)
 
-`Model` extends [`ModelEmitter`](../../explain/ModelEmitter.js) — a deliberately minimal pub/sub base class (no dependencies, **no `once`, no wildcards, no per-callback error guarding**):
+`Model` extends [`ModelEmitter`](../ModelEmitter.js) — a deliberately minimal pub/sub base class (no dependencies, **no `once`, no wildcards, no per-callback error guarding**):
 
 | Method | Behaviour |
 |---|---|
@@ -535,8 +543,8 @@ When adding a tunable param, follow this convention so it composes with interven
 
 **⚠️ The scaling-layer suffix is NOT uniform across the engine.** Verify before you copy:
 
-- The **capacitance / resistor / time-varying-elastance** family uses **`*_factor_scaling_ps`** (e.g. `el_base_factor_scaling_ps`, `u_vol_factor_scaling_ps`, `r_factor_scaling_ps` in [`Capacitance.js`](../../explain/base_models/Capacitance.js) / [`Resistor.js`](../../explain/base_models/Resistor.js)).
-- The **diffusor / exchanger** family uses **`*_factor_scaling`** with **no `_ps`** (e.g. `dif_o2_factor_scaling`, `dif_co2_factor_scaling` in [`GasDiffusor.js`](../../explain/base_models/GasDiffusor.js); likewise `GasExchanger`, `BloodDiffusor`).
+- The **capacitance / resistor / time-varying-elastance** family uses **`*_factor_scaling_ps`** (e.g. `el_base_factor_scaling_ps`, `u_vol_factor_scaling_ps`, `r_factor_scaling_ps` in [`Capacitance.js`](../base_models/Capacitance.js) / [`Resistor.js`](../base_models/Resistor.js)).
+- The **diffusor / exchanger** family uses **`*_factor_scaling`** with **no `_ps`** (e.g. `dif_o2_factor_scaling`, `dif_co2_factor_scaling` in [`GasDiffusor.js`](../base_models/GasDiffusor.js); likewise `GasExchanger`, `BloodDiffusor`).
 
 If you scale a diffusor through the `*_scaling_ps` name it will silently do nothing.
 
@@ -566,7 +574,7 @@ applied to `to2`, `tco2`, every entry in `solutes` and `drugs`, plus `temp` and 
 2. **Give it a `static model_type`** string — the key used at build and in definition JSON.
 3. **Implement `init_model(args)`** (resolve cross-model refs, set `_is_initialized`) and **`calc_model()`** (the physics).
 4. **Follow the factor convention** (§7a) for any tunable param so it composes with interventions and scaling — and use the **correct scaling suffix** for the family you're modelling.
-5. **Export it from [`ModelIndex.js`](../../explain/ModelIndex.js).** The engine builds `available_model_map` from everything `ModelIndex` exports. **Forgetting this export is the usual cause of "model type not found" at build.**
+5. **Export it from [`ModelIndex.js`](../ModelIndex.js).** The engine builds `available_model_map` from everything `ModelIndex` exports. **Forgetting this export is the usual cause of "model type not found" at build.**
 6. **Reference the `model_type`** in your `model_definitions/*.json` `models` map.
 7. **Add a `model_type` entry to `src/model-interface/registry.ts`** so the parameters become editable in the app (the engine ships no UI metadata).
 8. **Write a doc** in `docs/engine/` following the template in §10.
@@ -616,7 +624,7 @@ The mirror of the `ChannelWriter`/`AnimationPacker` write side, running on the *
 
 ````
 
-### FILE: docs/engine/AnimationPacker.md
+### FILE: explain-engine/docs/AnimationPacker.md
 
 ````markdown
 # AnimationPacker
@@ -706,7 +714,7 @@ Frames follow the anim layout from [RealtimeChannels](./RealtimeChannels.md): `[
 
 ````
 
-### FILE: docs/engine/Ans.md
+### FILE: explain-engine/docs/Ans.md
 
 ````markdown
 # Autonomic Nervous System (Ans, AnsAfferent, AnsEfferent)
@@ -841,7 +849,7 @@ firing → factor < 1 → lower heart rate; the baroreflex).
 
 ````
 
-### FILE: docs/engine/AnsAfferent.md
+### FILE: explain-engine/docs/AnsAfferent.md
 
 ```markdown
 # AnsAfferent
@@ -857,7 +865,7 @@ firing rate), the data flow, the configuration fields (`input_model`, `input_pro
 
 ```
 
-### FILE: docs/engine/AnsEfferent.md
+### FILE: explain-engine/docs/AnsEfferent.md
 
 ```markdown
 # AnsEfferent
@@ -874,7 +882,7 @@ translation, the configuration fields (`target_model`, `target_prop`, `effect_at
 
 ```
 
-### FILE: docs/engine/BaseModelClass.md
+### FILE: explain-engine/docs/BaseModelClass.md
 
 ````markdown
 # BaseModelClass
@@ -989,7 +997,7 @@ however, carries the shared fields it defines (`name`, `description`, `is_enable
 
 ````
 
-### FILE: docs/engine/Blood.md
+### FILE: explain-engine/docs/Blood.md
 
 ````markdown
 # Blood
@@ -1119,7 +1127,7 @@ From `term_neonate.json` (`model_definition.models.Blood`):
 
 ````
 
-### FILE: docs/engine/BloodCapacitance.md
+### FILE: explain-engine/docs/BloodCapacitance.md
 
 ````markdown
 # BloodCapacitance
@@ -1251,7 +1259,7 @@ BloodCapacitance does not override `calc_model()` -- it inherits the Capacitance
 
 ````
 
-### FILE: docs/engine/BloodComposition.md
+### FILE: explain-engine/docs/BloodComposition.md
 
 ````markdown
 # BloodComposition
@@ -1409,7 +1417,7 @@ A standard Brent solver combining inverse quadratic interpolation, the secant me
 
 ````
 
-### FILE: docs/engine/BloodDiffusor.md
+### FILE: explain-engine/docs/BloodDiffusor.md
 
 ````markdown
 # BloodDiffusor
@@ -1536,7 +1544,7 @@ Here `PL_MAT` carries `fixed_composition: true`, so the diffusor drives fetal ga
 
 ````
 
-### FILE: docs/engine/BloodPump.md
+### FILE: explain-engine/docs/BloodPump.md
 
 ````markdown
 # BloodPump
@@ -1637,7 +1645,7 @@ No scenario contains a `BloodPump`, so the following is **illustrative** (the in
 
 ````
 
-### FILE: docs/engine/BloodTimeVaryingElastance.md
+### FILE: explain-engine/docs/BloodTimeVaryingElastance.md
 
 ````markdown
 # BloodTimeVaryingElastance
@@ -1779,7 +1787,7 @@ When `is_externally_managed = true`, all three tiers of factors are reset to 1.0
 
 ````
 
-### FILE: docs/engine/BloodVessel.md
+### FILE: explain-engine/docs/BloodVessel.md
 
 ````markdown
 # BloodVessel
@@ -2002,7 +2010,7 @@ Where `pres_ext` is a non-persistent external pressure (e.g., intrathoracic pres
 
 ````
 
-### FILE: docs/engine/Brain.md
+### FILE: explain-engine/docs/Brain.md
 
 ````markdown
 # Brain (cerebral autoregulation + ICP)
@@ -2145,7 +2153,7 @@ once, restoring neutral cerebral haemodynamics.
 
 ````
 
-### FILE: docs/engine/Breathing.md
+### FILE: explain-engine/docs/Breathing.md
 
 ````markdown
 # Breathing
@@ -2343,7 +2351,7 @@ From `term_neonate.json`:
 
 ````
 
-### FILE: docs/engine/Calibrator.md
+### FILE: explain-engine/docs/Calibrator.md
 
 ```markdown
 # Calibrator
@@ -2403,7 +2411,7 @@ The live levers built by `buildLiveControllers` deliberately use the persistent 
 
 ```
 
-### FILE: docs/engine/Capacitance.md
+### FILE: explain-engine/docs/Capacitance.md
 
 ````markdown
 # Capacitance
@@ -2556,7 +2564,7 @@ omitted):
 
 ````
 
-### FILE: docs/engine/ChannelReader.md
+### FILE: explain-engine/docs/ChannelReader.md
 
 ````markdown
 # ChannelReader
@@ -2660,7 +2668,7 @@ The reader uses the control-header indices from [RealtimeChannels](./RealtimeCha
 
 ````
 
-### FILE: docs/engine/ChannelWriter.md
+### FILE: explain-engine/docs/ChannelWriter.md
 
 ```markdown
 # ChannelWriter
@@ -2763,7 +2771,7 @@ The ring-buffer indices and frame layout are owned by [RealtimeChannels](./Realt
 
 ```
 
-### FILE: docs/engine/Circulation.md
+### FILE: explain-engine/docs/Circulation.md
 
 ````markdown
 # Circulation
@@ -2954,7 +2962,7 @@ See also [Respiration](./Respiration.md) (the respiratory-tree counterpart) and
 
 ````
 
-### FILE: docs/engine/Container.md
+### FILE: explain-engine/docs/Container.md
 
 ````markdown
 # Container
@@ -3106,7 +3114,7 @@ Same pattern as [`Capacitance`](./Capacitance.md).
 
 ````
 
-### FILE: docs/engine/DataCollector.md
+### FILE: explain-engine/docs/DataCollector.md
 
 ````markdown
 # DataCollector
@@ -3204,7 +3212,7 @@ This is the read side of the model contract; the write side (deferred mutation o
 
 ````
 
-### FILE: docs/engine/Drugs.md
+### FILE: explain-engine/docs/Drugs.md
 
 ````markdown
 # Drugs (pharmacology PK/PD)
@@ -3340,7 +3348,7 @@ Callable via `callModelFunction` / the `TaskScheduler` (see the engine docs):
 
 ````
 
-### FILE: docs/engine/Ecls.md
+### FILE: explain-engine/docs/Ecls.md
 
 ````markdown
 # Ecls
@@ -3588,7 +3596,7 @@ Note `ecls_clamped: true` ships the circuit on but clamped — no blood flows un
 
 ````
 
-### FILE: docs/engine/Fluids.md
+### FILE: explain-engine/docs/Fluids.md
 
 ````markdown
 # Fluids
@@ -3726,7 +3734,7 @@ From `term_neonate.json`:
 
 ````
 
-### FILE: docs/engine/Gas.md
+### FILE: explain-engine/docs/Gas.md
 
 ````markdown
 # Gas
@@ -3838,7 +3846,7 @@ warm, fully-saturated alveoli):
 
 ````
 
-### FILE: docs/engine/GasCapacitance.md
+### FILE: explain-engine/docs/GasCapacitance.md
 
 ````markdown
 # GasCapacitance
@@ -4049,7 +4057,7 @@ manager from its `temp_settings` / `humidity_settings` / `pres_atm`, rather than
 
 ````
 
-### FILE: docs/engine/GasComposition.md
+### FILE: explain-engine/docs/GasComposition.md
 
 ````markdown
 # GasComposition
@@ -4158,7 +4166,7 @@ The per-step composition update is done by the [`GasCapacitance.calc_gas_composi
 
 ````
 
-### FILE: docs/engine/GasDiffusor.md
+### FILE: explain-engine/docs/GasDiffusor.md
 
 ````markdown
 # GasDiffusor
@@ -4279,7 +4287,7 @@ definition follows the shape of the other transport elements:
 
 ````
 
-### FILE: docs/engine/GasExchanger.md
+### FILE: explain-engine/docs/GasExchanger.md
 
 ````markdown
 # GasExchanger
@@ -4412,7 +4420,7 @@ alveolar gas:
 
 ````
 
-### FILE: docs/engine/Glucose.md
+### FILE: explain-engine/docs/Glucose.md
 
 ````markdown
 # Glucose (blood-glucose / insulin controller)
@@ -4515,7 +4523,7 @@ glucose the same way any fluid raises Na/K. The controller then senses the rise 
 
 ````
 
-### FILE: docs/engine/Heart.md
+### FILE: explain-engine/docs/Heart.md
 
 ````markdown
 # Heart
@@ -4626,7 +4634,7 @@ isoelectric at 0 mV.
 
 ````
 
-### FILE: docs/engine/HeartChamber.md
+### FILE: explain-engine/docs/HeartChamber.md
 
 ````markdown
 # HeartChamber
@@ -4823,7 +4831,7 @@ Flow between chambers is handled by separate `Resistor` models (e.g., `LA_LV` fo
 
 ````
 
-### FILE: docs/engine/HeartFunction.md
+### FILE: explain-engine/docs/HeartFunction.md
 
 ````markdown
 # HeartFunction — Load-Induced Ventricular Contractility Compromise
@@ -4959,7 +4967,7 @@ a `HeartFunction` limitation).
 
 ````
 
-### FILE: docs/engine/HeartValve.md
+### FILE: explain-engine/docs/HeartValve.md
 
 ````markdown
 # HeartValve
@@ -4987,7 +4995,7 @@ the resistance/factor details.
 
 ````
 
-### FILE: docs/engine/Hormones.md
+### FILE: explain-engine/docs/Hormones.md
 
 ````markdown
 # Hormones (RAAS / ADH)
@@ -5100,7 +5108,7 @@ optionally `--hset aldosterone_tc=…` to compress for a quick loop check):
 
 ````
 
-### FILE: docs/engine/Kidneys.md
+### FILE: explain-engine/docs/Kidneys.md
 
 ````markdown
 # Kidneys
@@ -5354,7 +5362,7 @@ adult 0.88) — no railing.
 
 ````
 
-### FILE: docs/engine/Lactate.md
+### FILE: explain-engine/docs/Lactate.md
 
 ````markdown
 # Lactate
@@ -5519,7 +5527,7 @@ From `term_neonate.json`:
 
 ````
 
-### FILE: docs/engine/MODEL_DEFINITIONS.md
+### FILE: explain-engine/docs/MODEL_DEFINITIONS.md
 
 ````markdown
 # Model definitions (scenario files)
@@ -5741,7 +5749,7 @@ Each entry `X` maps to `public/model_definitions/X.json` and is a valid argument
 
 ````
 
-### FILE: docs/engine/MaternalPlacenta.md
+### FILE: explain-engine/docs/MaternalPlacenta.md
 
 ````markdown
 # MaternalPlacenta
@@ -6020,7 +6028,7 @@ term placental flow.
 
 ````
 
-### FILE: docs/engine/Metabolism.md
+### FILE: explain-engine/docs/Metabolism.md
 
 ````markdown
 # Metabolism
@@ -6171,7 +6179,7 @@ scenario uses `vo2: 3.5` with a slightly different split.)
 
 ````
 
-### FILE: docs/engine/Mob.md
+### FILE: explain-engine/docs/Mob.md
 
 ````markdown
 # Mob — Myocardial Oxygen Balance
@@ -6355,7 +6363,7 @@ From `term_neonate.json` (coronary sub-components abbreviated):
 
 ````
 
-### FILE: docs/engine/ModelScaler.md
+### FILE: explain-engine/docs/ModelScaler.md
 
 ````markdown
 # ModelScaler
@@ -6437,7 +6445,7 @@ Because `_apply` **sets** the scaling layer to an absolute value, calling a scal
 
 ````
 
-### FILE: docs/engine/Monitor.md
+### FILE: explain-engine/docs/Monitor.md
 
 ````markdown
 # Monitor
@@ -6580,7 +6588,7 @@ matching `flow_targets`:
 
 ````
 
-### FILE: docs/engine/Pda-velocity.md
+### FILE: explain-engine/docs/Pda-velocity.md
 
 ````markdown
 # Pda — Velocity Outputs
@@ -6737,7 +6745,7 @@ Two follow-up steps would resolve the trade-off without removing either existing
 
 ````
 
-### FILE: docs/engine/Pda.md
+### FILE: explain-engine/docs/Pda.md
 
 ````markdown
 # Pda
@@ -6923,7 +6931,7 @@ circuit compartment (not owned by the Pda).
 
 ````
 
-### FILE: docs/engine/Placenta.md
+### FILE: explain-engine/docs/Placenta.md
 
 ````markdown
 # Placenta
@@ -7083,7 +7091,7 @@ From `term_fetus.json` (placenta running, cord unclamped):
 
 ````
 
-### FILE: docs/engine/README.md
+### FILE: explain-engine/docs/README.md
 
 ```markdown
 # Explain Engine — Model Documentation Index
@@ -7250,7 +7258,7 @@ Not tied to a single class — physiology/clinical background and scenario-build
 
 ```
 
-### FILE: docs/engine/RealTimeMovingAverage.md
+### FILE: explain-engine/docs/RealTimeMovingAverage.md
 
 ```markdown
 # RealTimeMovingAverage
@@ -7304,7 +7312,7 @@ Re-initializes the buffer (`values`, `count`, `writeIndex`, `sum`, `currentAvera
 
 ```
 
-### FILE: docs/engine/RealtimeBus.md
+### FILE: explain-engine/docs/RealtimeBus.md
 
 ````markdown
 # RealtimeBus
@@ -7420,7 +7428,7 @@ So **chart never drops samples** (drained in order with ring-wrap handling) whil
 
 ````
 
-### FILE: docs/engine/RealtimeChannels.md
+### FILE: explain-engine/docs/RealtimeChannels.md
 
 ```markdown
 # RealtimeChannels
@@ -7531,7 +7539,7 @@ All are pure helpers used to compute anim-frame geometry consistently on both si
 
 ```
 
-### FILE: docs/engine/Resistor.md
+### FILE: explain-engine/docs/Resistor.md
 
 ````markdown
 # Resistor
@@ -7690,7 +7698,7 @@ p_eff = p + (factor − 1)·p + (factor_ps − 1)·p + (factor_scaling_ps − 1)
 
 ````
 
-### FILE: docs/engine/Respiration.md
+### FILE: explain-engine/docs/Respiration.md
 
 ````markdown
 # Respiration
@@ -7842,7 +7850,7 @@ From `term_neonate.json`:
 
 ````
 
-### FILE: docs/engine/Resuscitation.md
+### FILE: explain-engine/docs/Resuscitation.md
 
 ````markdown
 # Resuscitation
@@ -8020,7 +8028,7 @@ From `term_neonate.json`:
 
 ````
 
-### FILE: docs/engine/Shunts.md
+### FILE: explain-engine/docs/Shunts.md
 
 ````markdown
 # Shunts
@@ -8183,7 +8191,7 @@ From `term_neonate.json` (a healthy term neonate — both septal openings closed
 
 ````
 
-### FILE: docs/engine/Surfactant.md
+### FILE: explain-engine/docs/Surfactant.md
 
 ````markdown
 # Surfactant
@@ -8314,7 +8322,7 @@ idles. This is the clean "off" switch that returns the lung to its underlying (s
 
 ````
 
-### FILE: docs/engine/TESTING.md
+### FILE: explain-engine/docs/TESTING.md
 
 ````markdown
 # Testing
@@ -8438,7 +8446,7 @@ For the calibration math these tools drive, see [Calibrator](./Calibrator.md); f
 
 ````
 
-### FILE: docs/engine/TaskScheduler.md
+### FILE: explain-engine/docs/TaskScheduler.md
 
 ````markdown
 # TaskScheduler
@@ -8521,7 +8529,7 @@ The complementary read-only telemetry helper is [DataCollector](./DataCollector.
 
 ````
 
-### FILE: docs/engine/Thermoregulation.md
+### FILE: explain-engine/docs/Thermoregulation.md
 
 ````markdown
 # Thermoregulation
@@ -8637,7 +8645,7 @@ limb (which grows ∝ `core − env_temp` and so always overtakes) plus the `vo2
 
 ````
 
-### FILE: docs/engine/TimeVaryingElastance.md
+### FILE: explain-engine/docs/TimeVaryingElastance.md
 
 ````markdown
 # TimeVaryingElastance
@@ -8798,7 +8806,7 @@ usually omitted):
 
 ````
 
-### FILE: docs/engine/Uterus.md
+### FILE: explain-engine/docs/Uterus.md
 
 ````markdown
 # Uterus
@@ -9141,7 +9149,7 @@ of uterine flow once a maternal placenta carries the dominant share) and `preg_v
 
 ````
 
-### FILE: docs/engine/Ventilator.md
+### FILE: explain-engine/docs/Ventilator.md
 
 ````markdown
 # Ventilator
@@ -9435,7 +9443,7 @@ the full definition also nests the six `VENT_*` sub-models under `components`:
 
 ````
 
-### FILE: docs/engine/chd_duct_fo_dependent.md
+### FILE: explain-engine/docs/chd_duct_fo_dependent.md
 
 ```markdown
 # Duct- and Foramen-Ovale-Dependent Congenital Heart Disease
@@ -9476,9 +9484,9 @@ The unifying teaching concept is the **balanced parallel circulation**. In a duc
 
 For each lesion: the **dependency**, the **mechanism**, and the **engine levers** that reproduce it. All cited engine identifiers were verified against the current tree:
 
-- Ductus → `Pda` model, resistor `AAR_DA` wired `AAR → PA`, levers `diameter_relative` / `length` / `discharge_coeff` (bidirectional; see [`Pda.js`](../../explain/component_models/Pda.js) and [`docs/Pda.md`](./Pda.md) if present).
+- Ductus → `Pda` model, resistor `AAR_DA` wired `AAR → PA`, levers `diameter_relative` / `length` / `discharge_coeff` (bidirectional; see [`Pda.js`](../component_models/Pda.js) and [`docs/Pda.md`](./Pda.md) if present).
 - Foramen ovale → `Shunts.diameter_fo` (LA↔RA via the split resistors `LA_RAIVCI` / `LA_RASVC`, with flap-valve asymmetry `fo_lr_factor`); restrictive/intact = `diameter_fo → 0`.
-- VSD → `Shunts.diameter_vsd` (LV↔RV). Intrapulmonary shunt → `Shunts.ips_res`. See [`Shunts.js`](../../explain/component_models/Shunts.js).
+- VSD → `Shunts.diameter_vsd` (LV↔RV). Intrapulmonary shunt → `Shunts.ips_res`. See [`Shunts.js`](../component_models/Shunts.js).
 - Valves are `HeartValve`s (a `Resistor` subclass) in `Heart.components`: `LA_LV` (mitral), `RV_PA` (pulmonary), `LV_AA` (aortic). The **tricuspid is split** into two resistors `RAIVCI_RV` + `RASVC_RV` (there is no single `RA_RV` valve model — `RA_RV` is only a diagram connector grouping the two). **Atresia** = `no_flow: true`; **stenosis** = raise `r_for` (set on both halves of the tricuspid).
 - **TGA outflow tracts are pre-wired but disabled** in `term_neonate.json`: `RV_AA` (RV→AA, `is_enabled: false`) and `LV_PA` (LV→PA, `is_enabled: false`), alongside the normal `RV_PA` and `LV_AA`.
 

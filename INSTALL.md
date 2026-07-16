@@ -215,8 +215,9 @@ picked up.
 ## Next steps
 
 - **Documentation index:** [`docs/README.md`](./docs/README.md) — the UI⇄engine map.
-- **Engine architecture & model reference:** [`explain/README.md`](./explain/README.md) and the
-  per-model docs in [`docs/engine/`](./docs/engine/) (start with
-  [`docs/engine/ARCHITECTURE.md`](./docs/engine/ARCHITECTURE.md)).
+- **Engine architecture & model reference:** [`explain-engine/README.md`](./explain-engine/README.md)
+  and the per-model docs in [`explain-engine/docs/`](./explain-engine/docs/) (start with
+  [`explain-engine/docs/ARCHITECTURE.md`](./explain-engine/docs/ARCHITECTURE.md)). Both live in the
+  engine submodule — run `git submodule update --init` if that directory is empty.
 - **UI architecture:** [`docs/ui/UI_ARCHITECTURE.md`](./docs/ui/UI_ARCHITECTURE.md).
 - **Production server details:** [`server/README.md`](./server/README.md).

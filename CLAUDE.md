@@ -76,9 +76,11 @@ Some component models build sub-models inside `init_model` via the `this.compone
 
 ## Docs
 
-All prose documentation now lives under the top-level [`docs/`](docs/README.md), split into two clearly separated sets: [`docs/engine/`](docs/engine/README.md) (the physics engine) and [`docs/ui/`](docs/ui/README.md) (the Vue app). The engine *code* still lives under `explain-engine/`.
+Prose documentation is split into two sets in **two repositories**: [`docs/ui/`](docs/ui/README.md) (the Vue app) lives here, and [`explain-engine/docs/`](explain-engine/docs/README.md) (the physics engine) lives in the engine repo beside the code it documents — it reaches this tree through the submodule. [`docs/README.md`](docs/README.md) is the index for both.
 
-[`docs/engine/*.md`](docs/engine/README.md) contains the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain-engine/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
+[`explain-engine/docs/*.md`](explain-engine/docs/README.md) contains the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain-engine/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
+
+Note: a checkout without `git submodule update --init` has no engine docs at all.
 
 ## UI documentation
 
