@@ -36,8 +36,13 @@ works. Keep them distinct at assembly:
 
 ## Assembly to-dos carried over (not part of this verification)
 
-- Append the AI-parameterization refs **[24]** (P6 companion), **[25]** Claude, **[26]** Agent SDK per
-  `pediatric-research-plan/P1_ai-param_insertions.md`, once the P6 bioRxiv preprint DOI exists.
+- The AI-parameterization refs **[24]–[26]** are now drafted below (entries 24–26). They must enter the
+  `.docx` as a **coupled insertion in the Word pass** — together with Box 1 and the inline **[24]** anchors
+  in the Abstract, Introduction, Results §3.1.2/§3.1.3 and Discussion §4.1/§4.5 (full set in
+  `pediatric-research-plan/P1_ai-param_insertions.md`) — so that [24] is never a dangling reference.
+  **[24] is blocked on the P6 bioRxiv preprint:** fill its DOI once P6 is posted (it currently carries a
+  placeholder). [25]/[26] are ready as-is; confirm the exact Claude model/version and access date and the
+  software-citation format PR/Springer Nature requires before submission.
 - Unify citation format between this `.docx` and the Markdown papers at final series/thesis assembly.
 
 ---
@@ -67,3 +72,9 @@ works. Keep them distinct at assembly:
 21. Bischoff AR, et al. Assessment of superior vena cava flow and cardiac output in different patterns of patent ductus arteriosus shunt. *Echocardiography.* 2021;38(9):1524–1533. PMID 34309068. doi:10.1111/echo.15163.
 22. van Laere D, et al. Application of NPE in the assessment of a patent ductus arteriosus. *Pediatr Res.* 2018;84(Suppl 1):46–56. PMID 30072803. doi:10.1038/s41390-018-0077-x.
 23. Jones CB, Crossland DS. The interplay between pressure, flow, and resistance in neonatal pulmonary hypertension. *Semin Fetal Neonatal Med.* 2022;27(4):101371. PMID 35787350. doi:10.1016/j.siny.2022.101371.
+
+### AI-parameterization additions (coupled Word-pass insertion — see note above)
+
+24. Antonius TAJ, van Meurs WL, Westerhof BE, de Boode WP. An AI-assisted closed-loop method for patient-specific parameterization of a whole-body neonatal physiology model. *Pediatr Res.* ‹year; in press›. Preprint: bioRxiv ‹preprint DOI pending — fill once P6 is posted›. *(P6 companion paper; cited inline as [24] in the Abstract, Introduction, Box 1 and Discussion.)*
+25. Anthropic. Claude [large language model]. Anthropic PBC; 2025. Available from: https://claude.com. *(Confirm exact model/version and access date at submission.)*
+26. Anthropic. Claude Agent SDK [software]; 2025. Available from: https://platform.claude.com/docs/en/api/agent-sdk.
