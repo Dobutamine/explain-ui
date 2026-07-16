@@ -1,13 +1,16 @@
 # AI-assisted parameterization of a mechanistic neonatal physiology model
 
-*Fourth paper in the EXPLAIN series (companion to the cardiovascular, respiratory and
-other-systems papers). Target journal: Pediatric Research. Markdown working draft — equations to be
+*Paper P6 of the EXPLAIN series — the headline AI-parameterization method (companion to the
+cardiovascular [P1], respiratory [P2], cerebral [P3a], homeostatic-regulation [P3b],
+mechanical-support-device [P4] and integrated-model [P5] papers, and applied to congenital heart
+disease in [P7]). Target journal: Pediatric Research. Markdown working draft — equations to be
 re-keyed as native Word (OMML) objects. Every algorithmic claim is transcribed from and checked
 against the implementation: `explain/helpers/Calibrator.js` (the shared closed-loop calibrator),
 `scripts/build_patient.mjs` (offline patient construction), `explain/ModelEngine.js` `tune_model`
 (live in-place tuning), and `src/services/botCommands.ts` / `botCommandAllowlist.ts` /
-`bot-host/api.py` (the LLM command pipeline). The condensed form of this method already appears as
-§2.4 of the cardiovascular paper (Eqs. 13–15, Table X); this paper is its full treatment.*
+`bot-host/api.py` (the LLM command pipeline). The condensed form of this method appears as the
+compact AI-parameterization highlight (Box 1) carried by each companion paper; this paper is its
+full treatment.*
 
 ---
 
@@ -171,8 +174,8 @@ A controller reports that it has converged, and makes no move, when its residual
 > **Eq. 4** &nbsp; | *x\** − *x*_k | ≤ τ
 
 with τ a per-quantity, clinician-meaningful tolerance band (Table 2). Equations 2–4 are the
-proportional-seed, secant and convergence rules that appear as Eqs. 13–15 of the cardiovascular
-paper.
+proportional-seed, secant and convergence rules of the shared closed-loop calibrator — a standard
+secant root-finder (see the series' shared Methods [P1]).
 
 Measured quantities are read as short-window means to suppress the residual pulsatility of the
 beat-averaged monitor:
