@@ -46,6 +46,8 @@ Outside PR: **May et al., "Newborn cardiovascular digital twins: personalised id
 
 **Keeping the differentiator visible despite the late method paper.** Because the whole model is in print before its parameterization method is formally published, two devices carry the "patient-specific parameterization" differentiator through Waves 1–2: the **compact per-paper highlight** (next section) and an **early bioRxiv preprint of P6** (PR does not count preprints as prior publication) so every earlier paper can cite the method.
 
+*Preprint server — decided 2026-07-16: **bioRxiv**, not medRxiv.* P6 is an in-silico physiological-modelling *method* paper with no patient data, which is bioRxiv's remit (and where the comparator in-silico neonatal models live); medRxiv's health/clinical-data scope is a weaker fit and its "algorithm-announcement" screening could delay or redirect it, defeating the goal of a fast citable DOI. Posting to both is prohibited, so the choice is bioRxiv. (*Pediatric Research* accepts preprints from either.)
+
 ## AI-parameterization threaded through every paper
 
 AI-parameterization is the headline innovation of the whole Explain project, so — even though its full method gets one dedicated paper (P6) — **every paper carries a compact, standardized AI-parameterization highlight**: a short boxed callout (≈½ column + one figure-or-cross-reference) stating that the paper's virtual patients were instantiated by the AI-assisted closed-loop calibrator, with the full method deferred to P6. Author it **once** and reuse it near-verbatim so it reads as a deliberate series signature, not padding.

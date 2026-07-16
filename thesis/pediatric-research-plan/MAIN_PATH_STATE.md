@@ -34,7 +34,7 @@ Legend: ✅ done · ◐ partial · ✗ not started · 🔒 blocked (dependency).
 ## 3. Cross-cutting open actions (each unblocks several papers)
 
 1. ~~**Make the engine repo PUBLIC + mint a Zenodo DOI.**~~ ✅ **DONE 2026-07-16.** Engine repo public; Zenodo concept DOI `10.5281/zenodo.21389097` minted (v0.1.0; `CITATION.cff` + README badge in the engine repo). The repo-URL/DOI slots have been filled across all 8 cover letters and the P2/P3a/P3b/P4 manuscript availability statements; the series software citation is in `_references.md`. *(Public deposit, not "on request".)*
-2. **Post the P6 bioRxiv preprint.** Author list ✅ settled 2026-07-16 = Antonius/van Meurs/Westerhof/de Boode (same four; no added ICMJE contributor). Now unblocked — post the preprint (byline must match), obtain its DOI, and backfill the `[P6]`/`‹P6›` citations that P1–P5 and P7 all rely on.
+2. **Post the P6 bioRxiv preprint.** Author list ✅ settled 2026-07-16 = Antonius/van Meurs/Westerhof/de Boode (same four; no added ICMJE contributor). Server ✅ settled 2026-07-16 = **bioRxiv** (not medRxiv — in-silico method, no patient data; rationale in `PR_ARTICLE_SLATE.md`). Now unblocked — post the preprint (byline must match), obtain its DOI, and backfill the `[P6]`/`‹P6›` citations that P1–P5 and P7 all rely on.
 3. **Fill Antonius author block** (series-wide): degrees, full postal address, phone, email, competing-interests line.
 4. **Re-verify PR's live article limits** — the cached guidelines PDF is dated May 2020 (word/figure/reference caps, unsolicited-Review policy).
 5. **Wire inline numeric [N] citations** at final assembly — the manuscripts cite by author-name in prose; the numbered reference lists are pools until wired.
@@ -83,7 +83,7 @@ Pick up at whichever is unblocked; suggested order when returning:
 1. ~~**Repo public + Zenodo DOI** (action #1) → then a single sweep filling every `‹URL›/‹DOI›` slot~~ ✅ done 2026-07-16 (DOI `10.5281/zenodo.21389097`; slots filled series-wide, except the P1 `.docx` Word pass).
 2. ~~**Decide P3 omnibus-vs-refocus**~~ ✅ done (split into P3a/P3b).
 3. **Draft P5** (the flagship the earlier papers point toward) — needs the distinct library-wide data cut vs P1–P4.
-4. ~~**Settle P6 author list**~~ ✅ done 2026-07-16 (same four) → **post bioRxiv preprint** → backfill `[P6]` citations everywhere.
+4. ~~**Settle P6 author list**~~ ✅ done 2026-07-16 (same four); ~~server choice~~ ✅ bioRxiv (vs medRxiv) → **post bioRxiv preprint** → backfill `[P6]` citations everywhere.
 5. Finish P7 plumbing; P1 docx AI-param injection; then submit Wave 1 (P1→P2) and proceed wave by wave; send the P8 inquiry once P1/P2 are in.
 
 **Submission order (waves):** W1 P1→P2 · W2 P3→P4→P5 · W3 P6→P7→P8(invited).
