@@ -139,7 +139,12 @@ function onDictValue(f: InterfaceField, key: string, v: number | null) {
 // at the empty array, so pick the first NON-EMPTY of the candidates.
 function listOptions(f: InterfaceField): string[] {
   const candidates = [f.custom_options ? f.choices : f.options, f.choices, f.options];
-  return candidates.find((c) => Array.isArray(c) && c.length > 0) ?? [];
+  const opts = candidates.find((c) => Array.isArray(c) && c.length > 0) ?? [];
+  // `options` holds model-TYPE names (see InterfaceField), so a field resolved
+  // from them (comp_from/comp_to, Ecls sites, ...) must offer the matching
+  // instance names; literal `choices` pass through untouched.
+  if (!f.custom_options && opts === f.options) return instancesOfTypes(f.options);
+  return opts;
 }
 // instances whose model_type is one of the field's allowed types
 function instancesOfTypes(types: string[] | undefined): string[] {

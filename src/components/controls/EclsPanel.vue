@@ -37,6 +37,8 @@ const SETTINGS: Field[] = [
   { p: "gas_flow", label: "Sweep gas", unit: "L/min", min: 0, max: 10, step: 0.1, rounding: 1 },
   { p: "gas_fio2", label: "Sweep FiO₂", unit: "%", min: 21, max: 100, step: 1, rounding: 0, factor: 100 },
   { p: "gas_fico2", label: "Sweep FiCO₂", unit: "%", min: 0, max: 10, step: 0.01, rounding: 2, factor: 100 },
+  { p: "gas_humidity", label: "Humidity", unit: "", min: 0, max: 1, step: 0.05, rounding: 2 },
+  { p: "gas_temp", label: "Gas temp", unit: "°C", min: 0, max: 42, step: 0.5, rounding: 1 },
 ];
 
 // Component resistance-factor multipliers (advanced tuning).
@@ -45,6 +47,7 @@ const RES_FACTORS: Field[] = [
   { p: "oxy_res_factor", label: "Oxy R×", unit: "", min: 0, max: 1000, step: 0.1, rounding: 1 },
   { p: "drainage_res_factor", label: "Drain R×", unit: "", min: 0, max: 1000, step: 0.1, rounding: 1 },
   { p: "return_res_factor", label: "Return R×", unit: "", min: 0, max: 1000, step: 0.1, rounding: 1 },
+  { p: "tubing_res_factor", label: "Tubing R×", unit: "", min: 0, max: 1000, step: 0.1, rounding: 1 },
 ];
 
 const PUMP_MODES = [
@@ -59,11 +62,30 @@ const drainageCannula = ref<string | null>(null);
 const returnCannula = ref<string | null>(null);
 const drainageOptions = ref<string[]>([]);
 const returnOptions = ref<string[]>([]);
+const drainageSite = ref<string | null>(null);
+const returnSite = ref<string | null>(null);
+
+// Blood-compartment instances the drainage/return cannulas can connect to.
+// The engine applies these live each tick (ECLS_DRAINAGE.comp_from / ECLS_RETURN.comp_to).
+const SITE_MODEL_TYPES = new Set([
+  "BloodCapacitance",
+  "BloodTimeVaryingElastance",
+  "BloodVessel",
+  "HeartChamber",
+]);
+const siteOptions = computed<string[]>(() => {
+  const models = (modelState.value as any)?.models ?? {};
+  return Object.keys(models)
+    .filter((name) => SITE_MODEL_TYPES.has(models[name]?.model_type))
+    .sort();
+});
 // editable display values keyed by field/knob prop
 const vals = ref<Record<string, number>>({});
 
 const SLOW_PATHS = [
   "Ecls.flow_avg",
+  "Ecls.flow",
+  "Ecls.pump_pressure",
   "Ecls.p_ven",
   "Ecls.p_int",
   "Ecls.p_art",
@@ -86,6 +108,8 @@ const measured = computed(() => {
   const l = latest.value;
   return [
     { label: "Flow", value: fmt(l["Ecls.flow_avg"], 2), unit: "L/min" },
+    { label: "Flow inst", value: fmt(l["Ecls.flow"], 2), unit: "L/min" },
+    { label: "Pump P", value: fmt(l["Ecls.pump_pressure"], 0), unit: "mmHg" },
     { label: "P venous", value: fmt(l["Ecls.p_ven"], 0), unit: "mmHg" },
     { label: "P internal", value: fmt(l["Ecls.p_int"], 0), unit: "mmHg" },
     { label: "P arterial", value: fmt(l["Ecls.p_art"], 0), unit: "mmHg" },
@@ -104,6 +128,8 @@ function syncLocal() {
   pumpMode.value = e.pump_mode ?? 0;
   drainageCannula.value = e.drainage_cannula_type ?? null;
   returnCannula.value = e.return_cannula_type ?? null;
+  drainageSite.value = e.drainage_site ?? null;
+  returnSite.value = e.return_site ?? null;
   drainageOptions.value = e.drainage_cannulas ? Object.keys(e.drainage_cannulas) : [];
   returnOptions.value = e.return_cannulas ? Object.keys(e.return_cannulas) : [];
   for (const f of [...SETTINGS, ...RES_FACTORS]) {
@@ -149,6 +175,14 @@ function onDrainageCannula(v: string) {
 function onReturnCannula(v: string) {
   returnCannula.value = v;
   setProp("Ecls.return_cannula_type", v, 0);
+}
+function onDrainageSite(v: string) {
+  drainageSite.value = v;
+  setProp("Ecls.drainage_site", v, 0);
+}
+function onReturnSite(v: string) {
+  returnSite.value = v;
+  setProp("Ecls.return_site", v, 0);
 }
 </script>
 
@@ -213,7 +247,7 @@ function onReturnCannula(v: string) {
         </div>
       </div>
 
-      <!-- cannulas -->
+      <!-- cannulas + sites -->
       <div class="grid grid-cols-1 gap-2 border-t border-surface-700 pt-2">
         <div class="flex flex-col gap-0.5">
           <span class="text-xs opacity-70">Drainage cannula</span>
@@ -227,6 +261,17 @@ function onReturnCannula(v: string) {
           />
         </div>
         <div class="flex flex-col gap-0.5">
+          <span class="text-xs opacity-70">Drainage site</span>
+          <Select
+            :model-value="drainageSite"
+            :options="siteOptions"
+            size="small"
+            class="w-full"
+            placeholder="Select site"
+            @update:model-value="onDrainageSite"
+          />
+        </div>
+        <div class="flex flex-col gap-0.5">
           <span class="text-xs opacity-70">Return cannula</span>
           <Select
             :model-value="returnCannula"
@@ -235,6 +280,17 @@ function onReturnCannula(v: string) {
             class="w-full"
             placeholder="Select cannula"
             @update:model-value="onReturnCannula"
+          />
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <span class="text-xs opacity-70">Return site</span>
+          <Select
+            :model-value="returnSite"
+            :options="siteOptions"
+            size="small"
+            class="w-full"
+            placeholder="Select site"
+            @update:model-value="onReturnSite"
           />
         </div>
       </div>

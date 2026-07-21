@@ -1608,12 +1608,240 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
   ],
   "Ecls": [
     {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "target": "ecls_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "caption": "ECLS running"
+    },
+    {
       "target": "ecls_clamped",
       "type": "boolean",
       "build_prop": true,
-      "edit_mode": "caption",
-      "readonly": true,
+      "edit_mode": "basic",
       "caption": "ECLS clamped"
+    },
+    {
+      "caption": "pump mode (0 = centrifugal, 1 = roller)",
+      "target": "pump_mode",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "factor": 1,
+      "delta": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 1
+    },
+    {
+      "caption": "pump speed (rpm)",
+      "target": "pump_rpm",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "factor": 1,
+      "delta": 50,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 5000
+    },
+    {
+      "caption": "sweep gas flow (L/min)",
+      "target": "gas_flow",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "factor": 1,
+      "delta": 0.1,
+      "rounding": 1,
+      "ll": 0,
+      "ul": 10
+    },
+    {
+      "caption": "sweep gas fio2 (fraction)",
+      "target": "gas_fio2",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "factor": 1,
+      "delta": 0.01,
+      "rounding": 2,
+      "ll": 0.21,
+      "ul": 1
+    },
+    {
+      "caption": "sweep gas fico2 (fraction)",
+      "target": "gas_fico2",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "factor": 1,
+      "delta": 0.001,
+      "rounding": 4,
+      "ll": 0,
+      "ul": 0.1
+    },
+    {
+      "type": "list",
+      "caption": "drainage site",
+      "target": "drainage_site",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "options": [
+        "BloodCapacitance",
+        "BloodTimeVaryingElastance",
+        "BloodVessel",
+        "HeartChamber"
+      ]
+    },
+    {
+      "type": "list",
+      "caption": "return site",
+      "target": "return_site",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "options": [
+        "BloodCapacitance",
+        "BloodTimeVaryingElastance",
+        "BloodVessel",
+        "HeartChamber"
+      ]
+    },
+    {
+      "caption": "sweep gas humidity (fraction)",
+      "target": "gas_humidity",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.05,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1
+    },
+    {
+      "caption": "sweep gas temperature (°C)",
+      "target": "gas_temp",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.5,
+      "rounding": 1,
+      "ll": 0,
+      "ul": 42
+    },
+    {
+      "caption": "o2 diffusion constant",
+      "target": "dif_o2",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.0001,
+      "rounding": 4,
+      "ll": 0,
+      "ul": 0.1
+    },
+    {
+      "caption": "co2 diffusion constant",
+      "target": "dif_co2",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.0001,
+      "rounding": 4,
+      "ll": 0,
+      "ul": 0.1
+    },
+    {
+      "caption": "tubing in diameter (m)",
+      "target": "tubing_in_diameter",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.0005,
+      "rounding": 5,
+      "ll": 0,
+      "ul": 0.05
+    },
+    {
+      "caption": "tubing in length (m)",
+      "target": "tubing_in_length",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.05,
+      "rounding": 3,
+      "ll": 0,
+      "ul": 5
+    },
+    {
+      "caption": "tubing out diameter (m)",
+      "target": "tubing_out_diameter",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.0005,
+      "rounding": 5,
+      "ll": 0,
+      "ul": 0.05
+    },
+    {
+      "caption": "tubing out length (m)",
+      "target": "tubing_out_length",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.05,
+      "rounding": 3,
+      "ll": 0,
+      "ul": 5
+    },
+    {
+      "caption": "oxygenator volume (L)",
+      "target": "oxy_vol",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.001,
+      "rounding": 3,
+      "ll": 0,
+      "ul": 1
+    },
+    {
+      "caption": "pump volume (L)",
+      "target": "pump_vol",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "extra",
+      "factor": 1,
+      "delta": 0.001,
+      "rounding": 3,
+      "ll": 0,
+      "ul": 1
     },
     {
       "caption": "drainage cannula resistance factor",
@@ -1661,37 +1889,10 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "ul": 100
     },
     {
-      "target": "drainage_res",
-      "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "drainage cannula resistance (mmHg/(L/s))",
-      "factor": 1,
-      "delta": 1,
-      "rounding": 0,
-      "ll": 100,
-      "ul": 100000
-    },
-    {
-      "target": "return_res",
-      "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
-      "readonly": false,
-      "caption": "return cannula res (mmHg/(L/s))",
-      "slider": true,
-      "factor": 1,
-      "delta": 1,
-      "rounding": 0,
-      "ll": 100,
-      "ul": 100000
-    },
-    {
       "target": "tubing_in_res",
       "type": "number",
       "build_prop": true,
-      "edit_mode": "basic",
+      "edit_mode": "advanced",
       "readonly": false,
       "caption": "tubing in resistance (mmHg/(L/s))",
       "factor": 1,
@@ -1704,7 +1905,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "target": "tubing_out_res",
       "type": "number",
       "build_prop": true,
-      "edit_mode": "basic",
+      "edit_mode": "advanced",
       "readonly": false,
       "caption": "tubing out resistance (mmHg/(L/s))",
       "factor": 1,
@@ -1717,7 +1918,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "target": "pump_res_for",
       "type": "number",
       "build_prop": true,
-      "edit_mode": "basic",
+      "edit_mode": "advanced",
       "readonly": false,
       "caption": "pump forward resistance (mmHg/(L/s))",
       "factor": 1,
@@ -1730,7 +1931,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "target": "pump_res_back",
       "type": "number",
       "build_prop": true,
-      "edit_mode": "basic",
+      "edit_mode": "advanced",
       "readonly": false,
       "caption": "pump backward resistance (mmHg/(L/s))",
       "factor": 1,
@@ -1743,7 +1944,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "target": "oxy_res_for",
       "type": "number",
       "build_prop": true,
-      "edit_mode": "basic",
+      "edit_mode": "advanced",
       "readonly": false,
       "caption": "oxygenator forward resistance (mmHg/(L/s))",
       "factor": 1,
@@ -1756,7 +1957,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "target": "oxy_res_back",
       "type": "number",
       "build_prop": true,
-      "edit_mode": "basic",
+      "edit_mode": "advanced",
       "readonly": false,
       "caption": "oxygenator backward resistance (mmHg/(L/s))",
       "factor": 1,
@@ -1766,28 +1967,103 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "ul": 100000
     },
     {
-      "caption": "o2 diffusion constant",
-      "target": "dif_o2",
+      "target": "drainage_res",
       "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "drainage cannula resistance (computed, mmHg/(L/s))",
       "factor": 1,
-      "delta": 0.0001,
-      "rounding": 4,
-      "ll": 0,
-      "ul": 0.1
+      "rounding": 0
     },
     {
-      "caption": "co2 dioxide diffusion constant",
-      "target": "dif_co2",
+      "target": "return_res",
       "type": "number",
-      "build_prop": true,
-      "edit_mode": "basic",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "return cannula resistance (computed, mmHg/(L/s))",
       "factor": 1,
-      "delta": 0.0001,
-      "rounding": 4,
-      "ll": 0,
-      "ul": 0.1
+      "rounding": 0
+    },
+    {
+      "target": "pump_pressure",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "pump pressure (mmHg)",
+      "factor": 1,
+      "rounding": 1
+    },
+    {
+      "target": "flow",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "circuit flow (L/min)",
+      "factor": 1,
+      "rounding": 2
+    },
+    {
+      "target": "flow_avg",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "circuit flow, averaged (L/min)",
+      "factor": 1,
+      "rounding": 2
+    },
+    {
+      "target": "p_ven",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "venous (drainage) pressure (mmHg)",
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "target": "p_int",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "internal (pump) pressure (mmHg)",
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "target": "p_art",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "arterial (return) pressure (mmHg)",
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "target": "sat_ven_o2",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "venous o2 saturation (%)",
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "target": "sat_postoxy_o2",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "post-oxygenator o2 saturation (%)",
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "target": "pco2_postoxy",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "post-oxygenator pco2 (mmHg)",
+      "factor": 1,
+      "rounding": 0
     }
   ],
   "Fluids": [

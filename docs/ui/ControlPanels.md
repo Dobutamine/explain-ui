@@ -86,12 +86,15 @@ Bespoke ECLS/ECMO console. Targets the `Ecls` model. **Every write goes through 
 | Control | Write |
 |---|---|
 | Running / Clamped | `setProp("Ecls.ecls_running\|ecls_clamped", v, 0)` |
-| Pump mode | `setProp("Ecls.pump_mode", v, 0)` (0 centrifugal / 1 roller) |
-| Pump RPM, sweep gas/FiO₂/FiCO₂ | `setProp("Ecls.<p>", v/factor, 0)` |
-| Resistance factors | `setProp("Ecls.<p>_res_factor", v, 0)` |
+| Pump mode | `setProp("Ecls.pump_mode", v, 0)` (0 centrifugal / 1 roller — **numeric**; the engine compares `=== 0`) |
+| Pump RPM, sweep gas/FiO₂/FiCO₂, humidity, gas temp | `setProp("Ecls.<p>", v/factor, 0)` |
+| Resistance factors (all five: pump/oxy/drainage/return/tubing) | `setProp("Ecls.<p>_res_factor", v, 0)` |
 | Drainage / return cannula | `setProp("Ecls.drainage_cannula_type\|return_cannula_type", v, 0)` |
+| Drainage / return site | `setProp("Ecls.drainage_site\|return_site", v, 0)` — re-routes `ECLS_DRAINAGE.comp_from` / `ECLS_RETURN.comp_to` |
 
-Cannula `Select` options come from the model's own `drainage_cannulas` / `return_cannulas` libraries (keys of the snapshot object). Sweep FiO₂/FiCO₂ display ×100. Slow read-outs: `flow_avg`, `p_ven`/`p_int`/`p_art`, `sat_ven_o2`, `sat_postoxy_o2`, `pco2_postoxy`.
+Cannula `Select` options come from the model's own `drainage_cannulas` / `return_cannulas` libraries (keys of the snapshot object); site options are the blood-compartment instances in the snapshot (`model_type` ∈ BloodCapacitance / BloodTimeVaryingElastance / BloodVessel / HeartChamber). Sweep FiO₂/FiCO₂ display ×100. Slow read-outs: `flow_avg`, `flow`, `pump_pressure`, `p_ven`/`p_int`/`p_art`, `sat_ven_o2`, `sat_postoxy_o2`, `pco2_postoxy`.
+
+The generic `ModelEditor` now also exposes the full Ecls surface (registry entry in `src/model-interface/registry.ts`): config editable across basic/extra/factors/advanced, with the computed values (`drainage_res`/`return_res`, `pump_pressure`, pressures, sats, flows) as readonly snapshots. Cannula pickers stay bespoke to this panel because their options come from the runtime cannula dicts, which the static registry cannot express.
 
 ---
 

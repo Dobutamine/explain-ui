@@ -24,8 +24,8 @@ Rules of thumb:
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
-Snapshot: **44 model_types**, **405 settable params**, **27 functions**
-(+ 32 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
+Snapshot: **44 model_types**, **421 settable params**, **27 functions**
+(+ 46 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
 ## Guided mode — curated safe set
@@ -57,6 +57,20 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `call` `Resuscitation.switch_cpr` — start/stop CPR (arg: boolean)
 - `call` `Resuscitation.set_fio2` — set CPR ventilation FiO2 (0–1)
 - `setProp` `Resuscitation.chest_comp_freq` — chest compression frequency (/min)
+- `setProp` `Ecls.ecls_running` — ECLS circuit on/off (boolean)
+- `setProp` `Ecls.ecls_clamped` — clamp/unclamp the ECLS blood path (boolean)
+- `setProp` `Ecls.pump_mode` — pump mode (number: 0 = centrifugal, 1 = roller)
+- `setProp` `Ecls.pump_rpm` — pump speed (rpm, 0-5000)
+- `setProp` `Ecls.gas_flow` — sweep gas flow (L/min, 0-10)
+- `setProp` `Ecls.gas_fio2` — sweep gas O2 fraction (0.21-1.0)
+- `setProp` `Ecls.gas_fico2` — sweep gas CO2 fraction (0-0.1)
+- `setProp` `Ecls.drainage_res_factor` — drainage cannula resistance multiplier (1.0 = baseline)
+- `setProp` `Ecls.return_res_factor` — return cannula resistance multiplier (1.0 = baseline)
+- `setProp` `Ecls.tubing_res_factor` — circuit tubing resistance multiplier (1.0 = baseline)
+- `setProp` `Ecls.pump_res_factor` — pump resistance multiplier (1.0 = baseline)
+- `setProp` `Ecls.oxy_res_factor` — oxygenator resistance multiplier (1.0 = baseline)
+- `setProp` `Ecls.drainage_cannula_type` — drainage cannula key from the scenario's cannula library (string)
+- `setProp` `Ecls.return_cannula_type` — return cannula key from the scenario's cannula library (string)
 - `start`  — start the realtime simulation loop
 - `stop`  — stop the realtime simulation loop
 - `revert`  — undo all live changes — reload the patient as it was loaded
@@ -248,16 +262,32 @@ _call_:
 ### Ecls
 
 _setProp_:
-- `drainage_res` — drainage cannula resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000)
-- `return_res` — return cannula res (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000)
-- `tubing_in_res` — tubing in resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000)
-- `tubing_out_res` — tubing out resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000)
-- `pump_res_for` — pump forward resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000)
-- `pump_res_back` — pump backward resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000)
-- `oxy_res_for` — oxygenator forward resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000)
-- `oxy_res_back` — oxygenator backward resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000)
-- `dif_o2` — o2 diffusion constant (number, range 0–0.1)
-- `dif_co2` — co2 dioxide diffusion constant (number, range 0–0.1)
+- `is_enabled` — enabled (boolean)
+- `ecls_running` — ECLS running (boolean)
+- `ecls_clamped` — ECLS clamped (boolean)
+- `pump_mode` — pump mode (0 = centrifugal, 1 = roller) (number, 0 = centrifugal, 1 = roller, range 0–1)
+- `pump_rpm` — pump speed (rpm) (number, rpm, range 0–5000)
+- `gas_flow` — sweep gas flow (L/min) (number, L/min, range 0–10)
+- `gas_fio2` — sweep gas fio2 (fraction) (number, fraction, range 0.21–1)
+- `gas_fico2` — sweep gas fico2 (fraction) (number, fraction, range 0–0.1)
+- `drainage_site` — drainage site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber)
+- `return_site` — return site (list, one of BloodCapacitance/BloodTimeVaryingElastance/BloodVessel/HeartChamber)
+- `gas_humidity` — sweep gas humidity (fraction) (number, fraction, range 0–1) _(extra)_
+- `gas_temp` — sweep gas temperature (°C) (number, °C, range 0–42) _(extra)_
+- `dif_o2` — o2 diffusion constant (number, range 0–0.1) _(extra)_
+- `dif_co2` — co2 diffusion constant (number, range 0–0.1) _(extra)_
+- `tubing_in_diameter` — tubing in diameter (m) (number, m, range 0–0.05) _(extra)_
+- `tubing_in_length` — tubing in length (m) (number, m, range 0–5) _(extra)_
+- `tubing_out_diameter` — tubing out diameter (m) (number, m, range 0–0.05) _(extra)_
+- `tubing_out_length` — tubing out length (m) (number, m, range 0–5) _(extra)_
+- `oxy_vol` — oxygenator volume (L) (number, L, range 0–1) _(extra)_
+- `pump_vol` — pump volume (L) (number, L, range 0–1) _(extra)_
+- `tubing_in_res` — tubing in resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000) _(advanced)_
+- `tubing_out_res` — tubing out resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000) _(advanced)_
+- `pump_res_for` — pump forward resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000) _(advanced)_
+- `pump_res_back` — pump backward resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000) _(advanced)_
+- `oxy_res_for` — oxygenator forward resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000) _(advanced)_
+- `oxy_res_back` — oxygenator backward resistance (mmHg/(L/s)) (number, mmHg/(L/s, range 100–100000) _(advanced)_
 - `drainage_res_factor` — drainage cannula resistance factor (factor, range 0–100)
 - `return_res_factor` — return cannula resistance factor (factor, range 0–100)
 - `tubing_res_factor` — tubing resistance factor (factor, range 0–100)

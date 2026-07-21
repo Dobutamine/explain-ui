@@ -122,6 +122,64 @@ export const COMMAND_ALLOWLIST: AllowEntry[] = [
     note: "chest compression frequency (/min)",
   },
 
+  // --- ECLS (extracorporeal life support / ECMO) ---
+  // The Ecls model has no setter functions — everything is a direct setProp;
+  // calc_model() picks the values up each tick (see EclsPanel.vue).
+  { op: "setProp", model: "Ecls", target: "ecls_running", note: "ECLS circuit on/off (boolean)" },
+  { op: "setProp", model: "Ecls", target: "ecls_clamped", note: "clamp/unclamp the ECLS blood path (boolean)" },
+  {
+    op: "setProp",
+    model: "Ecls",
+    target: "pump_mode",
+    note: "pump mode (number: 0 = centrifugal, 1 = roller)",
+  },
+  { op: "setProp", model: "Ecls", target: "pump_rpm", note: "pump speed (rpm, 0-5000)" },
+  { op: "setProp", model: "Ecls", target: "gas_flow", note: "sweep gas flow (L/min, 0-10)" },
+  { op: "setProp", model: "Ecls", target: "gas_fio2", note: "sweep gas O2 fraction (0.21-1.0)" },
+  { op: "setProp", model: "Ecls", target: "gas_fico2", note: "sweep gas CO2 fraction (0-0.1)" },
+  {
+    op: "setProp",
+    model: "Ecls",
+    target: "drainage_res_factor",
+    note: "drainage cannula resistance multiplier (1.0 = baseline)",
+  },
+  {
+    op: "setProp",
+    model: "Ecls",
+    target: "return_res_factor",
+    note: "return cannula resistance multiplier (1.0 = baseline)",
+  },
+  {
+    op: "setProp",
+    model: "Ecls",
+    target: "tubing_res_factor",
+    note: "circuit tubing resistance multiplier (1.0 = baseline)",
+  },
+  {
+    op: "setProp",
+    model: "Ecls",
+    target: "pump_res_factor",
+    note: "pump resistance multiplier (1.0 = baseline)",
+  },
+  {
+    op: "setProp",
+    model: "Ecls",
+    target: "oxy_res_factor",
+    note: "oxygenator resistance multiplier (1.0 = baseline)",
+  },
+  {
+    op: "setProp",
+    model: "Ecls",
+    target: "drainage_cannula_type",
+    note: "drainage cannula key from the scenario's cannula library (string)",
+  },
+  {
+    op: "setProp",
+    model: "Ecls",
+    target: "return_cannula_type",
+    note: "return cannula key from the scenario's cannula library (string)",
+  },
+
   // --- Simulation control ---
   { op: "start", note: "start the realtime simulation loop" },
   { op: "stop", note: "stop the realtime simulation loop" },
