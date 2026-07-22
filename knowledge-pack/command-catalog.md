@@ -24,8 +24,8 @@ Rules of thumb:
   compose with interventions and weight-scaling. E.g. stiffer LV → `LV.el_max_factor_ps` 1.3.
 - Only fields listed here are accepted; readonly measured-outputs and structural wiring are omitted.
 
-Snapshot: **44 model_types**, **421 settable params**, **27 functions**
-(+ 46 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
+Snapshot: **44 model_types**, **421 settable params**, **28 functions**
+(+ 58 Guided commands, 7 diagram actions). Regenerate with `node scripts/build_command_catalog.mjs`.
 
 ---
 ## Guided mode — curated safe set
@@ -43,7 +43,11 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `setProp` `Ventilator.tidal_volume` — target tidal volume (mL)
 - `setProp` `Ventilator.pip_cmh2o` — peak inspiratory pressure (cmH2O)
 - `setProp` `Ventilator.pip_cmh2o_max` — max peak inspiratory pressure, PRVC (cmH2O)
-- `setProp` `Ventilator.peep_cmh2o` — positive end-expiratory pressure (cmH2O)
+- `setProp` `Ventilator.peep_cmh2o` — positive end-expiratory pressure (cmH2O); doubles as the CPAP level in CPAP mode
+- `setProp` `Ventilator.insp_flow` — inspiratory/bias flow (L/min)
+- `setProp` `Ventilator.synchronized` — synchronized (patient-triggered) ventilation on/off
+- `setProp` `Ventilator.trigger_volume_perc` — breath trigger volume (% of tidal volume)
+- `call` `Ventilator.trigger_breath` — trigger a single manual breath (no args)
 - `setProp` `Heart.heart_rate_ref` — reference heart rate (bpm)
 - `setProp` `Heart.ans_sens` — autonomic sensitivity of the heart (0–1)
 - `setProp` `Ans.ans_active` — autonomic nervous system on/off
@@ -57,6 +61,14 @@ anything else is rejected (the app suggests switching to Full). Full mode (below
 - `call` `Resuscitation.switch_cpr` — start/stop CPR (arg: boolean)
 - `call` `Resuscitation.set_fio2` — set CPR ventilation FiO2 (0–1)
 - `setProp` `Resuscitation.chest_comp_freq` — chest compression frequency (/min)
+- `setProp` `Resuscitation.chest_comp_max_pres` — peak chest compression pressure (mmHg)
+- `setProp` `Resuscitation.chest_comp_no` — chest compressions per cycle (e.g. 3 for 3:1, 15 for 15:2)
+- `setProp` `Resuscitation.chest_comp_cont` — continuous compressions without ventilation pauses (boolean)
+- `setProp` `Resuscitation.vent_freq` — CPR ventilation rate (/min)
+- `setProp` `Resuscitation.vent_no` — ventilations per pause (e.g. 2 for 15:2)
+- `setProp` `Resuscitation.vent_pres_pip` — CPR ventilation peak pressure (cmH2O); pushed to the ventilator when CPR is switched on
+- `setProp` `Resuscitation.vent_pres_peep` — CPR ventilation PEEP (cmH2O); pushed to the ventilator when CPR is switched on
+- `setProp` `Resuscitation.vent_insp_time` — CPR ventilation inspiration time (s); pushed to the ventilator when CPR is switched on
 - `setProp` `Ecls.ecls_running` — ECLS circuit on/off (boolean)
 - `setProp` `Ecls.ecls_clamped` — clamp/unclamp the ECLS blood path (boolean)
 - `setProp` `Ecls.pump_mode` — pump mode (number: 0 = centrifugal, 1 = roller)
@@ -614,7 +626,7 @@ _setProp_:
 
 _setProp_:
 - `chest_comp_freq` — chest compressions frequency (/min) (number, /min, range 10–150)
-- `chest_comp_no` — no of chest compressions (/cycle) (number, /cycle, range 0–10)
+- `chest_comp_no` — no of chest compressions (/cycle) (number, /cycle, range 0–30)
 - `chest_comp_cont` — continuous compressions (boolean)
 - `vent_freq` — ventilation frequency (/min) (number, /min, range 0–100)
 - `vent_no` — no of ventilation (/cycle) (number, /cycle, range 0–100)
@@ -726,7 +738,8 @@ _call_:
 - `set_ettube_length(ettube_length (number, mm))` — endotracheal tube length (mm)
 - `set_fio2(fio2 (number, range 0.21–1))` — fio2
 - `set_humidity(humidity (number, range 0–1))` — humidity
-- `set_temp(temp (number, C, range 0–1))` — temperature (C)
+- `set_temp(temp (number, C, range 0–42))` — temperature (C)
+- `trigger_breath()` — trigger a manual breath
 
 ---
 

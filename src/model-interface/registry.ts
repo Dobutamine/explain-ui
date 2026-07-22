@@ -6012,7 +6012,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "factor": 1,
       "rounding": 0,
       "ll": 0,
-      "ul": 10
+      "ul": 30
     },
     {
       "caption": "continuous compressions",
@@ -6106,6 +6106,23 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "rounding": 2
         }
       ]
+    },
+    {
+      "caption": "chest compression targets (weight per compartment)",
+      "target": "chest_comp_targets",
+      "type": "dict",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "dict_value_type": "number"
+    },
+    {
+      "target": "chest_comp_pres",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "chest compression pressure (mmHg)",
+      "factor": 1,
+      "rounding": 1
     }
   ],
   "Shunts": [
@@ -6440,7 +6457,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "delta": 0.1,
           "rounding": 1,
           "ll": 0,
-          "ul": 1
+          "ul": 42
         }
       ]
     },
@@ -6583,6 +6600,95 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "build_prop": true,
       "edit_mode": "extra",
       "readonly": false
+    },
+    {
+      "caption": "trigger a manual breath",
+      "target": "trigger_breath",
+      "type": "function",
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": []
+    },
+    {
+      "target": "pres",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "airway pressure (cmH2O)",
+      "factor": 1,
+      "rounding": 1
+    },
+    {
+      "target": "flow",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "flow (L/min)",
+      "factor": 1,
+      "rounding": 1
+    },
+    {
+      "target": "vol",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "volume (mL)",
+      "factor": 1,
+      "rounding": 1
+    },
+    {
+      "target": "exp_tidal_volume",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "expiratory tidal volume (mL)",
+      "factor": 1000,
+      "rounding": 1
+    },
+    {
+      "target": "insp_tidal_volume",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "inspiratory tidal volume (mL)",
+      "factor": 1000,
+      "rounding": 1
+    },
+    {
+      "target": "tv_kg",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "tidal volume per kg (mL/kg)",
+      "factor": 1,
+      "rounding": 1
+    },
+    {
+      "target": "minute_volume",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "minute volume (L/min)",
+      "factor": 1,
+      "rounding": 2
+    },
+    {
+      "target": "compliance",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "compliance (mL/cmH2O)",
+      "factor": 1,
+      "rounding": 1
+    },
+    {
+      "target": "etco2",
+      "type": "number",
+      "edit_mode": "advanced",
+      "readonly": true,
+      "caption": "end-tidal co2 (mmHg)",
+      "factor": 1,
+      "rounding": 0
     }
   ]
 };

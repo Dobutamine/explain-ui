@@ -68,8 +68,22 @@ export const COMMAND_ALLOWLIST: AllowEntry[] = [
     op: "setProp",
     model: "Ventilator",
     target: "peep_cmh2o",
-    note: "positive end-expiratory pressure (cmH2O)",
+    note: "positive end-expiratory pressure (cmH2O); doubles as the CPAP level in CPAP mode",
   },
+  { op: "setProp", model: "Ventilator", target: "insp_flow", note: "inspiratory/bias flow (L/min)" },
+  {
+    op: "setProp",
+    model: "Ventilator",
+    target: "synchronized",
+    note: "synchronized (patient-triggered) ventilation on/off",
+  },
+  {
+    op: "setProp",
+    model: "Ventilator",
+    target: "trigger_volume_perc",
+    note: "breath trigger volume (% of tidal volume)",
+  },
+  { op: "call", model: "Ventilator", target: "trigger_breath", note: "trigger a single manual breath (no args)" },
 
   // --- Hemodynamics + autonomic nervous system ---
   { op: "setProp", model: "Heart", target: "heart_rate_ref", note: "reference heart rate (bpm)" },
@@ -120,6 +134,44 @@ export const COMMAND_ALLOWLIST: AllowEntry[] = [
     model: "Resuscitation",
     target: "chest_comp_freq",
     note: "chest compression frequency (/min)",
+  },
+  {
+    op: "setProp",
+    model: "Resuscitation",
+    target: "chest_comp_max_pres",
+    note: "peak chest compression pressure (mmHg)",
+  },
+  {
+    op: "setProp",
+    model: "Resuscitation",
+    target: "chest_comp_no",
+    note: "chest compressions per cycle (e.g. 3 for 3:1, 15 for 15:2)",
+  },
+  {
+    op: "setProp",
+    model: "Resuscitation",
+    target: "chest_comp_cont",
+    note: "continuous compressions without ventilation pauses (boolean)",
+  },
+  { op: "setProp", model: "Resuscitation", target: "vent_freq", note: "CPR ventilation rate (/min)" },
+  { op: "setProp", model: "Resuscitation", target: "vent_no", note: "ventilations per pause (e.g. 2 for 15:2)" },
+  {
+    op: "setProp",
+    model: "Resuscitation",
+    target: "vent_pres_pip",
+    note: "CPR ventilation peak pressure (cmH2O); pushed to the ventilator when CPR is switched on",
+  },
+  {
+    op: "setProp",
+    model: "Resuscitation",
+    target: "vent_pres_peep",
+    note: "CPR ventilation PEEP (cmH2O); pushed to the ventilator when CPR is switched on",
+  },
+  {
+    op: "setProp",
+    model: "Resuscitation",
+    target: "vent_insp_time",
+    note: "CPR ventilation inspiration time (s); pushed to the ventilator when CPR is switched on",
   },
 
   // --- ECLS (extracorporeal life support / ECMO) ---
